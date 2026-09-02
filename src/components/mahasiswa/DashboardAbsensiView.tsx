@@ -252,26 +252,36 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           </div>
         )}
 
-        {/* GPS Status */}
-        <div className={`mb-4 flex items-center justify-between gap-3 rounded-xl border p-3 ${gpsDisplay.bg} ${gpsDisplay.border}`}>
-          <div className="flex items-center gap-2.5">
-            {gpsDisplay.icon}
+        {/* GPS Status (Hanya tampil setelah QR dipindai) */}
+        {isQrScannedToday ? (
+          <div className={`mb-4 flex items-center justify-between gap-3 rounded-xl border p-3 ${gpsDisplay.bg} ${gpsDisplay.border}`}>
+            <div className="flex items-center gap-2.5">
+              {gpsDisplay.icon}
+              <div>
+                <p className={`text-xs font-semibold ${gpsDisplay.color}`}>{gpsDisplay.label}</p>
+                {gpsState.lastUpdated && (
+                  <p className="text-[10px] text-slate-400 mt-0.5">Diperbarui: {gpsState.lastUpdated}</p>
+                )}
+              </div>
+            </div>
+            {(gpsState.status === 'permission_denied' || gpsState.status === 'unavailable' || gpsState.status === 'low_accuracy') && (
+              <button
+                onClick={retryGps}
+                className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                <RefreshCw className="h-3 w-3" /> Coba Lagi
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <Navigation className="h-4 w-4 text-slate-400 shrink-0" />
             <div>
-              <p className={`text-xs font-semibold ${gpsDisplay.color}`}>{gpsDisplay.label}</p>
-              {gpsState.lastUpdated && (
-                <p className="text-[10px] text-slate-400 mt-0.5">Diperbarui: {gpsState.lastUpdated}</p>
-              )}
+              <p className="text-xs font-semibold text-slate-500">Pengecekan Lokasi GPS Terkunci</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Silakan Pindai QR Code terlebih dahulu untuk mengaktifkan validasi lokasi.</p>
             </div>
           </div>
-          {(gpsState.status === 'permission_denied' || gpsState.status === 'unavailable' || gpsState.status === 'low_accuracy') && (
-            <button
-              onClick={retryGps}
-              className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              <RefreshCw className="h-3 w-3" /> Coba Lagi
-            </button>
-          )}
-        </div>
+        )}
 
         {/* QR Status & Scan Button */}
         <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
