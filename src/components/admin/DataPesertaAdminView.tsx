@@ -79,7 +79,7 @@ export const DataPesertaAdminView: React.FC = () => {
     addStudent({
       name: formData.name,
       email: formData.email,
-      role: 'mahasiswa',
+      role: 'user',
       username: username,
       avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250',
       nim: formData.nim,

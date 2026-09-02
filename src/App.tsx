@@ -3,43 +3,58 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { Header } from './components/common/Header';
 import { Sidebar } from './components/common/Sidebar';
-import { GpsSimulatorWidget } from './components/common/GpsSimulatorWidget';
 import { HelpAdminModal } from './components/common/HelpAdminModal';
 
 // Mahasiswa Views
 import { LoginView } from './components/mahasiswa/LoginView';
+import { RegisterView } from './components/auth/RegisterView';
 import { DataDiriView } from './components/mahasiswa/DataDiriView';
 import { DashboardAbsensiView } from './components/mahasiswa/DashboardAbsensiView';
 import { AktivitasMagangView } from './components/mahasiswa/AktivitasMagangView';
 import { PengajuanIzinView } from './components/mahasiswa/PengajuanIzinView';
-import { TandaTanganView } from './components/mahasiswa/TandaTanganView';
 import { LaporanMahasiswaView } from './components/mahasiswa/LaporanMahasiswaView';
+import { KoreksiAbsenView } from './components/mahasiswa/KoreksiAbsenView';
 
 // Admin Views
 import { DashboardAdminView } from './components/admin/DashboardAdminView';
 import { DataPesertaAdminView } from './components/admin/DataPesertaAdminView';
-import { PengaturanQRAdminView } from './components/admin/PengaturanQRAdminView';
 import { AbsensiAdminView } from './components/admin/AbsensiAdminView';
 import { PengajuanIzinAdminView } from './components/admin/PengajuanIzinAdminView';
 import { AktivitasAdminView } from './components/admin/AktivitasAdminView';
 import { LaporanAdminView } from './components/admin/LaporanAdminView';
-import { PembimbingPerusahaanView } from './components/admin/PembimbingPerusahaanView';
 import { PengaturanAdminView } from './components/admin/PengaturanAdminView';
+import LokasiAdminView from './components/admin/LokasiAdminView';
+import KoreksiAdminView from './components/admin/KoreksiAdminView';
 
 const MainLayout: React.FC = () => {
-  const { isAuthenticated, role } = useAuth();
+  const { isAuthenticated, role, isLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
+  const [showRegister, setShowRegister] = useState<boolean>(false);
 
   // If role changes, reset default tab if needed
   useEffect(() => {
     setActiveTab('dashboard');
   }, [role]);
 
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#F4F7FB]">
+        <div className="text-center">
+          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-[#2F80ED] border-t-transparent"></div>
+          <p className="text-sm text-slate-500">Memuat aplikasi...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!isAuthenticated) {
-    return <LoginView />;
+    if (showRegister) {
+      return <RegisterView onGoToLogin={() => setShowRegister(false)} />;
+    }
+    return <LoginView onGoToRegister={() => setShowRegister(true)} />;
   }
 
   // Render content based on role and activeTab
@@ -50,16 +65,16 @@ const MainLayout: React.FC = () => {
           return <DashboardAdminView onNavigateTab={(tab) => setActiveTab(tab)} />;
         case 'datapeserta':
           return <DataPesertaAdminView />;
-        case 'pembimbing':
-          return <PembimbingPerusahaanView />;
-        case 'perusahaan':
-          return <PengaturanQRAdminView />;
+        case 'lokasi':
+          return <LokasiAdminView />;
         case 'absensi':
           return <AbsensiAdminView />;
         case 'aktivitas':
           return <AktivitasAdminView />;
         case 'izin':
           return <PengajuanIzinAdminView />;
+        case 'koreksi':
+          return <KoreksiAdminView />;
         case 'laporan':
           return <LaporanAdminView />;
         case 'pengaturan':
@@ -68,22 +83,18 @@ const MainLayout: React.FC = () => {
           return <DashboardAdminView onNavigateTab={(tab) => setActiveTab(tab)} />;
       }
     } else {
-      // Mahasiswa role
+      // User role
       switch (activeTab) {
         case 'dashboard':
-          return <DashboardAbsensiView onNavigateToIzin={() => setActiveTab('izin')} />;
-        case 'datadiri':
-          return <DataDiriView />;
-        case 'absensi':
           return <DashboardAbsensiView onNavigateToIzin={() => setActiveTab('izin')} />;
         case 'aktivitas':
           return <AktivitasMagangView />;
         case 'izin':
           return <PengajuanIzinView />;
-        case 'tandatangan':
-          return <TandaTanganView />;
         case 'laporan':
           return <LaporanMahasiswaView />;
+        case 'koreksi':
+          return <KoreksiAbsenView />;
         case 'pengaturan':
           return <DataDiriView />;
         default:
@@ -120,9 +131,6 @@ const MainLayout: React.FC = () => {
           </div>
         </main>
       </div>
-
-      {/* Floating GPS Simulator Widget (Available for instant testing) */}
-      <GpsSimulatorWidget />
 
       {/* Helpdesk Support Modal */}
       <HelpAdminModal

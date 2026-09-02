@@ -361,7 +361,7 @@ export const AbsensiAdminView: React.FC = () => {
               </div>
               <div>
                 <span className="text-[10px] text-slate-400 font-medium">TOKEN QR DIGUNAKAN</span>
-                <p className="font-mono text-[11px] font-bold text-blue-600 truncate">{viewingPhotoRecord.qrTokenUsed || qrConfig.currentToken}</p>
+                <p className="font-mono text-[11px] font-bold text-blue-600 truncate">{viewingPhotoRecord.qrSessionId || qrConfig.currentToken}</p>
               </div>
             </div>
 

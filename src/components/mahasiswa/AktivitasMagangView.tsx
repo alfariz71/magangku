@@ -21,7 +21,13 @@ export const AktivitasMagangView: React.FC = () => {
       return;
     }
 
-    addActivity(day, date, title, time);
+    addActivity({
+      activityDate: date,
+      day: day,
+      date: date,
+      title: title,
+      time: time
+    });
     setIsModalOpen(false);
     setTitle('');
     setErrorMessage(null);

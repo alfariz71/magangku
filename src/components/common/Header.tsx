@@ -212,18 +212,18 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
                 </div>
                 <button
                   onClick={() => {
-                    switchRole('mahasiswa');
+                    switchRole('user');
                     setShowProfileMenu(false);
                   }}
                   className={`flex w-full items-center justify-between rounded-xl px-3 py-2 text-xs font-medium transition-colors ${
-                    role === 'mahasiswa' ? 'bg-blue-50 text-[#2F80ED]' : 'text-slate-700 hover:bg-slate-50'
+                    role === 'user' ? 'bg-blue-50 text-[#2F80ED]' : 'text-slate-700 hover:bg-slate-50'
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     <UserIcon className="h-4 w-4" />
                     <span>Andi Pratama (Mahasiswa)</span>
                   </div>
-                  {role === 'mahasiswa' && <Check className="h-3.5 w-3.5" />}
+                  {role === 'user' && <Check className="h-3.5 w-3.5" />}
                 </button>
 
                 <button
@@ -244,7 +244,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
               </div>
 
               <div className="border-t border-slate-100 p-1">
-                {role === 'mahasiswa' && onNavigate && (
+                {role === 'user' && onNavigate && (
                   <button
                     onClick={() => {
                       onNavigate('datadiri');

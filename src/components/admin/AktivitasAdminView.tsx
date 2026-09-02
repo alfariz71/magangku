@@ -19,11 +19,13 @@ export const AktivitasAdminView: React.FC = () => {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  const filteredActivities = activities.filter(a =>
-    a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.day.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    a.date.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredActivities = activities.filter(a => {
+    const dayStr = a.day || a.activityDate || '-';
+    const dateStr = a.date || a.activityDate || '-';
+    return a.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      dayStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      dateStr.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -74,8 +76,8 @@ export const AktivitasAdminView: React.FC = () => {
                 return (
                   <tr key={act.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-4 pr-4 whitespace-nowrap">
-                      <p className="font-bold text-slate-900">{act.day}</p>
-                      <p className="text-[11px] text-slate-400">{act.date}</p>
+                      <p className="font-bold text-slate-900">{act.day || act.activityDate || '-'}</p>
+                      <p className="text-[11px] text-slate-400">{act.date || act.activityDate || '-'}</p>
                     </td>
 
                     <td className="py-4 px-4 text-slate-800 font-medium max-w-md">

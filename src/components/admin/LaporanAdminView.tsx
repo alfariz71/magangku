@@ -32,7 +32,7 @@ export const LaporanAdminView: React.FC = () => {
       rows = leaveRequests.map(r => [r.studentName, r.studentNim, r.requestDate, `${r.startDate} - ${r.endDate}`, r.leaveType, r.status]);
     } else if (reportType === 'aktivitas') {
       head = [['Hari', 'Tanggal', 'Judul Aktivitas', 'Waktu']];
-      rows = activities.map(a => [a.day, a.date, a.title, a.time]);
+      rows = activities.map(a => [a.day || '-', a.date || '-', a.title || '-', a.time || '-']);
     } else {
       head = [['Nama Mahasiswa', 'NIM', 'Tanggal', 'Hari', 'Masuk', 'Pulang', 'Total Jam', 'Status']];
       rows = attendances.map(a => [
@@ -164,7 +164,7 @@ export const LaporanAdminView: React.FC = () => {
               className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs"
             >
               <option value="Semua">Semua Peserta (128 Mahasiswa)</option>
-              {students.filter(s => s.role === 'mahasiswa').map(s => (
+              {students.filter(s => s.role === 'user').map(s => (
                 <option key={s.id} value={s.name}>{s.name} ({s.nim})</option>
               ))}
             </select>

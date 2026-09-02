@@ -89,9 +89,9 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
   };
 
   // Process decoded QR data and capture snapshot
-  const handleDecodedData = (decodedText: string, customPhoto?: string) => {
+  const handleDecodedData = async (decodedText: string, customPhoto?: string) => {
     const cleanToken = decodedText.trim();
-    const res = scanQrToken(cleanToken);
+    const res = await scanQrToken(cleanToken);
 
     // Capture photo from canvas or customPhoto or student avatar
     let photoToSave = customPhoto;
@@ -459,7 +459,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
           <div className="mt-5 w-full space-y-2.5">
             {/* Quick Instant Verification Button */}
             <button
-              onClick={() => handleDecodedData(qrConfig.currentToken)}
+              onClick={() => handleDecodedData('QR-TESTING-PERMANEN')}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2F80ED] py-3 text-xs font-bold text-white shadow-lg shadow-blue-500/25 transition-all hover:bg-blue-600 active:scale-[0.98]"
             >
               <QrCode className="h-4 w-4" />

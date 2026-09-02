@@ -15,7 +15,8 @@ import {
   ChevronLeft,
   ChevronRight,
   X,
-  Sparkles
+  Sparkles,
+  MapPin
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAuth } from '../../context/AuthContext';
@@ -41,13 +42,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const { role } = useAuth();
 
-  const mahasiswaMenuItems = [
+  const userMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'datadiri', label: 'Data Diri', icon: UserIcon },
-    { id: 'absensi', label: 'Absensi', icon: Clock },
     { id: 'aktivitas', label: 'Aktivitas', icon: ClipboardList },
     { id: 'izin', label: 'Pengajuan Izin', icon: FileText },
-    { id: 'tandatangan', label: 'Tanda Tangan', icon: Edit3 },
     { id: 'laporan', label: 'Laporan', icon: BarChart2 },
     { id: 'pengaturan', label: 'Pengaturan', icon: Settings },
   ];
@@ -55,16 +53,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const adminMenuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'datapeserta', label: 'Data Peserta', icon: Users },
-    { id: 'pembimbing', label: 'Pembimbing', icon: UserCheck },
-    { id: 'perusahaan', label: 'Perusahaan', icon: Building2 },
+    { id: 'lokasi', label: 'Lokasi & QR', icon: MapPin },
     { id: 'absensi', label: 'Absensi', icon: Clock },
     { id: 'aktivitas', label: 'Aktivitas', icon: ClipboardList },
     { id: 'izin', label: 'Pengajuan Izin', icon: FileText },
+    { id: 'koreksi', label: 'Koreksi Absensi', icon: Edit3 },
     { id: 'laporan', label: 'Laporan', icon: BarChart2 },
     { id: 'pengaturan', label: 'Pengaturan', icon: Settings },
   ];
 
-  const menuItems = role === 'admin' ? adminMenuItems : mahasiswaMenuItems;
+  const menuItems = role === 'admin' ? adminMenuItems : userMenuItems;
 
   const sidebarContent = (
     <div className="flex h-full flex-col justify-between overflow-y-auto bg-[#0F2643] text-white p-4 transition-all duration-300">

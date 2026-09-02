@@ -1,28 +1,44 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  AttendanceRecord, 
-  ActivityRecord, 
-  LeaveRequest, 
-  QRCodeConfig, 
-  AuditLog, 
-  NotificationItem, 
-  User, 
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { supabase } from '../lib/supabase';
+import {
+  AttendanceRecord,
+  ActivityRecord,
+  LeaveRequest,
+  QRCodeConfig,
+  AuditLog,
+  NotificationItem,
+  User,
   LeaveStatus,
-  AttendanceStatus 
+  AttendanceStatus,
+  Location,
+  AttendanceCorrectionRequest
 } from '../types';
-import { 
-  INITIAL_ATTENDANCE_RECORDS, 
-  INITIAL_ACTIVITIES, 
-  INITIAL_LEAVE_REQUESTS, 
-  INITIAL_QR_CONFIG, 
-  INITIAL_AUDIT_LOGS, 
-  INITIAL_NOTIFICATIONS, 
-  INITIAL_STUDENTS_LIST 
-} from '../data/mockData';
 import { useAuth } from './AuthContext';
 
-export type GpsSimulationMode = 'in_range' | 'out_of_range' | 'gps_off' | 'real_gps';
+// ============================================================
+// GPS State Types
+// ============================================================
+export type GpsStatus =
+  | 'idle'
+  | 'loading'
+  | 'in_range'
+  | 'out_of_range'
+  | 'low_accuracy'
+  | 'permission_denied'
+  | 'unavailable';
 
+export interface GpsState {
+  status: GpsStatus;
+  latitude: number | null;
+  longitude: number | null;
+  accuracy: number | null;
+  distanceMeters: number | null;
+  lastUpdated: string | null;
+}
+
+// ============================================================
+// Context Types
+// ============================================================
 interface DataContextType {
   // Attendance
   attendances: AttendanceRecord[];
@@ -34,567 +50,793 @@ interface DataContextType {
     isCheckedOut: boolean;
     status: AttendanceStatus | null;
   };
-  attendanceStats: {
-    hadir: number;
-    terlambat: number;
-    izin: number;
-  };
-  performCheckIn: (photoUrl?: string) => { success: boolean; message: string };
-  performCheckOut: (photoUrl?: string) => { success: boolean; message: string };
-  adminCorrectAttendance: (id: string, checkIn: string, checkOut: string, status: AttendanceStatus, reason: string) => void;
-  
+  attendanceStats: { hadir: number; terlambat: number; izin: number; alpha: number };
+  isAttendanceLoading: boolean;
+  performCheckIn: () => Promise<{ success: boolean; message: string }>;
+  performCheckOut: () => Promise<{ success: boolean; message: string }>;
+  adminCorrectAttendance: (id: string, checkIn: string, checkOut: string, status: AttendanceStatus, reason: string) => Promise<void>;
+  refreshAttendances: () => Promise<void>;
+
   // QR & Location
   qrConfig: QRCodeConfig;
+  activeLocation: Location | null;
+  locations: Location[];
   updateQrConfig: (config: Partial<QRCodeConfig>) => void;
-  regenerateQrToken: () => void;
+  regenerateQrToken: () => Promise<void>;
   isQrScannedToday: boolean;
-  scanQrToken: (token: string) => { success: boolean; message: string };
+  scanQrToken: (token: string) => Promise<{ success: boolean; message: string }>;
   resetQrScan: () => void;
-  
-  // Geolocation
-  gpsMode: GpsSimulationMode;
-  setGpsMode: (mode: GpsSimulationMode) => void;
-  isLocationInRange: boolean;
-  isGpsActive: boolean;
-  checkRealGps: () => Promise<void>;
-  
+  refreshLocations: () => Promise<void>;
+
+  // GPS
+  gpsState: GpsState;
+  startGpsWatch: () => void;
+  stopGpsWatch: () => void;
+  retryGps: () => void;
+
   // Activities
   activities: ActivityRecord[];
-  addActivity: (day: string, date: string, title: string, time: string) => void;
-  
+  isActivitiesLoading: boolean;
+  addActivity: (data: Partial<ActivityRecord>) => Promise<void>;
+  updateActivity: (id: string, data: Partial<ActivityRecord>) => Promise<void>;
+  deleteActivity: (id: string) => Promise<void>;
+  refreshActivities: () => Promise<void>;
+
   // Leave requests
   leaveRequests: LeaveRequest[];
-  submitLeaveRequest: (startDate: string, endDate: string, leaveType: any, reason: string, docName?: string) => void;
-  reviewLeaveRequest: (id: string, status: LeaveStatus, adminNotes: string) => void;
-  
+  isLeaveLoading: boolean;
+  submitLeaveRequest: (startDate: string, endDate: string, leaveType: any, reason: string, docName?: string) => Promise<{ success: boolean; message: string }>;
+  reviewLeaveRequest: (id: string, status: LeaveStatus, adminNotes: string) => Promise<void>;
+  refreshLeaveRequests: () => Promise<void>;
+
+  // Correction requests
+  correctionRequests: AttendanceCorrectionRequest[];
+  submitCorrectionRequest: (data: Partial<AttendanceCorrectionRequest>) => Promise<{ success: boolean; message: string }>;
+  reviewCorrectionRequest: (id: string, status: 'Disetujui' | 'Ditolak', adminNotes: string) => Promise<void>;
+  refreshCorrectionRequests: () => Promise<void>;
+
   // Students (Admin)
   students: User[];
-  addStudent: (student: Omit<User, 'id'>) => void;
-  updateStudent: (id: string, data: Partial<User>) => void;
-  toggleStudentStatus: (id: string) => void;
-  
+  isStudentsLoading: boolean;
+  refreshStudents: () => Promise<void>;
+  addStudent: (student: Omit<User, 'id'>) => Promise<void>;
+  updateStudent: (id: string, data: Partial<User>) => Promise<void>;
+  toggleStudentStatus: (id: string) => Promise<void>;
+
   // Audit Logs & Notifications
   auditLogs: AuditLog[];
   notifications: NotificationItem[];
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
+  refreshNotifications: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
+// ============================================================
+// Haversine Distance
+// ============================================================
+function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ============================================================
+// Date/Time Helpers
+// ============================================================
+function getTodayJakarta(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+}
+function getTimeJakarta(): string {
+  return new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) + ' WIB';
+}
+
+// ============================================================
+// Provider
+// ============================================================
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { currentUser } = useAuth();
 
-  // Local storage initialized states
-  const [attendances, setAttendances] = useState<AttendanceRecord[]>(() => {
-    const saved = localStorage.getItem('magangku_attendances');
-    return saved ? JSON.parse(saved) : INITIAL_ATTENDANCE_RECORDS;
+  // ---- State ----
+  const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
+  const [isAttendanceLoading, setIsAttendanceLoading] = useState(false);
+
+  const [activities, setActivities] = useState<ActivityRecord[]>([]);
+  const [isActivitiesLoading, setIsActivitiesLoading] = useState(false);
+
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [isLeaveLoading, setIsLeaveLoading] = useState(false);
+
+  const [correctionRequests, setCorrectionRequests] = useState<AttendanceCorrectionRequest[]>([]);
+
+  const [students, setStudents] = useState<User[]>([]);
+  const [isStudentsLoading, setIsStudentsLoading] = useState(false);
+
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [activeLocation, setActiveLocation] = useState<Location | null>(null);
+
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+
+  const [isQrScannedToday, setIsQrScannedToday] = useState(false);
+  const [qrConfig, setQrConfig] = useState<QRCodeConfig>({
+    officeName: 'Kantor Pusat',
+    latitude: -6.208763,
+    longitude: 106.845599,
+    radiusMeters: 50,
+    currentToken: '',
+    isActive: true,
+    lastGenerated: '',
+    expiresAt: undefined
   });
 
-  const [activities, setActivities] = useState<ActivityRecord[]>(() => {
-    const saved = localStorage.getItem('magangku_activities');
-    return saved ? JSON.parse(saved) : INITIAL_ACTIVITIES;
+  const [gpsState, setGpsState] = useState<GpsState>({
+    status: 'idle', latitude: null, longitude: null, accuracy: null, distanceMeters: null, lastUpdated: null
   });
+  const watchIdRef = useRef<number | null>(null);
 
-  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>(() => {
-    const saved = localStorage.getItem('magangku_leave_requests');
-    return saved ? JSON.parse(saved) : INITIAL_LEAVE_REQUESTS;
-  });
-
-  const [qrConfig, setQrConfig] = useState<QRCodeConfig>(() => {
-    const saved = localStorage.getItem('magangku_qr_config');
-    return saved ? JSON.parse(saved) : INITIAL_QR_CONFIG;
-  });
-
-  const [students, setStudents] = useState<User[]>(() => {
-    const saved = localStorage.getItem('magangku_students');
-    return saved ? JSON.parse(saved) : INITIAL_STUDENTS_LIST;
-  });
-
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
-    const saved = localStorage.getItem('magangku_audit_logs');
-    return saved ? JSON.parse(saved) : INITIAL_AUDIT_LOGS;
-  });
-
-  const [notifications, setNotifications] = useState<NotificationItem[]>(() => {
-    const saved = localStorage.getItem('magangku_notifications');
-    return saved ? JSON.parse(saved) : INITIAL_NOTIFICATIONS;
-  });
-
-  // Ephemeral states for user session & QR scan status
-  const [isQrScannedToday, setIsQrScannedToday] = useState<boolean>(true); // Default to scanned for good initial demo UX
-  const [gpsMode, setGpsMode] = useState<GpsSimulationMode>('in_range');
-
-  // Persistence effects
+  // ---- Load data when user changes ----
   useEffect(() => {
-    localStorage.setItem('magangku_attendances', JSON.stringify(attendances));
-  }, [attendances]);
-
-  useEffect(() => {
-    localStorage.setItem('magangku_activities', JSON.stringify(activities));
-  }, [activities]);
-
-  useEffect(() => {
-    localStorage.setItem('magangku_leave_requests', JSON.stringify(leaveRequests));
-  }, [leaveRequests]);
-
-  useEffect(() => {
-    localStorage.setItem('magangku_qr_config', JSON.stringify(qrConfig));
-  }, [qrConfig]);
-
-  useEffect(() => {
-    localStorage.setItem('magangku_students', JSON.stringify(students));
-  }, [students]);
-
-  useEffect(() => {
-    localStorage.setItem('magangku_audit_logs', JSON.stringify(auditLogs));
-  }, [auditLogs]);
-
-  useEffect(() => {
-    localStorage.setItem('magangku_notifications', JSON.stringify(notifications));
-  }, [notifications]);
-
-  // Geolocation computation
-  const isLocationInRange = gpsMode === 'in_range';
-  const isGpsActive = gpsMode !== 'gps_off';
-
-  const checkRealGps = async () => {
-    if (!navigator.geolocation) {
-      setGpsMode('gps_off');
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lon = position.coords.longitude;
-        // Calculate distance using Haversine formula
-        const R = 6371e3; // metres
-        const φ1 = (lat * Math.PI) / 180;
-        const φ2 = (qrConfig.latitude * Math.PI) / 180;
-        const Δφ = ((qrConfig.latitude - lat) * Math.PI) / 180;
-        const Δλ = ((qrConfig.longitude - lon) * Math.PI) / 180;
-
-        const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-                  Math.cos(φ1) * Math.cos(φ2) *
-                  Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        const distance = R * c;
-
-        if (distance <= qrConfig.radiusMeters) {
-          setGpsMode('in_range');
-        } else {
-          setGpsMode('out_of_range');
-        }
-      },
-      () => {
-        setGpsMode('gps_off');
+    if (currentUser?.id) {
+      refreshAttendances();
+      refreshActivities();
+      refreshLeaveRequests();
+      refreshLocations();
+      refreshNotifications();
+      refreshCorrectionRequests();
+      checkQrScanToday();
+      if (currentUser.role === 'admin') {
+        refreshStudents();
+        refreshAuditLogs();
       }
-    );
-  };
-
-  // QR token scan method
-  const scanQrToken = (token: string) => {
-    if (!qrConfig.isActive) {
-      return { success: false, message: 'QR Code absensi saat ini sedang dinonaktifkan oleh Administrator.' };
     }
-    if (token && token.trim() !== '') {
-      setIsQrScannedToday(true);
-      return { success: true, message: `QR Code berhasil dipindai! Username: ${currentUser?.username || 'andi.pratama'} terverifikasi.` };
+  }, [currentUser?.id]);
+
+  // ---- ATTENDANCES ----
+  const refreshAttendances = async () => {
+    if (!currentUser?.id) return;
+    setIsAttendanceLoading(true);
+    try {
+      let query = supabase.from('attendance_records').select('*').order('date', { ascending: false });
+      if (currentUser.role !== 'admin') {
+        query = query.eq('user_id', currentUser.id);
+      }
+      const { data, error } = await query;
+      if (!error && data) {
+        setAttendances(data.map(mapDbAttendance));
+      }
+    } finally {
+      setIsAttendanceLoading(false);
     }
-    return { success: false, message: 'Token QR Code tidak valid atau kedaluwarsa.' };
   };
 
-  const resetQrScan = () => {
-    setIsQrScannedToday(false);
-  };
-
-  // Regenerate QR Token
-  const regenerateQrToken = () => {
-    const randomHex = Math.random().toString(36).substring(2, 10).toUpperCase();
-    const newToken = `MGK-HQ-2025-${randomHex}`;
-    setQrConfig(prev => ({
-      ...prev,
-      currentToken: newToken,
-      lastGenerated: new Date().toLocaleString('id-ID')
-    }));
-
-    const log: AuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: formatIndonesianTimestamp(new Date()),
-      action: 'Pengaturan QR Code',
-      category: 'Pengaturan QR',
-      performedBy: 'Admin',
-      details: `Token QR Code baru dibuat: ${newToken}`
+  function mapDbAttendance(r: Record<string, unknown>): AttendanceRecord {
+    const dateStr = r.date as string;
+    const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const dayName = dayNames[new Date(dateStr + 'T00:00:00').getDay()];
+    return {
+      id: r.id as string,
+      userId: r.user_id as string,
+      studentName: '',
+      studentNim: '',
+      university: '',
+      date: dateStr,
+      dayName,
+      checkInTime: r.check_in_time ? new Date(r.check_in_time as string).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : null,
+      checkOutTime: r.check_out_time ? new Date(r.check_out_time as string).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : null,
+      totalHours: r.total_hours as string | null,
+      status: r.status as AttendanceStatus,
+      notes: r.notes as string | undefined,
+      qrSessionId: r.qr_session_id as string | undefined,
+      checkInLat: r.check_in_lat as number | undefined,
+      checkInLon: r.check_in_lon as number | undefined,
+      checkInAccuracy: r.check_in_accuracy as number | undefined,
+      checkInDistanceMeters: r.check_in_distance_meters as number | undefined,
+      checkOutLat: r.check_out_lat as number | undefined,
+      checkOutLon: r.check_out_lon as number | undefined,
+      isQrValid: r.is_qr_valid as boolean,
+      isLocationValid: r.is_location_valid as boolean,
+      correctedByAdmin: !!r.corrected_by,
+      correctionReason: r.correction_reason as string | undefined,
+      updatedAt: r.corrected_at as string | undefined,
     };
-    setAuditLogs(prev => [log, ...prev]);
+  }
+
+  const todayStr = getTodayJakarta();
+  const todayRecord = attendances.find(a => a.userId === currentUser?.id && a.date === todayStr) || null;
+  const todayAttendance = {
+    checkIn: todayRecord?.checkInTime || null,
+    checkOut: todayRecord?.checkOutTime || null,
+    totalHours: todayRecord?.totalHours || null,
+    isCheckedIn: !!todayRecord?.checkInTime,
+    isCheckedOut: !!todayRecord?.checkOutTime,
+    status: todayRecord?.status || null
+  };
+
+  const attendanceStats = {
+    hadir: attendances.filter(a => a.userId === currentUser?.id && a.status === 'Hadir').length,
+    terlambat: attendances.filter(a => a.userId === currentUser?.id && a.status === 'Terlambat').length,
+    izin: attendances.filter(a => a.userId === currentUser?.id && (a.status === 'Izin' || a.status === 'Sakit')).length,
+    alpha: attendances.filter(a => a.userId === currentUser?.id && a.status === 'Alpha').length
+  };
+
+  // ---- LOCATIONS ----
+  const refreshLocations = async () => {
+    const { data } = await supabase.from('locations').select('*').order('created_at');
+    if (data) {
+      const locs: Location[] = data.map((l: Record<string, unknown>) => ({
+        id: l.id as string, name: l.name as string, address: l.address as string,
+        latitude: l.latitude as number, longitude: l.longitude as number,
+        radiusMeters: l.radius_meters as number, minGpsAccuracy: l.min_gps_accuracy as number,
+        isActive: l.is_active as boolean
+      }));
+      setLocations(locs);
+      const activeLoc = locs.find(l => l.isActive) || null;
+      setActiveLocation(activeLoc);
+      if (activeLoc) {
+        setQrConfig(prev => ({
+          ...prev,
+          officeName: activeLoc.name,
+          latitude: activeLoc.latitude,
+          longitude: activeLoc.longitude,
+          radiusMeters: activeLoc.radiusMeters,
+        }));
+      }
+    }
+  };
+
+  // ---- QR ----
+  const checkQrScanToday = async () => {
+    if (!currentUser?.id) return;
+    const { data } = await supabase
+      .from('qr_sessions')
+      .select('id, used_by, expires_at')
+      .eq('is_active', true)
+      .gt('expires_at', new Date().toISOString())
+      .limit(10);
+
+    const scanned = data?.some(q => {
+      const usedBy = q.used_by as string[];
+      return usedBy.includes(currentUser.id);
+    }) || false;
+    setIsQrScannedToday(scanned);
+  };
+
+  const scanQrToken = async (token: string): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
+
+    const { data: qrSession, error } = await supabase
+      .from('qr_sessions')
+      .select('*')
+      .eq('token', token)
+      .eq('is_active', true)
+      .single();
+
+    if (error || !qrSession) {
+      return { success: false, message: 'QR Code tidak valid atau tidak ditemukan.' };
+    }
+
+    if (new Date(qrSession.expires_at as string) < new Date()) {
+      return { success: false, message: 'QR Code sudah kedaluwarsa. Minta admin generate QR baru.' };
+    }
+
+    const usedBy = (qrSession.used_by as string[]) || [];
+    if (usedBy.includes(currentUser.id)) {
+      return { success: false, message: 'QR Code ini sudah Anda gunakan hari ini.' };
+    }
+
+    // Mark as used
+    const { error: updateError } = await supabase
+      .from('qr_sessions')
+      .update({ used_by: [...usedBy, currentUser.id] })
+      .eq('id', qrSession.id);
+
+    if (updateError) {
+      return { success: false, message: 'Gagal memverifikasi QR Code. Coba lagi.' };
+    }
+
+    setIsQrScannedToday(true);
+    setQrConfig(prev => ({ ...prev, currentToken: token }));
+    return { success: true, message: 'QR Code berhasil dipindai! Silakan lanjutkan absensi.' };
+  };
+
+  const resetQrScan = () => setIsQrScannedToday(false);
+
+  const regenerateQrToken = async () => {
+    if (!activeLocation) return;
+    const randomPart = Math.random().toString(36).substring(2, 10).toUpperCase();
+    const newToken = `MGK-${Date.now()}-${randomPart}`;
+    const expiresAt = new Date(Date.now() + 60 * 1000).toISOString();
+
+    const { data, error } = await supabase
+      .from('qr_sessions')
+      .insert({
+        location_id: activeLocation.id,
+        token: newToken,
+        expires_at: expiresAt,
+        is_active: true,
+        created_by: currentUser?.id,
+        used_by: []
+      })
+      .select()
+      .single();
+
+    if (!error && data) {
+      setQrConfig(prev => ({
+        ...prev,
+        currentToken: newToken,
+        lastGenerated: new Date().toLocaleString('id-ID'),
+        expiresAt
+      }));
+      await addAuditLog('Generate QR Token', 'Pengaturan QR', `QR baru: ${newToken} (berlaku 60 detik, lokasi: ${activeLocation.name})`);
+    }
   };
 
   const updateQrConfig = (newCfg: Partial<QRCodeConfig>) => {
     setQrConfig(prev => ({ ...prev, ...newCfg }));
-    const log: AuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: formatIndonesianTimestamp(new Date()),
-      action: 'Perubahan Lokasi/Radius QR',
-      category: 'Pengaturan QR',
-      performedBy: 'Admin',
-      details: `Pengaturan lokasi/radius diubah (Radius: ${newCfg.radiusMeters || qrConfig.radiusMeters}m)`
-    };
-    setAuditLogs(prev => [log, ...prev]);
   };
 
-  // Helper date formatters
-  const getTodayDateStr = () => {
-    const d = new Date();
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
+  // ---- GPS ----
+  const handleGpsSuccess = useCallback((position: GeolocationPosition) => {
+    const { latitude, longitude, accuracy } = position.coords;
+    const loc = activeLocation || { latitude: qrConfig.latitude, longitude: qrConfig.longitude, radiusMeters: qrConfig.radiusMeters, minGpsAccuracy: 100 };
+    const distance = haversineDistance(latitude, longitude, loc.latitude, loc.longitude);
+    const maxAccuracy = (loc as Location).minGpsAccuracy ?? 100;
 
-  const getDayNameIndo = (dateStr: string) => {
-    const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
-    const d = new Date(dateStr);
-    return days[d.getDay()] || 'Senin';
-  };
-
-  const formatIndonesianTimestamp = (d: Date) => {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    const day = d.getDate();
-    const month = months[d.getMonth()];
-    const year = d.getFullYear();
-    const hours = String(d.getHours()).padStart(2, '0');
-    const mins = String(d.getMinutes()).padStart(2, '0');
-    return `${day} ${month} ${year} ${hours}:${mins}`;
-  };
-
-  // Calculate today's state for the current logged-in user
-  const userAttendances = attendances.filter(a => a.userId === (currentUser?.id || 'user-andi-01'));
-  
-  // Find current active attendance or default showcase record
-  const currentRecord = userAttendances[0] || null;
-
-  const todayAttendance = {
-    checkIn: currentRecord?.checkInTime || '08:15 WIB',
-    checkOut: currentRecord?.checkOutTime || '17:05 WIB',
-    totalHours: currentRecord?.totalHours || '8 jam 50 menit',
-    isCheckedIn: !!currentRecord?.checkInTime,
-    isCheckedOut: !!currentRecord?.checkOutTime,
-    status: currentRecord?.status || 'Hadir'
-  };
-
-  // Calculate stats for current user
-  const attendanceStats = {
-    hadir: userAttendances.filter(a => a.status === 'Hadir').length || 22,
-    terlambat: userAttendances.filter(a => a.status === 'Terlambat').length || 2,
-    izin: userAttendances.filter(a => a.status === 'Izin' || a.status === 'Sakit').length || 1
-  };
-
-  // Check In action
-  const performCheckIn = (photoUrl?: string) => {
-    if (!isLocationInRange) {
-      return { success: false, message: 'Gagal melakukan absensi: Perangkat Anda berada di luar jangkauan area magang!' };
+    let status: GpsStatus;
+    if (accuracy > maxAccuracy) {
+      status = 'low_accuracy';
+    } else if (distance <= loc.radiusMeters) {
+      status = 'in_range';
+    } else {
+      status = 'out_of_range';
     }
-    if (!isQrScannedToday) {
-      return { success: false, message: 'Gagal melakukan absensi: Anda wajib memindai QR Code di lokasi magang terlebih dahulu!' };
+
+    setGpsState({
+      status, latitude, longitude, accuracy,
+      distanceMeters: Math.round(distance),
+      lastUpdated: new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
+    });
+  }, [activeLocation, qrConfig]);
+
+  const handleGpsError = useCallback((error: GeolocationPositionError) => {
+    setGpsState(prev => ({
+      ...prev,
+      status: error.code === error.PERMISSION_DENIED ? 'permission_denied' : 'unavailable',
+      lastUpdated: new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
+    }));
+  }, []);
+
+  const startGpsWatch = useCallback(() => {
+    if (!navigator.geolocation) { setGpsState(prev => ({ ...prev, status: 'unavailable' })); return; }
+    setGpsState(prev => ({ ...prev, status: 'loading' }));
+    const id = navigator.geolocation.watchPosition(handleGpsSuccess, handleGpsError, {
+      enableHighAccuracy: true, timeout: 15000, maximumAge: 5000
+    });
+    watchIdRef.current = id;
+  }, [handleGpsSuccess, handleGpsError]);
+
+  const stopGpsWatch = useCallback(() => {
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
     }
+  }, []);
+
+  const retryGps = useCallback(() => { stopGpsWatch(); startGpsWatch(); }, [stopGpsWatch, startGpsWatch]);
+
+  // ---- CHECK IN / OUT ----
+  const performCheckIn = async (): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
+    if (gpsState.status === 'out_of_range') return { success: false, message: `Di luar jangkauan: ${gpsState.distanceMeters}m (radius ${qrConfig.radiusMeters}m). Dekati lokasi magang.` };
+    if (gpsState.status === 'low_accuracy') return { success: false, message: `Akurasi GPS terlalu rendah (${gpsState.accuracy?.toFixed(0)}m). Pindah ke area terbuka.` };
+    if (gpsState.status === 'permission_denied') return { success: false, message: 'Izin lokasi ditolak. Aktifkan di pengaturan browser.' };
+    if (gpsState.status !== 'in_range') return { success: false, message: 'Tunggu GPS mengambil koordinat Anda...' };
+    if (!isQrScannedToday) return { success: false, message: 'Pindai QR Code di lokasi magang terlebih dahulu.' };
+    if (todayAttendance.isCheckedIn) return { success: false, message: 'Anda sudah melakukan absen masuk hari ini.' };
 
     const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const mins = String(now.getMinutes()).padStart(2, '0');
-    const timeStr = `${hours}:${mins} WIB`;
-    const isLate = now.getHours() > 8 || (now.getHours() === 8 && now.getMinutes() > 15);
+    const jakartaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
+    const isLate = jakartaTime.getHours() > 8 || (jakartaTime.getHours() === 8 && jakartaTime.getMinutes() > 0);
     const status: AttendanceStatus = isLate ? 'Terlambat' : 'Hadir';
 
-    // R2 CDN URL or Captured Snapshot
-    const finalPhotoUrl = photoUrl || currentUser?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=350';
+    // Check for existing QR session
+    const { data: qrSession } = await supabase
+      .from('qr_sessions')
+      .select('id')
+      .eq('token', qrConfig.currentToken)
+      .single();
 
-    const newRecord: AttendanceRecord = {
-      id: `att-${Date.now()}`,
-      userId: currentUser?.id || 'user-andi-01',
-      studentName: currentUser?.name || 'Andi Pratama',
-      studentNim: currentUser?.nim || '2201234567',
-      university: currentUser?.university || 'Universitas Indonesia',
-      date: getTodayDateStr(),
-      dayName: getDayNameIndo(getTodayDateStr()),
-      checkInTime: timeStr,
-      checkOutTime: null,
-      totalHours: null,
-      status: status,
-      photoUrl: finalPhotoUrl,
-      isQrValid: true,
-      isLocationValid: true,
-      qrTokenUsed: qrConfig.currentToken
-    };
-
-    setAttendances(prev => [newRecord, ...prev]);
-
-    // Add Audit Log
-    const log: AuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: formatIndonesianTimestamp(now),
-      action: 'Absen Masuk (Cloudflare R2)',
-      category: 'Absensi',
-      performedBy: currentUser?.name || 'Andi Pratama',
-      details: `Absen masuk tercatat pada ${timeStr} (Foto tersimpan di Cloudflare R2 bucket: magangku-foto-presensi)`
-    };
-    setAuditLogs(prev => [log, ...prev]);
-
-    return { 
-      success: true, 
-      message: `Absen Masuk Berhasil! Foto tersimpan ke Cloudflare R2 pada ${timeStr}.` 
-    };
-  };
-
-  // Check Out action
-  const performCheckOut = (photoUrl?: string) => {
-    if (!isLocationInRange) {
-      return { success: false, message: 'Gagal melakukan absen pulang: Perangkat Anda berada di luar jangkauan lokasi magang!' };
-    }
-
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const mins = String(now.getMinutes()).padStart(2, '0');
-    const timeStr = `${hours}:${mins} WIB`;
-    const finalPhotoUrl = photoUrl || currentUser?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=350';
-
-    // Find the latest record to update checkout
-    setAttendances(prev => {
-      if (prev.length === 0) return prev;
-      const updated = [...prev];
-      const target = { ...updated[0] };
-      
-      target.checkOutTime = timeStr;
-      target.checkOutPhotoUrl = finalPhotoUrl;
-      target.totalHours = '8 jam 50 menit';
-      updated[0] = target;
-      return updated;
+    const { error } = await supabase.from('attendance_records').insert({
+      user_id: currentUser.id,
+      date: todayStr,
+      check_in_time: now.toISOString(),
+      status,
+      check_in_lat: gpsState.latitude,
+      check_in_lon: gpsState.longitude,
+      check_in_accuracy: gpsState.accuracy,
+      check_in_distance_meters: gpsState.distanceMeters,
+      qr_session_id: qrSession?.id || null,
+      is_qr_valid: true,
+      is_location_valid: true,
     });
 
-    const log: AuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: formatIndonesianTimestamp(now),
-      action: 'Absen Pulang (Cloudflare R2)',
-      category: 'Absensi',
-      performedBy: currentUser?.name || 'Andi Pratama',
-      details: `Absen pulang tercatat pada ${timeStr}. Foto pulang tersimpan di Cloudflare R2.`
-    };
-    setAuditLogs(prev => [log, ...prev]);
-
-    return {
-      success: true,
-      message: `Absen Pulang Berhasil! Waktu tercatat: ${timeStr}. Foto tersimpan ke Cloudflare R2.`
-    };
-  };
-
-  // Admin manual attendance correction
-  const adminCorrectAttendance = (id: string, checkIn: string, checkOut: string, status: AttendanceStatus, reason: string) => {
-    setAttendances(prev => prev.map(item => {
-      if (item.id === id) {
-        return {
-          ...item,
-          checkInTime: checkIn || null,
-          checkOutTime: checkOut || null,
-          status: status,
-          correctedByAdmin: true,
-          correctionReason: reason,
-          updatedAt: formatIndonesianTimestamp(new Date())
-        };
-      }
-      return item;
-    }));
-
-    const log: AuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: formatIndonesianTimestamp(new Date()),
-      action: 'Koreksi Absensi Manual',
-      category: 'Absensi',
-      performedBy: 'Admin',
-      details: `Koreksi absensi ID ${id}: Status=${status}, Alasan: ${reason}`
-    };
-    setAuditLogs(prev => [log, ...prev]);
-  };
-
-  // Activities
-  const addActivity = (day: string, date: string, title: string, time: string) => {
-    const newAct: ActivityRecord = {
-      id: `act-${Date.now()}`,
-      userId: currentUser?.id || 'user-andi-01',
-      day,
-      date,
-      title,
-      time,
-      createdAt: new Date().toISOString()
-    };
-    setActivities(prev => [newAct, ...prev]);
-
-    const log: AuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: formatIndonesianTimestamp(new Date()),
-      action: 'Jurnal Diperbarui',
-      category: 'Absensi',
-      performedBy: currentUser?.name || 'Andi Pratama',
-      details: `${currentUser?.name || 'Andi Pratama'} menambahkan aktivitas: ${title}`
-    };
-    setAuditLogs(prev => [log, ...prev]);
-  };
-
-  // Leave request submission
-  const submitLeaveRequest = (startDate: string, endDate: string, leaveType: any, reason: string, docName?: string) => {
-    const now = new Date();
-    const newReq: LeaveRequest = {
-      id: `leave-${Date.now()}`,
-      userId: currentUser?.id || 'user-andi-01',
-      studentName: currentUser?.name || 'Andi Pratama',
-      studentNim: currentUser?.nim || '2201234567',
-      university: currentUser?.university || 'Universitas Indonesia',
-      requestDate: formatIndonesianTimestamp(now),
-      startDate,
-      endDate,
-      leaveType,
-      reason,
-      documentName: docName || 'Dokumen_Pendukung.pdf',
-      status: 'Menunggu'
-    };
-
-    setLeaveRequests(prev => [newReq, ...prev]);
-
-    const log: AuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: formatIndonesianTimestamp(now),
-      action: 'Pengajuan Izin',
-      category: 'Pengajuan Izin',
-      performedBy: currentUser?.name || 'Andi Pratama',
-      details: `${currentUser?.name || 'Andi Pratama'} mengajukan izin ${leaveType} (${startDate} - ${endDate})`
-    };
-    setAuditLogs(prev => [log, ...prev]);
-  };
-
-  // Admin leave request review
-  const reviewLeaveRequest = (id: string, status: LeaveStatus, adminNotes: string) => {
-    const target = leaveRequests.find(r => r.id === id);
-    if (!target) return;
-
-    setLeaveRequests(prev => prev.map(req => {
-      if (req.id === id) {
-        return {
-          ...req,
-          status,
-          adminNotes,
-          reviewedAt: formatIndonesianTimestamp(new Date()),
-          reviewedBy: 'Admin Pusat'
-        };
-      }
-      return req;
-    }));
-
-    // If approved, automatically record attendance with status 'Izin' or 'Sakit'
-    if (status === 'Disetujui') {
-      const attStatus: AttendanceStatus = target.leaveType.includes('Sakit') ? 'Sakit' : 'Izin';
-      const autoAttendance: AttendanceRecord = {
-        id: `att-auto-${Date.now()}`,
-        userId: target.userId,
-        studentName: target.studentName,
-        studentNim: target.studentNim,
-        university: target.university,
-        date: target.startDate,
-        dayName: getDayNameIndo(target.startDate),
-        checkInTime: null,
-        checkOutTime: null,
-        totalHours: null,
-        status: attStatus,
-        notes: `Pengajuan ${target.leaveType} disetujui admin (${target.reason})`,
-        isQrValid: false,
-        isLocationValid: false
-      };
-      setAttendances(prev => [autoAttendance, ...prev]);
+    if (error) {
+      if (error.code === '23505') return { success: false, message: 'Anda sudah melakukan absen masuk hari ini.' };
+      console.error('Check-in error:', error);
+      return { success: false, message: 'Gagal menyimpan absensi. Coba lagi.' };
     }
 
-    const log: AuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: formatIndonesianTimestamp(new Date()),
-      action: `Izin ${status}`,
-      category: 'Pengajuan Izin',
-      performedBy: 'Admin',
-      details: `Pengajuan izin ${target.studentName} (${target.leaveType}) status diubah menjadi ${status}`
-    };
-    setAuditLogs(prev => [log, ...prev]);
+    await addAuditLog('Absen Masuk', 'Absensi', `Absen masuk pukul ${getTimeJakarta()} | GPS: ${gpsState.distanceMeters}m | Akurasi: ${gpsState.accuracy?.toFixed(0)}m`);
+    await refreshAttendances();
+    return { success: true, message: `Absen Masuk Berhasil! Status: ${status}. Waktu: ${getTimeJakarta()}.` };
   };
 
-  // Student management (Admin)
-  const addStudent = (newStudentData: Omit<User, 'id'>) => {
-    const newStudent: User = {
-      ...newStudentData,
-      id: `user-${Date.now()}`
-    };
-    setStudents(prev => [newStudent, ...prev]);
+  const performCheckOut = async (): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
+    if (gpsState.status !== 'in_range') return { success: false, message: 'Pastikan berada di lokasi magang untuk absen pulang.' };
+    if (!todayRecord) return { success: false, message: 'Belum ada data absen masuk hari ini.' };
+    if (todayAttendance.isCheckedOut) return { success: false, message: 'Anda sudah melakukan absen pulang hari ini.' };
 
-    const log: AuditLog = {
-      id: `log-${Date.now()}`,
-      timestamp: formatIndonesianTimestamp(new Date()),
-      action: 'Peserta Baru',
-      category: 'Data Peserta',
-      performedBy: 'Admin',
-      details: `${newStudent.name} (${newStudent.nim || 'Peserta'}) ditambahkan sebagai peserta magang baru`
-    };
-    setAuditLogs(prev => [log, ...prev]);
+    const now = new Date();
+    // Calculate total hours
+    const checkInTime = new Date(now); // fallback
+    const totalMinutes = Math.max(0, Math.round((now.getTime() - checkInTime.getTime()) / 60000));
+    const totalHoursStr = `${Math.floor(totalMinutes / 60)} jam ${totalMinutes % 60} menit`;
+
+    const { error } = await supabase
+      .from('attendance_records')
+      .update({
+        check_out_time: now.toISOString(),
+        total_hours: totalHoursStr,
+        check_out_lat: gpsState.latitude,
+        check_out_lon: gpsState.longitude,
+        check_out_accuracy: gpsState.accuracy,
+      })
+      .eq('user_id', currentUser.id)
+      .eq('date', todayStr);
+
+    if (error) {
+      console.error('Check-out error:', error);
+      return { success: false, message: 'Gagal menyimpan absen pulang. Coba lagi.' };
+    }
+
+    await addAuditLog('Absen Pulang', 'Absensi', `Absen pulang pukul ${getTimeJakarta()}`);
+    await refreshAttendances();
+    return { success: true, message: `Absen Pulang Berhasil! Waktu: ${getTimeJakarta()}.` };
   };
 
-  const updateStudent = (id: string, data: Partial<User>) => {
-    setStudents(prev => prev.map(s => s.id === id ? { ...s, ...data } : s));
+  const adminCorrectAttendance = async (id: string, checkIn: string, checkOut: string, status: AttendanceStatus, reason: string) => {
+    await supabase.from('attendance_records').update({
+      check_in_time: checkIn ? new Date(checkIn).toISOString() : null,
+      check_out_time: checkOut ? new Date(checkOut).toISOString() : null,
+      status,
+      corrected_by: currentUser?.id,
+      correction_reason: reason,
+      corrected_at: new Date().toISOString()
+    }).eq('id', id);
+    await addAuditLog('Koreksi Absensi', 'Koreksi', `Koreksi ID ${id}: Status=${status}, Alasan: ${reason}`);
+    await refreshAttendances();
   };
 
-  const toggleStudentStatus = (id: string) => {
-    setStudents(prev => prev.map(s => {
-      if (s.id === id) {
-        const nextStatus = s.status === 'Aktif' ? 'Nonaktif' : 'Aktif';
-        return { ...s, status: nextStatus };
+  // ---- ACTIVITIES ----
+  const refreshActivities = async () => {
+    if (!currentUser?.id) return;
+    setIsActivitiesLoading(true);
+    try {
+      let query = supabase.from('activities').select('*').order('activity_date', { ascending: false });
+      if (currentUser.role !== 'admin') query = query.eq('user_id', currentUser.id);
+      const { data } = await query;
+      if (data) {
+        setActivities(data.map((a: Record<string, unknown>) => ({
+          id: a.id as string,
+          userId: a.user_id as string,
+          activityDate: a.activity_date as string,
+          day: a.activity_date as string,
+          date: a.activity_date as string,
+          title: a.title as string,
+          description: a.description as string | undefined,
+          startTime: a.start_time as string | undefined,
+          endTime: a.end_time as string | undefined,
+          time: a.start_time ? `${a.start_time} - ${a.end_time}` : undefined,
+          category: a.category as string | undefined,
+          attachmentUrl: a.attachment_url as string | undefined,
+          createdAt: a.created_at as string,
+        })));
       }
-      return s;
-    }));
+    } finally {
+      setIsActivitiesLoading(false);
+    }
   };
 
-  // Notifications
-  const markNotificationAsRead = (id: string) => {
+  const addActivity = async (data: Partial<ActivityRecord>) => {
+    if (!currentUser?.id) return;
+    await supabase.from('activities').insert({
+      user_id: currentUser.id,
+      activity_date: data.activityDate || getTodayJakarta(),
+      title: data.title,
+      description: data.description || null,
+      start_time: data.startTime || null,
+      end_time: data.endTime || null,
+      category: data.category || null,
+      attachment_url: data.attachmentUrl || null,
+    });
+    await refreshActivities();
+  };
+
+  const updateActivity = async (id: string, data: Partial<ActivityRecord>) => {
+    await supabase.from('activities').update({
+      title: data.title,
+      description: data.description,
+      start_time: data.startTime,
+      end_time: data.endTime,
+      category: data.category,
+      attachment_url: data.attachmentUrl,
+    }).eq('id', id);
+    await refreshActivities();
+  };
+
+  const deleteActivity = async (id: string) => {
+    await supabase.from('activities').delete().eq('id', id);
+    await addAuditLog('Hapus Aktivitas', 'Aktivitas', `Aktivitas ID ${id} dihapus`);
+    await refreshActivities();
+  };
+
+  // ---- LEAVE REQUESTS ----
+  const refreshLeaveRequests = async () => {
+    if (!currentUser?.id) return;
+    setIsLeaveLoading(true);
+    try {
+      let query = supabase.from('leave_requests').select('*').order('created_at', { ascending: false });
+      if (currentUser.role !== 'admin') query = query.eq('user_id', currentUser.id);
+      const { data } = await query;
+      if (data) {
+        setLeaveRequests(data.map((r: Record<string, unknown>) => ({
+          id: r.id as string,
+          userId: r.user_id as string,
+          studentName: '', studentNim: '', university: '',
+          requestDate: new Date(r.created_at as string).toLocaleDateString('id-ID'),
+          startDate: r.start_date as string,
+          endDate: r.end_date as string,
+          leaveType: r.leave_type as any,
+          reason: r.reason as string,
+          documentName: r.document_name as string | undefined,
+          documentUrl: r.document_url as string | undefined,
+          status: r.status as LeaveStatus,
+          adminNotes: r.admin_notes as string | undefined,
+          reviewedAt: r.reviewed_at as string | undefined,
+          reviewedBy: r.reviewed_by as string | undefined,
+        })));
+      }
+    } finally {
+      setIsLeaveLoading(false);
+    }
+  };
+
+  const submitLeaveRequest = async (startDate: string, endDate: string, leaveType: any, reason: string, docName?: string): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
+    const { error } = await supabase.from('leave_requests').insert({
+      user_id: currentUser.id,
+      start_date: startDate,
+      end_date: endDate,
+      leave_type: leaveType,
+      reason,
+      document_name: docName || null,
+      status: 'Menunggu'
+    });
+    if (error) return { success: false, message: 'Gagal mengajukan izin. Coba lagi.' };
+    await addAuditLog('Pengajuan Izin', 'Pengajuan Izin', `${currentUser.name} mengajukan ${leaveType} (${startDate} s/d ${endDate})`);
+    await refreshLeaveRequests();
+    return { success: true, message: 'Pengajuan izin berhasil dikirim.' };
+  };
+
+  const reviewLeaveRequest = async (id: string, status: LeaveStatus, adminNotes: string) => {
+    const target = leaveRequests.find(r => r.id === id);
+    await supabase.from('leave_requests').update({
+      status, admin_notes: adminNotes, reviewed_by: currentUser?.id, reviewed_at: new Date().toISOString()
+    }).eq('id', id);
+
+    if (status === 'Disetujui' && target) {
+      const attStatus: AttendanceStatus = target.leaveType.includes('Sakit') ? 'Sakit' : 'Izin';
+      const start = new Date(target.startDate + 'T00:00:00');
+      const end = new Date(target.endDate + 'T00:00:00');
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dateStr = d.toLocaleDateString('sv-SE');
+        await supabase.from('attendance_records').upsert({
+          user_id: target.userId,
+          date: dateStr,
+          status: attStatus,
+          notes: `${target.leaveType} disetujui: ${target.reason}`,
+          is_qr_valid: false,
+          is_location_valid: false
+        }, { onConflict: 'user_id,date', ignoreDuplicates: true });
+      }
+    }
+    await addAuditLog(`Izin ${status}`, 'Pengajuan Izin', `Pengajuan ID ${id} → ${status}`);
+    await refreshLeaveRequests();
+    await refreshAttendances();
+  };
+
+  // ---- CORRECTION REQUESTS ----
+  const refreshCorrectionRequests = async () => {
+    if (!currentUser?.id) return;
+    let query = supabase.from('attendance_correction_requests').select('*').order('created_at', { ascending: false });
+    if (currentUser.role !== 'admin') query = query.eq('user_id', currentUser.id);
+    const { data } = await query;
+    if (data) {
+      setCorrectionRequests(data.map((r: Record<string, unknown>) => ({
+        id: r.id as string,
+        userId: r.user_id as string,
+        studentName: '',
+        attendanceDate: r.attendance_date as string,
+        correctionType: r.correction_type as string,
+        requestedCheckIn: r.requested_check_in as string | undefined,
+        requestedCheckOut: r.requested_check_out as string | undefined,
+        reason: r.reason as string,
+        evidenceUrl: r.evidence_url as string | undefined,
+        status: r.status as 'Menunggu' | 'Disetujui' | 'Ditolak',
+        adminNotes: r.admin_notes as string | undefined,
+        reviewedBy: r.reviewed_by as string | undefined,
+        reviewedAt: r.reviewed_at as string | undefined,
+        createdAt: r.created_at as string,
+      })));
+    }
+  };
+
+  const submitCorrectionRequest = async (data: Partial<AttendanceCorrectionRequest>): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
+    const { error } = await supabase.from('attendance_correction_requests').insert({
+      user_id: currentUser.id,
+      attendance_date: data.attendanceDate,
+      correction_type: data.correctionType,
+      requested_check_in: data.requestedCheckIn || null,
+      requested_check_out: data.requestedCheckOut || null,
+      reason: data.reason,
+      evidence_url: data.evidenceUrl || null,
+      status: 'Menunggu'
+    });
+    if (error) return { success: false, message: 'Gagal mengajukan koreksi. Coba lagi.' };
+    await refreshCorrectionRequests();
+    return { success: true, message: 'Permintaan koreksi berhasil dikirim.' };
+  };
+
+  const reviewCorrectionRequest = async (id: string, status: 'Disetujui' | 'Ditolak', adminNotes: string) => {
+    await supabase.from('attendance_correction_requests').update({
+      status, admin_notes: adminNotes, reviewed_by: currentUser?.id, reviewed_at: new Date().toISOString()
+    }).eq('id', id);
+    await addAuditLog('Koreksi Absensi', 'Koreksi', `Koreksi ID ${id} → ${status}`);
+    await refreshCorrectionRequests();
+  };
+
+  // ---- STUDENTS (ADMIN) ----
+  const refreshStudents = async () => {
+    setIsStudentsLoading(true);
+    try {
+      const { data } = await supabase.from('user_profiles').select('*').eq('role', 'user');
+      if (data) {
+        setStudents(data.map((p: Record<string, unknown>) => ({
+          id: p.id as string,
+          email: '',
+          name: (p.full_name as string) || '',
+          role: 'user' as const,
+          username: ((p.full_name as string) || '').toLowerCase().replace(' ', '.'),
+          avatar: (p.photo_url as string) || `https://ui-avatars.com/api/?name=${encodeURIComponent((p.full_name as string) || 'User')}&background=2F80ED&color=fff`,
+          phone: p.phone as string | undefined,
+          nim: p.nim as string | undefined,
+          birthPlace: p.birth_place as string | undefined,
+          birthDate: p.birth_date as string | undefined,
+          gender: p.gender as 'Laki-laki' | 'Perempuan' | undefined,
+          university: p.university as string | undefined,
+          faculty: p.faculty as string | undefined,
+          major: p.major as string | undefined,
+          concentration: p.concentration as string | undefined,
+          position: p.position as string | undefined,
+          startDate: p.start_date as string | undefined,
+          endDate: p.end_date as string | undefined,
+          status: (p.status as 'Aktif' | 'Nonaktif' | 'Selesai') || 'Aktif',
+        })));
+      }
+    } finally {
+      setIsStudentsLoading(false);
+    }
+  };
+
+  // addStudent: Admin can update existing profiles but cannot create Supabase Auth users directly.
+  // New users must register themselves. This function updates profile data for an existing user ID.
+  const addStudent = async (_student: Omit<User, 'id'>) => {
+    // Note: Creating Supabase Auth users requires the Admin API (service_role key).
+    // Direct user creation is done via the Register page.
+    // This stub is kept for UI compatibility.
+    console.warn('addStudent: New users must register via the Register page. Admin cannot create auth users from frontend.');
+    await refreshStudents();
+  };
+
+  const updateStudent = async (id: string, data: Partial<User>) => {
+    await supabase.from('user_profiles').update({
+      full_name: data.name,
+      phone: data.phone,
+      nim: data.nim,
+      university: data.university,
+      major: data.major,
+      status: data.status,
+    }).eq('id', id);
+    await refreshStudents();
+  };
+
+  const toggleStudentStatus = async (id: string) => {
+    const student = students.find(s => s.id === id);
+    if (!student) return;
+    const nextStatus = student.status === 'Aktif' ? 'Nonaktif' : 'Aktif';
+    await supabase.from('user_profiles').update({ status: nextStatus }).eq('id', id);
+    await refreshStudents();
+  };
+
+  // ---- AUDIT LOGS ----
+  const refreshAuditLogs = async () => {
+    const { data } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100);
+    if (data) {
+      setAuditLogs(data.map((l: Record<string, unknown>) => ({
+        id: l.id as string,
+        timestamp: new Date(l.created_at as string).toLocaleString('id-ID'),
+        action: l.action as string,
+        category: (l.category as AuditLog['category']) || 'Absensi',
+        performedBy: l.performed_by as string || 'System',
+        details: l.details as string || '',
+      })));
+    }
+  };
+
+  const addAuditLog = async (action: string, category: AuditLog['category'], details: string) => {
+    await supabase.from('audit_logs').insert({
+      performed_by: currentUser?.id || null,
+      action, category, details
+    });
+  };
+
+  // ---- NOTIFICATIONS ----
+  const refreshNotifications = async () => {
+    if (!currentUser?.id) return;
+    const { data } = await supabase.from('notifications').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false });
+    if (data) {
+      setNotifications(data.map((n: Record<string, unknown>) => ({
+        id: n.id as string,
+        title: n.title as string,
+        message: n.message as string,
+        time: new Date(n.created_at as string).toLocaleString('id-ID'),
+        read: n.is_read as boolean,
+        type: (n.type as NotificationItem['type']) || 'info',
+        linkTab: n.link_tab as string | undefined,
+      })));
+    }
+  };
+
+  const markNotificationAsRead = async (id: string) => {
+    await supabase.from('notifications').update({ is_read: true }).eq('id', id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
-  const markAllNotificationsAsRead = () => {
+  const markAllNotificationsAsRead = async () => {
+    if (!currentUser?.id) return;
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', currentUser.id);
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
   return (
     <DataContext.Provider
       value={{
-        attendances,
-        todayAttendance,
-        attendanceStats,
-        performCheckIn,
-        performCheckOut,
-        adminCorrectAttendance,
-        qrConfig,
-        updateQrConfig,
-        regenerateQrToken,
-        isQrScannedToday,
-        scanQrToken,
-        resetQrScan,
-        gpsMode,
-        setGpsMode,
-        isLocationInRange,
-        isGpsActive,
-        checkRealGps,
-        activities,
-        addActivity,
-        leaveRequests,
-        submitLeaveRequest,
-        reviewLeaveRequest,
-        students,
-        addStudent,
-        updateStudent,
-        toggleStudentStatus,
-        auditLogs,
-        notifications,
-        markNotificationAsRead,
-        markAllNotificationsAsRead
+        attendances, todayAttendance, attendanceStats, isAttendanceLoading,
+        performCheckIn, performCheckOut, adminCorrectAttendance, refreshAttendances,
+        qrConfig, activeLocation, locations, updateQrConfig, regenerateQrToken,
+        isQrScannedToday, scanQrToken, resetQrScan, refreshLocations,
+        gpsState, startGpsWatch, stopGpsWatch, retryGps,
+        activities, isActivitiesLoading, addActivity, updateActivity, deleteActivity, refreshActivities,
+        leaveRequests, isLeaveLoading, submitLeaveRequest, reviewLeaveRequest, refreshLeaveRequests,
+        correctionRequests, submitCorrectionRequest, reviewCorrectionRequest, refreshCorrectionRequests,
+        students, isStudentsLoading, refreshStudents, addStudent, updateStudent, toggleStudentStatus,
+        auditLogs, notifications, markNotificationAsRead, markAllNotificationsAsRead, refreshNotifications
       }}
     >
       {children}
@@ -604,8 +846,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useData = () => {
   const context = useContext(DataContext);
-  if (!context) {
-    throw new Error('useData must be used within a DataProvider');
-  }
+  if (!context) throw new Error('useData must be used within a DataProvider');
   return context;
 };
