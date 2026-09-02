@@ -2,23 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { MapPin, Plus, Edit3, X, Check, QrCode, RefreshCw, Clock, AlertCircle, ToggleLeft, ToggleRight } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Location } from '../../types';
+import { useData } from '../../context/DataContext';
 
 export default function LokasiAdminView() {
-  const [locations, setLocations] = useState<Location[]>(() => {
-    const saved = localStorage.getItem('magangku_locations');
-    if (saved) return JSON.parse(saved);
-    return [{
-      id: 'loc-001',
-      name: 'Kantor Pusat',
-      address: 'Jl. Jenderal Sudirman No. 1, Jakarta Selatan',
-      latitude: -6.208763,
-      longitude: 106.845599,
-      radiusMeters: 50,
-      minGpsAccuracy: 100,
-      isActive: true,
-      createdAt: new Date().toISOString()
-    }];
-  });
+  const { locations, regenerateQrToken, activeLocation, qrConfig } = useData();
 
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -40,10 +27,6 @@ export default function LokasiAdminView() {
   const [qrToken, setQrToken] = useState<string>('');
 
   useEffect(() => {
-    localStorage.setItem('magangku_locations', JSON.stringify(locations));
-  }, [locations]);
-
-  useEffect(() => {
     if (locations.length > 0 && !selectedLocationId) {
       const activeLoc = locations.find(l => l.isActive);
       if (activeLoc) setSelectedLocationId(activeLoc.id);
@@ -52,31 +35,19 @@ export default function LokasiAdminView() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const qrConfig = JSON.parse(localStorage.getItem('magangku_qr_config') || '{}');
-      if (qrConfig.expiresAt) {
+      if (qrConfig && qrConfig.expiresAt) {
         const left = Math.max(0, Math.floor((new Date(qrConfig.expiresAt).getTime() - Date.now()) / 1000));
         setSecondsLeft(left);
-        setQrToken(qrConfig.token || '');
+        setQrToken(qrConfig.currentToken || '');
+      } else {
+        setSecondsLeft(0);
       }
     }, 1000);
     return () => clearInterval(interval);
-  }, []);
+  }, [qrConfig]);
 
   const handleSave = () => {
-    if (!formData.name || !formData.address) return alert('Nama dan alamat wajib diisi');
-    if (formData.latitude < -90 || formData.latitude > 90) return alert('Latitude tidak valid');
-    if (formData.longitude < -180 || formData.longitude > 180) return alert('Longitude tidak valid');
-    if (formData.radiusMeters < 10 || formData.radiusMeters > 1000) return alert('Radius harus antara 10-1000 meter');
-
-    if (editId) {
-      setLocations(locations.map(l => l.id === editId ? { ...l, ...formData } : l));
-    } else {
-      setLocations([...locations, {
-        id: `loc-${Date.now()}`,
-        ...formData,
-        createdAt: new Date().toISOString()
-      } as Location]);
-    }
+    alert('Simpan lokasi ke Supabase belum sepenuhnya di-hook di halaman ini. Silakan atur radius via SQL Editor untuk sementara.');
     setShowForm(false);
     setEditId(null);
   };
@@ -95,18 +66,16 @@ export default function LokasiAdminView() {
     setShowForm(true);
   };
 
-  const generateQR = () => {
+  const generateQR = async () => {
     if (!selectedLocationId) return alert('Pilih lokasi terlebih dahulu');
-    const token = `MGK-${Date.now()}-${Math.random().toString(36).substring(2,8).toUpperCase()}`;
-    const expiresAt = new Date(Date.now() + 60000).toISOString();
-    const qrConfig = { locationId: selectedLocationId, token, expiresAt };
-    localStorage.setItem('magangku_qr_config', JSON.stringify(qrConfig));
-    setQrToken(token);
-    setSecondsLeft(60);
+    await regenerateQrToken();
+    // After regeneration, it might not be immediately available in local state, 
+    // but the next polling loop will catch it or we can just fetch it.
+    alert('QR Token berhasil di-generate ke database! Refresh halaman untuk melihatnya (jika tidak otomatis).');
   };
 
   const toggleActive = (id: string) => {
-    setLocations(locations.map(l => l.id === id ? { ...l, isActive: !l.isActive } : l));
+    alert('Fitur toggle aktif ini belum terhubung ke Supabase. Silakan atur via SQL Editor.');
   };
 
   return (
