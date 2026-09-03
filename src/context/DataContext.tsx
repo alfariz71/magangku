@@ -33,6 +33,8 @@ export interface GpsState {
   longitude: number | null;
   accuracy: number | null;
   distanceMeters: number | null;
+  nearestLocationName?: string | null;
+  targetRadiusMeters?: number | null;
   lastUpdated: string | null;
 }
 
@@ -61,12 +63,18 @@ interface DataContextType {
   qrConfig: QRCodeConfig;
   activeLocation: Location | null;
   locations: Location[];
+  locationQrMap: Record<string, string>;
   updateQrConfig: (config: Partial<QRCodeConfig>) => void;
   regenerateQrToken: () => Promise<void>;
+  generateQrForLocationId: (locationId: string) => Promise<void>;
   isQrScannedToday: boolean;
   scanQrToken: (token: string) => Promise<{ success: boolean; message: string }>;
   resetQrScan: () => void;
   refreshLocations: () => Promise<void>;
+  addLocation: (location: Partial<Location>) => Promise<void>;
+  updateLocation: (id: string, location: Partial<Location>) => Promise<void>;
+  toggleLocationStatus: (id: string) => Promise<void>;
+  deleteLocation: (id: string) => Promise<void>;
 
   // GPS
   gpsState: GpsState;
@@ -157,6 +165,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [locations, setLocations] = useState<Location[]>([]);
   const [activeLocation, setActiveLocation] = useState<Location | null>(null);
+  // Map dari location_id → token QR aktif untuk lokasi tersebut
+  const [locationQrMap, setLocationQrMap] = useState<Record<string, string>>({});
 
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
@@ -200,29 +210,73 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!currentUser?.id) return;
     setIsAttendanceLoading(true);
     try {
-      let query = supabase.from('attendance_records').select('*').order('date', { ascending: false });
+      let query = supabase
+        .from('attendance_records')
+        .select('*')
+        .order('date', { ascending: false });
+
       if (currentUser.role !== 'admin') {
         query = query.eq('user_id', currentUser.id);
       }
-      const { data, error } = await query;
-      if (!error && data) {
-        setAttendances(data.map(mapDbAttendance));
+
+      const { data: records, error } = await query;
+      if (error) {
+        console.error('Error fetching attendances:', error.message);
+        return;
       }
+
+      if (!records) {
+        setAttendances([]);
+        return;
+      }
+
+      // Fetch user profiles to enrich student info
+      const { data: profiles } = await supabase
+        .from('user_profiles')
+        .select('id, full_name, nim, university, photo_url');
+
+      // Fetch qr_sessions to map location
+      const { data: qrSessions } = await supabase
+        .from('qr_sessions')
+        .select('id, location_id');
+
+      const { data: locsData } = await supabase
+        .from('locations')
+        .select('id, name');
+
+      const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+      const qrLocMap = new Map((qrSessions || []).map((q: any) => [q.id, q.location_id]));
+      const locNameMap = new Map((locsData || []).map((l: any) => [l.id, l.name]));
+
+      const mapped = records.map((r: Record<string, unknown>) => {
+        const p = profileMap.get(r.user_id as string);
+        const locId = r.qr_session_id ? qrLocMap.get(r.qr_session_id as string) : null;
+        const locName = locId ? locNameMap.get(locId) : null;
+        return mapDbAttendance(r, p, locName);
+      });
+
+      setAttendances(mapped);
+    } catch (err) {
+      console.error('refreshAttendances unexpected error:', err);
     } finally {
       setIsAttendanceLoading(false);
     }
   };
 
-  function mapDbAttendance(r: Record<string, unknown>): AttendanceRecord {
+  function mapDbAttendance(
+    r: Record<string, unknown>,
+    p?: { full_name?: string; nim?: string; university?: string; photo_url?: string },
+    locName?: string | null
+  ): AttendanceRecord {
     const dateStr = r.date as string;
     const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const dayName = dayNames[new Date(dateStr + 'T00:00:00').getDay()];
     return {
       id: r.id as string,
       userId: r.user_id as string,
-      studentName: '',
-      studentNim: '',
-      university: '',
+      studentName: p?.full_name || (currentUser?.id === r.user_id ? (currentUser?.name || 'Peserta') : 'Peserta'),
+      studentNim: p?.nim || (currentUser?.id === r.user_id ? (currentUser?.nim || '-') : '-'),
+      university: p?.university || (currentUser?.id === r.user_id ? (currentUser?.university || '-') : '-'),
       date: dateStr,
       dayName,
       checkInTime: r.check_in_time ? new Date(r.check_in_time as string).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : null,
@@ -237,11 +291,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       checkInDistanceMeters: r.check_in_distance_meters as number | undefined,
       checkOutLat: r.check_out_lat as number | undefined,
       checkOutLon: r.check_out_lon as number | undefined,
+      photoUrl: (r.photo_url as string) || p?.photo_url || undefined,
       isQrValid: r.is_qr_valid as boolean,
       isLocationValid: r.is_location_valid as boolean,
       correctedByAdmin: !!r.corrected_by,
       correctionReason: r.correction_reason as string | undefined,
       updatedAt: r.corrected_at as string | undefined,
+      locationName: locName || undefined,
     };
   }
 
@@ -285,76 +341,107 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           radiusMeters: activeLoc.radiusMeters,
         }));
       }
+      // Fetch QR token aktif untuk setiap lokasi
+      const locIds = locs.map(l => l.id);
+      if (locIds.length > 0) {
+        const { data: qrData } = await supabase
+          .from('qr_sessions')
+          .select('location_id, token')
+          .in('location_id', locIds)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+        if (qrData) {
+          const qrMap: Record<string, string> = {};
+          qrData.forEach((q: any) => {
+            if (!qrMap[q.location_id]) qrMap[q.location_id] = q.token;
+          });
+          setLocationQrMap(qrMap);
+          // Set active QR config dari lokasi aktif
+          if (activeLoc && qrMap[activeLoc.id]) {
+            setQrConfig(prev => ({ ...prev, currentToken: qrMap[activeLoc.id] }));
+          }
+        }
+      }
     }
   };
 
-  // ---- QR ----
-  const checkQrScanToday = async () => {
-    if (!currentUser?.id) return;
-    const { data } = await supabase
-      .from('qr_sessions')
-      .select('id, used_by, expires_at')
-      .eq('is_active', true)
-      .gt('expires_at', new Date().toISOString())
-      .limit(10);
+  const addLocation = async (loc: Partial<Location>) => {
+    const { data: insertData, error } = await supabase.from('locations').insert({
+      name: loc.name,
+      address: loc.address,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      radius_meters: loc.radiusMeters,
+      min_gps_accuracy: loc.minGpsAccuracy,
+      is_active: loc.isActive,
+      updated_by: currentUser?.id
+    }).select().single();
 
-    const scanned = data?.some(q => {
-      const usedBy = q.used_by as string[];
-      return usedBy.includes(currentUser.id);
-    }) || false;
-    setIsQrScannedToday(scanned);
+    if (!error && insertData) {
+      // Auto-generate permanent QR for new location
+      await generateQrForLocation(insertData.id, insertData.name);
+      await refreshLocations();
+      await addAuditLog('Tambah Lokasi', 'Lokasi', `Lokasi baru ditambahkan: ${loc.name} (QR otomatis dibuat)`);
+    }
   };
 
-  const scanQrToken = async (token: string): Promise<{ success: boolean; message: string }> => {
-    if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
-
-    const { data: qrSession, error } = await supabase
-      .from('qr_sessions')
-      .select('*')
-      .eq('token', token)
-      .eq('is_active', true)
-      .single();
-
-    if (error || !qrSession) {
-      return { success: false, message: 'QR Code tidak valid atau tidak ditemukan.' };
+  const updateLocation = async (id: string, loc: Partial<Location>) => {
+    const { error } = await supabase.from('locations').update({
+      name: loc.name,
+      address: loc.address,
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      radius_meters: loc.radiusMeters,
+      min_gps_accuracy: loc.minGpsAccuracy,
+      is_active: loc.isActive,
+      updated_by: currentUser?.id
+    }).eq('id', id);
+    if (!error) {
+      await refreshLocations();
+      await addAuditLog('Update Lokasi', 'Lokasi', `Lokasi diupdate: ${loc.name}`);
     }
-
-    if (new Date(qrSession.expires_at as string) < new Date()) {
-      return { success: false, message: 'QR Code sudah kedaluwarsa. Minta admin generate QR baru.' };
-    }
-
-    const usedBy = (qrSession.used_by as string[]) || [];
-    if (usedBy.includes(currentUser.id)) {
-      return { success: false, message: 'QR Code ini sudah Anda gunakan hari ini.' };
-    }
-
-    // Mark as used
-    const { error: updateError } = await supabase
-      .from('qr_sessions')
-      .update({ used_by: [...usedBy, currentUser.id] })
-      .eq('id', qrSession.id);
-
-    if (updateError) {
-      return { success: false, message: 'Gagal memverifikasi QR Code. Coba lagi.' };
-    }
-
-    setIsQrScannedToday(true);
-    setQrConfig(prev => ({ ...prev, currentToken: token }));
-    return { success: true, message: 'QR Code berhasil dipindai! Silakan lanjutkan absensi.' };
   };
 
-  const resetQrScan = () => setIsQrScannedToday(false);
+  const toggleLocationStatus = async (id: string) => {
+    const loc = locations.find(l => l.id === id);
+    if (!loc) return;
+    const { error } = await supabase.from('locations').update({
+      is_active: !loc.isActive,
+      updated_by: currentUser?.id
+    }).eq('id', id);
+    if (!error) {
+      await refreshLocations();
+      await addAuditLog('Update Lokasi', 'Lokasi', `Status lokasi ${loc.name} diubah menjadi ${!loc.isActive ? 'Aktif' : 'Nonaktif'}`);
+    }
+  };
 
-  const regenerateQrToken = async () => {
-    if (!activeLocation) return;
+  const deleteLocation = async (id: string) => {
+    const loc = locations.find(l => l.id === id);
+    const { error } = await supabase.from('locations').delete().eq('id', id);
+    if (!error) {
+      await refreshLocations();
+      await addAuditLog('Hapus Lokasi', 'Lokasi', `Lokasi dihapus: ${loc?.name || id}`);
+    }
+  };
+
+  // ---- QR Token ----
+  // Internal helper: generate a permanent QR for a specific location (1 lokasi = 1 QR)
+  const generateQrForLocation = async (locationId: string, locationName: string) => {
     const randomPart = Math.random().toString(36).substring(2, 10).toUpperCase();
     const newToken = `MGK-${Date.now()}-${randomPart}`;
-    const expiresAt = new Date(Date.now() + 60 * 1000).toISOString();
+    const expiresAt = new Date('2099-12-31T23:59:59Z').toISOString();
+
+    // Deactivate existing QR for this location first
+    await supabase
+      .from('qr_sessions')
+      .update({ is_active: false })
+      .eq('location_id', locationId)
+      .eq('is_active', true);
 
     const { data, error } = await supabase
       .from('qr_sessions')
       .insert({
-        location_id: activeLocation.id,
+        location_id: locationId,
         token: newToken,
         expires_at: expiresAt,
         is_active: true,
@@ -371,36 +458,156 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastGenerated: new Date().toLocaleString('id-ID'),
         expiresAt
       }));
-      await addAuditLog('Generate QR Token', 'Pengaturan QR', `QR baru: ${newToken} (berlaku 60 detik, lokasi: ${activeLocation.name})`);
+      setLocationQrMap(prev => ({ ...prev, [locationId]: newToken }));
+      await addAuditLog('Generate QR Token', 'Pengaturan QR', `QR permanen dibuat untuk lokasi: ${locationName}`);
+      return newToken;
     }
+    return null;
+  };
+
+  // Public: regenerate token for active location
+  const regenerateQrToken = async () => {
+    if (!activeLocation) return;
+    await generateQrForLocation(activeLocation.id, activeLocation.name);
+  };
+
+  // Generate/regenerate QR untuk lokasi tertentu berdasarkan ID
+  const generateQrForLocationId = async (locationId: string) => {
+    const loc = locations.find(l => l.id === locationId);
+    if (!loc) return;
+    await generateQrForLocation(locationId, loc.name);
   };
 
   const updateQrConfig = (newCfg: Partial<QRCodeConfig>) => {
     setQrConfig(prev => ({ ...prev, ...newCfg }));
   };
 
+  // ---- QR Scan Today ----
+  const checkQrScanToday = async () => {
+    if (!currentUser?.id) return;
+    const { data } = await supabase
+      .from('attendance_records')
+      .select('id, check_in_time')
+      .eq('user_id', currentUser.id)
+      .eq('date', todayStr)
+      .maybeSingle();
+
+    setIsQrScannedToday(!!data?.check_in_time);
+  };
+
+  const scanQrToken = async (token: string): Promise<{ success: boolean; message: string }> => {
+    if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
+
+    const { data: qrSession, error } = await supabase
+      .from('qr_sessions')
+      .select('*')
+      .eq('token', token)
+      .eq('is_active', true)
+      .maybeSingle();
+
+    if (error || !qrSession) {
+      return { success: false, message: 'QR Code tidak valid atau tidak ditemukan.' };
+    }
+
+    if (new Date(qrSession.expires_at as string) < new Date()) {
+      return { success: false, message: 'QR Code sudah kedaluwarsa. Hubungi admin.' };
+    }
+
+    // Check if user already attended today (both in and out)
+    const { data: existingAtt } = await supabase
+      .from('attendance_records')
+      .select('id, check_in_time, check_out_time')
+      .eq('user_id', currentUser.id)
+      .eq('date', todayStr)
+      .maybeSingle();
+
+    if (existingAtt && existingAtt.check_in_time && existingAtt.check_out_time) {
+      return { success: false, message: 'Anda sudah menyelesaikan absensi masuk dan pulang hari ini.' };
+    }
+
+    // Match scanned QR with the correct location and update GPS target immediately
+    if (qrSession.location_id) {
+      const scannedLoc = locations.find(l => l.id === qrSession.location_id);
+      if (scannedLoc) {
+        setActiveLocation(scannedLoc);
+        setQrConfig(prev => ({
+          ...prev,
+          officeName: scannedLoc.name,
+          latitude: scannedLoc.latitude,
+          longitude: scannedLoc.longitude,
+          radiusMeters: scannedLoc.radiusMeters,
+          currentToken: token
+        }));
+      }
+    }
+
+    setIsQrScannedToday(true);
+    setQrConfig(prev => ({ ...prev, currentToken: token }));
+    return { success: true, message: 'QR Code valid dan berhasil diverifikasi!' };
+  };
+
+  const resetQrScan = () => setIsQrScannedToday(false);
+
+
   // ---- GPS ----
   const handleGpsSuccess = useCallback((position: GeolocationPosition) => {
     const { latitude, longitude, accuracy } = position.coords;
-    const loc = activeLocation || { latitude: qrConfig.latitude, longitude: qrConfig.longitude, radiusMeters: qrConfig.radiusMeters, minGpsAccuracy: 100 };
-    const distance = haversineDistance(latitude, longitude, loc.latitude, loc.longitude);
-    const maxAccuracy = (loc as Location).minGpsAccuracy ?? 100;
+    
+    // Auto-detect nearest active office location from all locations
+    const activeLocs = locations.filter(l => l.isActive);
+    let targetLoc: { id?: string; name: string; latitude: number; longitude: number; radiusMeters: number; minGpsAccuracy?: number };
+    let distance: number;
+
+    if (activeLocs.length > 0) {
+      let nearest = activeLocs[0];
+      let shortestDist = haversineDistance(latitude, longitude, nearest.latitude, nearest.longitude);
+
+      for (let i = 1; i < activeLocs.length; i++) {
+        const d = haversineDistance(latitude, longitude, activeLocs[i].latitude, activeLocs[i].longitude);
+        if (d < shortestDist) {
+          shortestDist = d;
+          nearest = activeLocs[i];
+        }
+      }
+      targetLoc = nearest;
+      distance = shortestDist;
+    } else {
+      targetLoc = activeLocation || {
+        name: qrConfig.officeName || 'Kantor',
+        latitude: qrConfig.latitude,
+        longitude: qrConfig.longitude,
+        radiusMeters: qrConfig.radiusMeters,
+        minGpsAccuracy: 100
+      };
+      distance = haversineDistance(latitude, longitude, targetLoc.latitude, targetLoc.longitude);
+    }
+
+    const maxAccuracy = (targetLoc as Location).minGpsAccuracy ?? 300;
+    const isWithinRadius = distance <= targetLoc.radiusMeters;
 
     let status: GpsStatus;
-    if (accuracy > maxAccuracy) {
-      status = 'low_accuracy';
-    } else if (distance <= loc.radiusMeters) {
+    if (isWithinRadius) {
       status = 'in_range';
+      if ('id' in targetLoc && (!activeLocation || activeLocation.id !== targetLoc.id)) {
+        setActiveLocation(targetLoc as Location);
+      }
+    } else if (accuracy > maxAccuracy) {
+      status = 'low_accuracy';
     } else {
       status = 'out_of_range';
     }
 
     setGpsState({
-      status, latitude, longitude, accuracy,
+      status,
+      latitude,
+      longitude,
+      accuracy,
       distanceMeters: Math.round(distance),
+      nearestLocationName: targetLoc.name,
+      targetRadiusMeters: targetLoc.radiusMeters,
       lastUpdated: new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta' })
     });
-  }, [activeLocation, qrConfig]);
+  }, [locations, activeLocation, qrConfig]);
 
   const handleGpsError = useCallback((error: GeolocationPositionError) => {
     setGpsState(prev => ({
@@ -431,10 +638,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // ---- CHECK IN / OUT ----
   const performCheckIn = async (): Promise<{ success: boolean; message: string }> => {
     if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
-    if (gpsState.status === 'out_of_range') return { success: false, message: `Di luar jangkauan: ${gpsState.distanceMeters}m (radius ${qrConfig.radiusMeters}m). Dekati lokasi magang.` };
-    if (gpsState.status === 'low_accuracy') return { success: false, message: `Akurasi GPS terlalu rendah (${gpsState.accuracy?.toFixed(0)}m). Pindah ke area terbuka.` };
+    const officeName = gpsState.nearestLocationName || qrConfig.officeName || 'kantor';
+    const radius = gpsState.targetRadiusMeters || qrConfig.radiusMeters || 50;
+
+    if (gpsState.status === 'out_of_range') return { success: false, message: `Di luar jangkauan: ${gpsState.distanceMeters}m dari ${officeName} (radius ${radius}m). Dekati lokasi magang.` };
     if (gpsState.status === 'permission_denied') return { success: false, message: 'Izin lokasi ditolak. Aktifkan di pengaturan browser.' };
-    if (gpsState.status !== 'in_range') return { success: false, message: 'Tunggu GPS mengambil koordinat Anda...' };
+    if (gpsState.status === 'loading' || gpsState.status === 'idle') return { success: false, message: 'Tunggu GPS mengambil koordinat Anda...' };
+    if (gpsState.status === 'unavailable') return { success: false, message: 'GPS tidak tersedia di perangkat ini.' };
+    if (gpsState.status === 'low_accuracy') return { success: false, message: `Akurasi GPS terlalu rendah (${gpsState.accuracy?.toFixed(0)}m). Anda berada di luar radius ${officeName}. Dekati area kantor.` };
     if (!isQrScannedToday) return { success: false, message: 'Pindai QR Code di lokasi magang terlebih dahulu.' };
     if (todayAttendance.isCheckedIn) return { success: false, message: 'Anda sudah melakukan absen masuk hari ini.' };
 
@@ -448,7 +659,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .from('qr_sessions')
       .select('id')
       .eq('token', qrConfig.currentToken)
-      .single();
+      .maybeSingle();
 
     const { error } = await supabase.from('attendance_records').insert({
       user_id: currentUser.id,
@@ -467,17 +678,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (error) {
       if (error.code === '23505') return { success: false, message: 'Anda sudah melakukan absen masuk hari ini.' };
       console.error('Check-in error:', error);
-      return { success: false, message: 'Gagal menyimpan absensi. Coba lagi.' };
+      return { success: false, message: `Gagal menyimpan absensi: ${error.message}` };
     }
 
-    await addAuditLog('Absen Masuk', 'Absensi', `Absen masuk pukul ${getTimeJakarta()} | GPS: ${gpsState.distanceMeters}m | Akurasi: ${gpsState.accuracy?.toFixed(0)}m`);
+    await addAuditLog('Absen Masuk', 'Absensi', `Absen masuk di ${officeName} pukul ${getTimeJakarta()} | Jarak: ${gpsState.distanceMeters}m`);
     await refreshAttendances();
-    return { success: true, message: `Absen Masuk Berhasil! Status: ${status}. Waktu: ${getTimeJakarta()}.` };
+    return { success: true, message: `Absen Masuk Berhasil di ${officeName}! Status: ${status}. Waktu: ${getTimeJakarta()}.` };
   };
 
   const performCheckOut = async (): Promise<{ success: boolean; message: string }> => {
     if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
-    if (gpsState.status !== 'in_range') return { success: false, message: 'Pastikan berada di lokasi magang untuk absen pulang.' };
+    const officeName = gpsState.nearestLocationName || qrConfig.officeName || 'kantor';
+    if (gpsState.status !== 'in_range') return { success: false, message: `Pastikan berada di ${officeName} untuk absen pulang.` };
     if (!todayRecord) return { success: false, message: 'Belum ada data absen masuk hari ini.' };
     if (todayAttendance.isCheckedOut) return { success: false, message: 'Anda sudah melakukan absen pulang hari ini.' };
 
@@ -829,8 +1041,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         attendances, todayAttendance, attendanceStats, isAttendanceLoading,
         performCheckIn, performCheckOut, adminCorrectAttendance, refreshAttendances,
-        qrConfig, activeLocation, locations, updateQrConfig, regenerateQrToken,
-        isQrScannedToday, scanQrToken, resetQrScan, refreshLocations,
+        qrConfig, activeLocation, locations, locationQrMap, updateQrConfig, regenerateQrToken, generateQrForLocationId, isQrScannedToday, scanQrToken, resetQrScan, refreshLocations, addLocation, updateLocation, toggleLocationStatus, deleteLocation,
         gpsState, startGpsWatch, stopGpsWatch, retryGps,
         activities, isActivitiesLoading, addActivity, updateActivity, deleteActivity, refreshActivities,
         leaveRequests, isLeaveLoading, submitLeaveRequest, reviewLeaveRequest, refreshLeaveRequests,

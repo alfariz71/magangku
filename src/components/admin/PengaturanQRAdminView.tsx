@@ -74,14 +74,6 @@ export const PengaturanQRAdminView: React.FC = () => {
             <Printer className="h-4 w-4 text-[#2F80ED]" />
             Cetak QR Code
           </button>
-
-          <button
-            onClick={regenerateQrToken}
-            className="flex items-center gap-2 rounded-xl bg-[#2F80ED] px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-600 transition-all"
-          >
-            <RefreshCw className="h-4 w-4" />
-            Generate Token Baru
-          </button>
         </div>
       </div>
 

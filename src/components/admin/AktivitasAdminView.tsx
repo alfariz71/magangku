@@ -5,19 +5,6 @@ import { useData } from '../../context/DataContext';
 export const AktivitasAdminView: React.FC = () => {
   const { activities, students } = useData();
   const [searchQuery, setSearchQuery] = useState('');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [verifiedIds, setVerifiedIds] = useState<string[]>(['act-01', 'act-02']);
-
-  const handleVerify = (id: string) => {
-    if (verifiedIds.includes(id)) {
-      setVerifiedIds(prev => prev.filter(item => item !== id));
-      setToastMessage('Status verifikasi jurnal dibatalkan.');
-    } else {
-      setVerifiedIds(prev => [...prev, id]);
-      setToastMessage('Jurnal aktivitas berhasil diverifikasi oleh Administrator.');
-    }
-    setTimeout(() => setToastMessage(null), 3000);
-  };
 
   const filteredActivities = activities.filter(a => {
     const dayStr = a.day || a.activityDate || '-';
@@ -35,13 +22,6 @@ export const AktivitasAdminView: React.FC = () => {
           Tinjau laporan log kegiatan harian peserta magang untuk evaluasi berkala
         </p>
       </div>
-
-      {toastMessage && (
-        <div className="flex items-center gap-2.5 rounded-xl bg-emerald-50 p-4 text-xs font-semibold text-[#27AE60] border border-emerald-200 shadow-sm animate-in fade-in">
-          <CheckCircle2 className="h-4 w-4" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
 
       {/* Search Filter */}
       <div className="rounded-[16px] border border-slate-100 bg-white p-4 sm:p-5 shadow-sm">
@@ -65,14 +45,11 @@ export const AktivitasAdminView: React.FC = () => {
               <tr className="border-b border-slate-100 text-slate-600 font-bold">
                 <th className="pb-3 pr-4">Hari & Tanggal</th>
                 <th className="pb-3 px-4">Judul & Rincian Aktivitas</th>
-                <th className="pb-3 px-4">Waktu Pengerjaan</th>
-                <th className="pb-3 px-4">Status Verifikasi</th>
-                <th className="pb-3 pl-4 text-right">Tindakan</th>
+                <th className="pb-3 pl-4">Waktu Pengerjaan</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
               {filteredActivities.map((act) => {
-                const isVerified = verifiedIds.includes(act.id);
                 return (
                   <tr key={act.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-4 pr-4 whitespace-nowrap">
@@ -84,34 +61,8 @@ export const AktivitasAdminView: React.FC = () => {
                       {act.title}
                     </td>
 
-                    <td className="py-4 px-4 whitespace-nowrap text-slate-600">
+                    <td className="py-4 pl-4 whitespace-nowrap text-slate-600">
                       {act.time}
-                    </td>
-
-                    <td className="py-4 px-4 whitespace-nowrap">
-                      {isVerified ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-[#27AE60]">
-                          <Check className="h-3 w-3" />
-                          Terverifikasi
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-[#F2994A]">
-                          Menunggu Review
-                        </span>
-                      )}
-                    </td>
-
-                    <td className="py-4 pl-4 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => handleVerify(act.id)}
-                        className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                          isVerified
-                            ? 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
-                            : 'bg-[#2F80ED] text-white hover:bg-blue-600 shadow-xs'
-                        }`}
-                      >
-                        {isVerified ? 'Batalkan' : 'Verifikasi Jurnal'}
-                      </button>
                     </td>
                   </tr>
                 );

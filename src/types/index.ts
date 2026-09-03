@@ -54,6 +54,7 @@ export interface AttendanceRecord {
   correctedByAdmin?: boolean;
   correctionReason?: string;
   updatedAt?: string;
+  locationName?: string;
 }
 
 export interface ActivityRecord {
@@ -151,7 +152,7 @@ export interface AuditLog {
   id: string;
   timestamp: string;
   action: string;
-  category: 'Absensi' | 'Pengajuan Izin' | 'Data Peserta' | 'Pengaturan QR' | 'Autentikasi' | 'Aktivitas' | 'Koreksi';
+  category: 'Absensi' | 'Pengajuan Izin' | 'Data Peserta' | 'Pengaturan QR' | 'Autentikasi' | 'Aktivitas' | 'Koreksi' | 'Lokasi';
   performedBy: string;
   details: string;
   ipAddress?: string;

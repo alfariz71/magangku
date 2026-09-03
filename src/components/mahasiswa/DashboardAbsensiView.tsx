@@ -76,19 +76,26 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
     setFeedbackToast({ type, message });
   };
 
-  // Check-In
-  const handleCheckInClick = async () => {
-    const res = await performCheckIn();
-    if (res.success) {
-      showToast('success', res.message);
-      try { confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } }); } catch { /* ignore */ }
-    } else {
-      showToast('error', res.message);
-    }
+  // Check-In (Buka Scanner QR langsung)
+  const handleCheckInClick = () => {
+    if (todayAttendance.isCheckedIn) return;
+    setIsScannerOpen(true);
   };
 
-  // Check-Out
+  // Check-Out (Cukup klik & validasi GPS tanpa scan QR)
   const handleCheckOutClick = async () => {
+    if (!todayAttendance.isCheckedIn) {
+      showToast('error', 'Anda belum melakukan absen masuk hari ini.');
+      return;
+    }
+    if (todayAttendance.isCheckedOut) {
+      showToast('error', 'Anda sudah melakukan absen pulang hari ini.');
+      return;
+    }
+    if (gpsState.status !== 'in_range') {
+      showToast('error', `Anda harus berada di lokasi kantor untuk absen pulang. Posisi saat ini di luar radius kantor (${gpsState.distanceMeters ?? '?'}m).`);
+      return;
+    }
     const res = await performCheckOut();
     if (res.success) {
       showToast('success', res.message);
@@ -100,8 +107,8 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
 
   // Derived values
   const isInRange = gpsState.status === 'in_range';
-  const canCheckIn = isInRange && isQrScannedToday && !todayAttendance.isCheckedIn;
-  const canCheckOut = isInRange && todayAttendance.isCheckedIn && !todayAttendance.isCheckedOut;
+  const canCheckIn = !todayAttendance.isCheckedIn;
+  const canCheckOut = todayAttendance.isCheckedIn && !todayAttendance.isCheckedOut && isInRange;
 
   // Filter attendance records for current user
   const userId = currentUser?.id || '';
@@ -125,13 +132,16 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
     hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta'
   });
 
+  const currentOfficeName = gpsState.nearestLocationName || qrConfig.officeName || 'Lokasi Magang';
+  const currentRadius = gpsState.targetRadiusMeters || qrConfig.radiusMeters || 50;
+
   // GPS Status display config
   const gpsStatusConfig = {
     idle: { label: 'Menginisialisasi GPS...', color: 'text-slate-500', bg: 'bg-slate-50', border: 'border-slate-200', icon: <Navigation className="h-4 w-4 text-slate-400 animate-pulse" /> },
-    loading: { label: 'Mengambil lokasi...', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', icon: <RefreshCw className="h-4 w-4 text-blue-400 animate-spin" /> },
-    in_range: { label: `Dalam jangkauan — ${gpsState.distanceMeters}m dari lokasi (radius ${qrConfig.radiusMeters}m)`, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: <ShieldCheck className="h-4 w-4 text-emerald-500" /> },
-    out_of_range: { label: `Di luar jangkauan — ${gpsState.distanceMeters}m dari lokasi (radius ${qrConfig.radiusMeters}m)`, color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200', icon: <XCircle className="h-4 w-4 text-rose-500" /> },
-    low_accuracy: { label: `Akurasi GPS rendah (${gpsState.accuracy?.toFixed(0)}m). Pindah ke area terbuka.`, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', icon: <AlertTriangle className="h-4 w-4 text-amber-500" /> },
+    loading: { label: 'Mengambil koordinat lokasi...', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200', icon: <RefreshCw className="h-4 w-4 text-blue-400 animate-spin" /> },
+    in_range: { label: `Dalam jangkauan — ${gpsState.distanceMeters}m dari ${currentOfficeName} (radius ${currentRadius}m)`, color: 'text-emerald-700', bg: 'bg-emerald-50', border: 'border-emerald-200', icon: <ShieldCheck className="h-4 w-4 text-emerald-500" /> },
+    out_of_range: { label: `Di luar jangkauan — ${gpsState.distanceMeters}m dari ${currentOfficeName} (radius ${currentRadius}m)`, color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200', icon: <XCircle className="h-4 w-4 text-rose-500" /> },
+    low_accuracy: { label: `Akurasi GPS rendah (${gpsState.accuracy?.toFixed(0)}m). Pindah ke area terbuka dekat ${currentOfficeName}.`, color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200', icon: <AlertTriangle className="h-4 w-4 text-amber-500" /> },
     permission_denied: { label: 'Izin lokasi ditolak. Aktifkan izin lokasi di pengaturan browser.', color: 'text-rose-700', bg: 'bg-rose-50', border: 'border-rose-200', icon: <WifiOff className="h-4 w-4 text-rose-500" /> },
     unavailable: { label: 'Lokasi GPS tidak tersedia. Periksa pengaturan perangkat Anda.', color: 'text-slate-600', bg: 'bg-slate-50', border: 'border-slate-200', icon: <WifiOff className="h-4 w-4 text-slate-400" /> },
   };
@@ -252,61 +262,25 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           </div>
         )}
 
-        {/* GPS Status (Hanya tampil setelah QR dipindai) */}
-        {isQrScannedToday ? (
-          <div className={`mb-4 flex items-center justify-between gap-3 rounded-xl border p-3 ${gpsDisplay.bg} ${gpsDisplay.border}`}>
-            <div className="flex items-center gap-2.5">
-              {gpsDisplay.icon}
-              <div>
-                <p className={`text-xs font-semibold ${gpsDisplay.color}`}>{gpsDisplay.label}</p>
-                {gpsState.lastUpdated && (
-                  <p className="text-[10px] text-slate-400 mt-0.5">Diperbarui: {gpsState.lastUpdated}</p>
-                )}
-              </div>
-            </div>
-            {(gpsState.status === 'permission_denied' || gpsState.status === 'unavailable' || gpsState.status === 'low_accuracy') && (
-              <button
-                onClick={retryGps}
-                className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
-              >
-                <RefreshCw className="h-3 w-3" /> Coba Lagi
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="mb-4 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3">
-            <Navigation className="h-4 w-4 text-slate-400 shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-slate-500">Pengecekan Lokasi GPS Terkunci</p>
-              <p className="text-[10px] text-slate-400 mt-0.5">Silakan Pindai QR Code terlebih dahulu untuk mengaktifkan validasi lokasi.</p>
-            </div>
-          </div>
-        )}
-
-        {/* QR Status & Scan Button */}
-        <div className="mb-6 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+        {/* GPS Status Live */}
+        <div className={`mb-6 flex items-center justify-between gap-3 rounded-xl border p-3.5 ${gpsDisplay.bg} ${gpsDisplay.border}`}>
           <div className="flex items-center gap-2.5">
-            {isQrScannedToday ? (
-              <CheckCircle2 className="h-5 w-5 text-emerald-500 shrink-0" />
-            ) : (
-              <Camera className="h-5 w-5 text-slate-400 shrink-0" />
-            )}
+            {gpsDisplay.icon}
             <div>
-              <p className={`text-xs font-semibold ${isQrScannedToday ? 'text-emerald-700' : 'text-slate-600'}`}>
-                {isQrScannedToday ? 'QR Code Berhasil Dipindai ✓' : 'QR Code Belum Dipindai'}
-              </p>
-              <p className="text-[10px] text-slate-400 mt-0.5">
-                {isQrScannedToday ? 'Siap melakukan absensi' : 'Scan QR Code di lokasi magang terlebih dahulu'}
-              </p>
+              <p className={`text-xs font-semibold ${gpsDisplay.color}`}>{gpsDisplay.label}</p>
+              {gpsState.lastUpdated && (
+                <p className="text-[10px] text-slate-400 mt-0.5">Diperbarui: {gpsState.lastUpdated}</p>
+              )}
             </div>
           </div>
-          <button
-            onClick={() => setIsScannerOpen(true)}
-            className="flex shrink-0 items-center gap-1.5 rounded-xl bg-[#2F80ED] px-3 py-2 text-[10px] font-semibold text-white hover:bg-blue-600"
-          >
-            <Camera className="h-3.5 w-3.5" />
-            {isQrScannedToday ? 'Pindai Ulang' : 'Pindai QR'}
-          </button>
+          {(gpsState.status === 'permission_denied' || gpsState.status === 'unavailable' || gpsState.status === 'low_accuracy') && (
+            <button
+              onClick={retryGps}
+              className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              <RefreshCw className="h-3 w-3" /> Coba Lagi
+            </button>
+          )}
         </div>
 
         {/* Action Buttons */}
@@ -319,13 +293,11 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
             className={`flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold shadow-md transition-all ${
               todayAttendance.isCheckedIn
                 ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
-                : canCheckIn
-                ? 'bg-[#2F80ED] text-white shadow-blue-500/25 hover:bg-blue-600 active:scale-[0.98]'
-                : 'bg-blue-200 text-white shadow-none cursor-not-allowed'
+                : 'bg-[#2F80ED] text-white shadow-blue-500/25 hover:bg-blue-600 active:scale-[0.98]'
             }`}
           >
             <LogIn className="h-4 w-4" />
-            {todayAttendance.isCheckedIn ? 'Sudah Absen Masuk ✓' : 'Absen Masuk'}
+            {todayAttendance.isCheckedIn ? 'Sudah Absen Masuk ✓' : 'Absen Masuk (Scan QR)'}
           </button>
 
           {/* Absen Pulang */}
@@ -338,9 +310,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
                 ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
                 : !todayAttendance.isCheckedIn
                 ? 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed'
-                : canCheckOut
-                ? 'border-[#EB5757] bg-white text-[#EB5757] hover:bg-rose-50 active:scale-[0.98]'
-                : 'border-rose-200 bg-white text-rose-300 cursor-not-allowed'
+                : 'border-[#EB5757] bg-white text-[#EB5757] hover:bg-rose-50 shadow-sm active:scale-[0.98]'
             }`}
           >
             <LogOut className="h-4 w-4" />
@@ -457,9 +427,20 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
       <CameraScannerModal
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
-        onSuccessScan={() => {
+        onSuccessScan={async () => {
           setIsScannerOpen(false);
-          showToast('success', 'QR Code berhasil dipindai! Silakan lanjutkan absensi.');
+          // Langsung otomatis catat Absen Masuk saat scan QR berhasil
+          if (!todayAttendance.isCheckedIn) {
+            const res = await performCheckIn();
+            if (res.success) {
+              showToast('success', res.message);
+              try { confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } }); } catch { /* ignore */ }
+            } else {
+              showToast('error', res.message);
+            }
+          } else {
+            showToast('success', 'QR Code berhasil dipindai! Silakan klik Absen Pulang jika jam kerja selesai.');
+          }
         }}
       />
     </div>

@@ -34,7 +34,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   register: (data: RegisterData) => Promise<{ success: boolean; message?: string }>;
-  updateCurrentUser: (updatedData: Partial<User>) => Promise<void>;
+  updateCurrentUser: (updatedData: Partial<User>) => Promise<{ success: boolean; message?: string }>;
   switchRole: (role: UserRole) => void; // dev only
 }
 
@@ -76,7 +76,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   // Fetch and set user profile from Supabase
-  const fetchAndSetUser = async (userId: string, email: string) => {
+  const fetchAndSetUser = async (sessionUser: any) => {
+    const userId = sessionUser.id;
+    const email = sessionUser.email || '';
+    
     const { data: profile, error } = await supabase
       .from('user_profiles')
       .select('*')
@@ -90,6 +93,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     const user = mapProfileToUser(userId, profile, email);
+    
+    // Sync missing NIM from auth metadata if available (fix for registration RLS block)
+    const metadataNim = sessionUser.user_metadata?.nim;
+    if (!user.nim && metadataNim) {
+      user.nim = metadataNim;
+      // Background sync to DB
+      supabase.from('user_profiles').update({ nim: metadataNim }).eq('id', userId).then(({error}) => {
+         if (error) console.error('Failed to sync NIM from metadata', error);
+      });
+    }
+
     setCurrentUser(user);
   };
 
@@ -100,7 +114,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          await fetchAndSetUser(session.user.id, session.user.email || '');
+          await fetchAndSetUser(session.user);
         }
       } catch (err) {
         console.error('Auth init error:', err);
@@ -114,7 +128,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Listen for auth state changes (login, logout, token refresh)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
-        await fetchAndSetUser(session.user.id, session.user.email || '');
+        await fetchAndSetUser(session.user);
       } else if (event === 'SIGNED_OUT') {
         setCurrentUser(null);
       } else if (event === 'TOKEN_REFRESHED' && session?.user) {
@@ -144,7 +158,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (data.user) {
-        await fetchAndSetUser(data.user.id, data.user.email || '');
+        await fetchAndSetUser(data.user);
         return { success: true };
       }
 
@@ -186,7 +200,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         options: {
           data: {
             full_name: data.name,
-            role: 'user'
+            role: 'user',
+            nim: data.nim || null
           }
         }
       });
@@ -202,27 +217,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { success: false, message: 'Pendaftaran gagal. Coba lagi.' };
       }
 
-      // Update profile with complete data (trigger already created the profile row)
+      // Sync metadata nim to profile if session exists (RLS allows it) or wait for login
+      const updatePayload: any = {
+        full_name: data.name,
+        role: 'user',
+        status: 'Aktif'
+      };
+      
+      if (data.nim) updatePayload.nim = data.nim;
+      if (data.phone) updatePayload.phone = data.phone;
+      if (defaultLocationId) updatePayload.location_id = defaultLocationId;
+
       const { error: profileError } = await supabase
         .from('user_profiles')
-        .update({
-          full_name: data.name,
-          phone: data.phone,
-          nim: data.nim || null,
-          birth_place: data.birthPlace,
-          birth_date: data.birthDate,
-          gender: data.gender,
-          university: data.university,
-          faculty: data.faculty || null,
-          major: data.major,
-          concentration: data.concentration || null,
-          position: data.position,
-          location_id: defaultLocationId,
-          start_date: data.startDate,
-          end_date: data.endDate,
-          status: 'Aktif',
-          role: 'user'
-        })
+        .update(updatePayload)
         .eq('id', authData.user.id);
 
       if (profileError) {
@@ -233,7 +241,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Note: With email confirmation enabled, user needs to confirm email first
       // Check if session is available (email confirmation might be off in dev)
       if (authData.session) {
-        await fetchAndSetUser(authData.user.id, authData.user.email || '');
+        await fetchAndSetUser(authData.user);
       }
 
       return {
@@ -255,37 +263,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // ---- Update Profile ----
-  const updateCurrentUser = async (updatedData: Partial<User>) => {
-    if (!currentUser) return;
+  const updateCurrentUser = async (updatedData: Partial<User>): Promise<{ success: boolean; message?: string }> => {
+    if (!currentUser) return { success: false, message: 'Not logged in' };
 
     try {
       const { error } = await supabase
         .from('user_profiles')
         .update({
           full_name: updatedData.name,
-          phone: updatedData.phone,
-          nim: updatedData.nim,
-          birth_place: updatedData.birthPlace,
-          birth_date: updatedData.birthDate,
-          gender: updatedData.gender,
-          photo_url: updatedData.avatar,
-          university: updatedData.university,
-          faculty: updatedData.faculty,
-          major: updatedData.major,
-          concentration: updatedData.concentration,
-          position: updatedData.position,
-          start_date: updatedData.startDate,
-          end_date: updatedData.endDate,
+          phone: updatedData.phone || null,
+          nim: updatedData.nim || null,
+          birth_place: updatedData.birthPlace || null,
+          birth_date: updatedData.birthDate || null,
+          gender: updatedData.gender || null,
+          photo_url: updatedData.avatar || null,
+          university: updatedData.university || null,
+          faculty: updatedData.faculty || null,
+          major: updatedData.major || null,
+          concentration: updatedData.concentration || null,
+          position: updatedData.position || null,
+          start_date: updatedData.startDate || null,
+          end_date: updatedData.endDate || null,
         })
         .eq('id', currentUser.id);
 
       if (!error) {
         setCurrentUser(prev => prev ? { ...prev, ...updatedData } : prev);
+        return { success: true };
       } else {
         console.error('Update profile error:', error.message);
+        return { success: false, message: error.message };
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('updateCurrentUser error:', err);
+      return { success: false, message: err.message || 'Terjadi kesalahan saat menyimpan.' };
     }
   };
 

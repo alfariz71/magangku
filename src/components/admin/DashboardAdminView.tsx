@@ -19,8 +19,16 @@ interface DashboardAdminViewProps {
 }
 
 export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNavigateTab }) => {
-  const { auditLogs, leaveRequests, attendances } = useData();
+  const { auditLogs, leaveRequests, attendances, students } = useData();
   const [selectedPeriod, setSelectedPeriod] = useState<'Minggu Ini' | 'Minggu Lalu' | 'Bulan Ini'>('Minggu Ini');
+
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+  const todayAttendances = attendances.filter(a => a.date === todayStr);
+  const totalPeserta = students.filter(s => s.status === 'Aktif' || !s.status).length;
+  const hadirHariIni = todayAttendances.filter(a => a.status === 'Hadir' || a.status === 'Terlambat').length;
+  const terlambatHariIni = todayAttendances.filter(a => a.status === 'Terlambat').length;
+  const izinHariIni = todayAttendances.filter(a => a.status === 'Izin' || a.status === 'Sakit').length;
+  const pendingLeaves = leaveRequests.filter(l => l.status === 'Menunggu').length;
 
   // Chart data matching screenshot
   const weeklyData = [
@@ -32,8 +40,6 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
     { day: 'Sabtu', date: '24/05', hadir: 70, terlambat: 10, izin: 20 },
     { day: 'Minggu', date: '25/05', hadir: 65, terlambat: 12, izin: 23 },
   ];
-
-  const pendingLeaves = leaveRequests.filter(l => l.status === 'Menunggu').length || 7;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -56,7 +62,7 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
           </div>
           <div className="mt-4">
             <span className="text-xs font-medium text-slate-500">Total Peserta</span>
-            <p className="text-2xl font-bold text-[#2F80ED] leading-none mt-1">128</p>
+            <p className="text-2xl font-bold text-[#2F80ED] leading-none mt-1">{totalPeserta}</p>
             <p className="text-[11px] text-slate-400 mt-1">Seluruh peserta aktif</p>
           </div>
         </div>
@@ -73,7 +79,7 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
           </div>
           <div className="mt-4">
             <span className="text-xs font-medium text-slate-500">Hadir Hari Ini</span>
-            <p className="text-2xl font-bold text-[#27AE60] leading-none mt-1">112</p>
+            <p className="text-2xl font-bold text-[#27AE60] leading-none mt-1">{hadirHariIni}</p>
             <p className="text-[11px] text-slate-400 mt-1">Dari total peserta aktif</p>
           </div>
         </div>
@@ -90,7 +96,7 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
           </div>
           <div className="mt-4">
             <span className="text-xs font-medium text-slate-500">Terlambat</span>
-            <p className="text-2xl font-bold text-[#EB5757] leading-none mt-1">9</p>
+            <p className="text-2xl font-bold text-[#EB5757] leading-none mt-1">{terlambatHariIni}</p>
             <p className="text-[11px] text-slate-400 mt-1">Hari ini</p>
           </div>
         </div>
@@ -107,7 +113,7 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
           </div>
           <div className="mt-4">
             <span className="text-xs font-medium text-slate-500">Izin</span>
-            <p className="text-2xl font-bold text-[#F2994A] leading-none mt-1">7</p>
+            <p className="text-2xl font-bold text-[#F2994A] leading-none mt-1">{izinHariIni}</p>
             <p className="text-[11px] text-slate-400 mt-1">Hari ini</p>
           </div>
         </div>

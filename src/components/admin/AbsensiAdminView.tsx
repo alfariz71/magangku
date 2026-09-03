@@ -254,6 +254,12 @@ export const AbsensiAdminView: React.FC = () => {
                           <MapPin className="h-3 w-3" />
                           {item.isLocationValid ? 'Area Kantor' : 'Luar Area'}
                         </span>
+
+                        {item.locationName && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 border border-blue-100">
+                            📍 {item.locationName}
+                          </span>
+                        )}
                       </div>
                     </td>
 

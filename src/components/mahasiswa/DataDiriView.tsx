@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Calendar, ChevronDown, Check, AlertCircle, Camera } from 'lucide-react';
+import { ChevronDown, Check, AlertCircle, Camera } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 interface DataDiriViewProps {
   onSuccess?: () => void;
@@ -8,26 +9,31 @@ interface DataDiriViewProps {
 
 export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
   const { currentUser, updateCurrentUser } = useAuth();
+  const [isLoading, setIsLoading] = useState(false);
 
   // Form states initialized with currentUser data
   const [formData, setFormData] = useState({
-    name: currentUser?.name || 'Andi Pratama',
-    birthPlace: currentUser?.birthPlace || 'Jakarta',
-    birthDate: currentUser?.birthDate || '2003-08-15',
+    name: currentUser?.name || '',
+    birthPlace: currentUser?.birthPlace || '',
+    birthDate: currentUser?.birthDate || '',
     gender: currentUser?.gender || 'Laki-laki',
-    email: currentUser?.email || 'andi.pratama@email.com',
-    phone: currentUser?.phone || '0812-3456-7890',
-    nim: currentUser?.nim || '2201234567',
-    university: currentUser?.university || 'Universitas Indonesia',
-    major: currentUser?.major || 'Sistem Informasi',
-    concentration: currentUser?.concentration || 'Pengembangan Sistem Informasi',
-    startDate: currentUser?.startDate || '2025-05-20',
-    endDate: currentUser?.endDate || '2025-08-20',
+    email: currentUser?.email || '',
+    phone: currentUser?.phone || '',
+    nim: currentUser?.nim || '',
+    university: currentUser?.university || '',
+    major: currentUser?.major || '',
+    concentration: currentUser?.concentration || '',
+    startDate: currentUser?.startDate || '',
+    endDate: currentUser?.endDate || '',
     avatar: currentUser?.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250'
   });
 
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // State untuk pengaturan tampilan
+  const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem('magangku_dark_mode') === 'true');
+  const [fontSize, setFontSize] = useState<string>(() => localStorage.getItem('magangku_font_size') || 'normal');
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -35,7 +41,7 @@ export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
     setErrorMessage(null);
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validations
@@ -52,7 +58,8 @@ export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
       return;
     }
 
-    updateCurrentUser({
+    setIsLoading(true);
+    const result = await updateCurrentUser({
       name: formData.name,
       birthPlace: formData.birthPlace,
       birthDate: formData.birthDate,
@@ -66,6 +73,12 @@ export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
       endDate: formData.endDate,
       avatar: formData.avatar
     });
+    setIsLoading(false);
+
+    if (result && !result.success) {
+      setErrorMessage(result.message || 'Gagal menyimpan data');
+      return;
+    }
 
     setSavedSuccess(true);
     if (onSuccess) onSuccess();
@@ -97,17 +110,79 @@ export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
     setSavedSuccess(false);
   };
 
-  // Avatar selector helper
-  const handleAvatarChange = () => {
-    const urls = [
-      'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250',
-      'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&q=80&w=250',
-      'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=250',
-      'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=250',
-    ];
-    const currentIndex = urls.indexOf(formData.avatar);
-    const nextUrl = urls[(currentIndex + 1) % urls.length];
-    setFormData(prev => ({ ...prev, avatar: nextUrl }));
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !currentUser?.id) return;
+
+    // Compress using canvas
+    const compressImage = (file: File, maxSizeKB = 500): Promise<Blob> => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let { width, height } = img;
+            const maxDim = 800;
+            if (width > maxDim || height > maxDim) {
+              if (width > height) { height = (height / width) * maxDim; width = maxDim; }
+              else { width = (width / height) * maxDim; height = maxDim; }
+            }
+            canvas.width = width;
+            canvas.height = height;
+            canvas.getContext('2d')!.drawImage(img, 0, 0, width, height);
+            let quality = 0.8;
+            const tryCompress = () => {
+              canvas.toBlob((blob) => {
+                if (blob && (blob.size / 1024 < maxSizeKB || quality <= 0.1)) {
+                  resolve(blob!);
+                } else {
+                  quality -= 0.1;
+                  tryCompress();
+                }
+              }, 'image/jpeg', quality);
+            };
+            tryCompress();
+          };
+          img.src = ev.target?.result as string;
+        };
+        reader.readAsDataURL(file);
+      });
+    };
+
+    setIsLoading(true);
+    try {
+      const compressed = await compressImage(file);
+      const fileName = `avatar-${currentUser.id}-${Date.now()}.jpg`;
+      const { data, error } = await supabase.storage.from('avatars').upload(fileName, compressed, { upsert: true, contentType: 'image/jpeg' });
+      if (!error && data) {
+        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
+        await supabase.from('user_profiles').update({ avatar_url: urlData.publicUrl }).eq('id', currentUser.id);
+        updateCurrentUser({ avatar: urlData.publicUrl });
+        setFormData(prev => ({ ...prev, avatar: urlData.publicUrl }));
+      }
+    } catch (err) {
+      console.error('Upload avatar error:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDarkModeToggle = (enabled: boolean) => {
+    setDarkMode(enabled);
+    localStorage.setItem('magangku_dark_mode', String(enabled));
+    if (enabled) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  };
+
+  const handleFontSizeChange = (size: string) => {
+    setFontSize(size);
+    localStorage.setItem('magangku_font_size', size);
+    const fontMap: Record<string, string> = { small: '14px', normal: '16px', large: '18px' };
+    document.documentElement.style.fontSize = fontMap[size] || '16px';
   };
 
   return (
@@ -138,23 +213,27 @@ export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
       {/* Top Profile Card */}
       <div className="rounded-[16px] border border-slate-100 bg-white p-6 shadow-sm">
         <div className="flex items-center gap-5">
-          <div className="relative group">
-            <div className="h-20 w-20 sm:h-24 sm:w-24 overflow-hidden rounded-full ring-4 ring-slate-100 shadow-md">
+          <div className="relative group cursor-pointer" onClick={() => document.getElementById('avatar-upload')?.click()}>
               <img
-                src={formData.avatar}
-                alt={formData.name}
-                className="h-full w-full object-cover"
+                src={formData.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250'}
+                alt={formData.name || 'Foto Profil'}
+                className="h-20 w-20 sm:h-24 sm:w-24 rounded-full object-cover ring-4 ring-slate-100 shadow-md"
+              />
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition">
+                {isLoading ? (
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                ) : (
+                  <Camera className="h-5 w-5 text-white" />
+                )}
+              </div>
+              <input
+                id="avatar-upload"
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarUpload}
               />
             </div>
-            <button
-              type="button"
-              onClick={handleAvatarChange}
-              className="absolute bottom-0 right-0 flex h-7 w-7 items-center justify-center rounded-full bg-[#2F80ED] text-white shadow-md hover:bg-blue-600 transition-transform active:scale-95"
-              title="Ganti Foto Profil"
-            >
-              <Camera className="h-3.5 w-3.5" />
-            </button>
-          </div>
 
           <div>
             <h3 className="text-lg sm:text-xl font-bold text-[#183B66]">
@@ -379,6 +458,53 @@ export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
         </div>
 
         {/* Bottom Actions Buttons */}
+        {/* Pengaturan Tampilan */}
+        <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm mt-0">
+          <h3 className="text-base font-bold text-[#183B66] mb-4">Pengaturan Tampilan</h3>
+          <div className="space-y-4">
+            {/* Dark Mode */}
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-700">Mode Gelap</p>
+                <p className="text-xs text-slate-400 mt-0.5">Tampilan gelap lebih nyaman di malam hari</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleDarkModeToggle(!darkMode)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  darkMode ? 'bg-[#2F80ED]' : 'bg-slate-200'
+                }`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                  darkMode ? 'translate-x-6' : 'translate-x-1'
+                }`} />
+              </button>
+            </div>
+            {/* Ukuran Font */}
+            <div>
+              <p className="text-sm font-medium text-slate-700 mb-2">Ukuran Teks</p>
+              <div className="flex gap-2">
+                {(['small', 'normal', 'large'] as const).map(size => (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => handleFontSizeChange(size)}
+                    className={`flex-1 rounded-xl border py-2 text-xs font-medium transition ${
+                      fontSize === size
+                        ? 'border-[#2F80ED] bg-blue-50 text-[#2F80ED]'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {size === 'small' ? 'Kecil' : size === 'normal' ? 'Normal' : 'Besar'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Actions Buttons */}
+
         <div className="mt-6 flex items-center justify-end gap-3">
           <button
             type="button"
