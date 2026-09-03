@@ -2,21 +2,15 @@ import React, { useState } from 'react';
 import { 
   Clock, 
   Search, 
-  Filter, 
   Edit3, 
   CheckCircle2, 
   XCircle, 
   MapPin, 
   QrCode, 
-  Calendar, 
+  Calendar,
   X,
   AlertCircle,
-  Eye,
-  Cloud,
   ShieldCheck,
-  ExternalLink,
-  Copy,
-  Check
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { AttendanceRecord, AttendanceStatus } from '../../types';
@@ -36,10 +30,6 @@ export const AbsensiAdminView: React.FC = () => {
   const [corrReason, setCorrReason] = useState('');
   const [corrError, setCorrError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState(false);
-
-  // Photo Preview Modal State
-  const [viewingPhotoRecord, setViewingPhotoRecord] = useState<AttendanceRecord | null>(null);
-  const [copiedUrl, setCopiedUrl] = useState(false);
 
   const openCorrectionModal = (record: AttendanceRecord) => {
     setEditingRecord(record);
@@ -71,12 +61,6 @@ export const AbsensiAdminView: React.FC = () => {
     setTimeout(() => setSuccessToast(false), 3500);
   };
 
-  const handleCopyCDNUrl = (url: string) => {
-    navigator.clipboard.writeText(url);
-    setCopiedUrl(true);
-    setTimeout(() => setCopiedUrl(false), 2000);
-  };
-
   // Filter attendance records
   const filteredRecords = attendances.filter(a => {
     const matchQuery = 
@@ -91,22 +75,46 @@ export const AbsensiAdminView: React.FC = () => {
     return matchQuery && matchStatus && matchUniv;
   });
 
+  // Get today's date string in 'sv-SE' format (YYYY-MM-DD)
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+
+  // Group records by date
+  const groupedByDate: { date: string; records: AttendanceRecord[] }[] = [];
+  filteredRecords.forEach(record => {
+    const existing = groupedByDate.find(g => g.date === record.date);
+    if (existing) {
+      existing.records.push(record);
+    } else {
+      groupedByDate.push({ date: record.date, records: [record] });
+    }
+  });
+
+  const getDateLabel = (dateStr: string) => {
+    if (dateStr === todayStr) return 'Hari Ini';
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    if (dateStr === yesterdayStr) return 'Kemarin';
+    return null;
+  };
+
+  const formatDateHeader = (dateStr: string) => {
+    const d = new Date(dateStr + 'T00:00:00');
+    const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return `${dayNames[d.getDay()]}, ${d.getDate()} ${monthNames[d.getMonth()]} ${d.getFullYear()}`;
+  };
+
+  const uniqueUniversities = [...new Set(attendances.map(a => a.university).filter(Boolean))];
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Top Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-[#183B66]">Manajemen Absensi & Bukti Foto</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Pantau kehadiran, foto selfie presensi (Cloudflare R2), validasi QR Code & GPS seluruh mahasiswa
-          </p>
-        </div>
-
-        {/* Cloudflare R2 Storage Status Pill */}
-        <div className="inline-flex items-center gap-2 rounded-2xl border border-orange-200 bg-orange-50/80 px-4 py-2 text-xs font-semibold text-orange-800 shadow-xs">
-          <Cloud className="h-4 w-4 text-orange-600" />
-          <span>Storage: <strong>Cloudflare R2</strong> (Egress: Rp 0)</span>
-        </div>
+      <div>
+        <h2 className="text-2xl font-bold text-[#183B66]">Manajemen Absensi</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Pantau kehadiran, validasi QR Code &amp; GPS seluruh peserta magang
+        </p>
       </div>
 
       {successToast && (
@@ -149,258 +157,177 @@ export const AbsensiAdminView: React.FC = () => {
               className="rounded-xl border border-slate-200 bg-slate-50 py-2.5 px-3 text-xs text-slate-700 focus:border-[#2F80ED] focus:bg-white focus:outline-none"
             >
               <option value="Semua">Semua Universitas</option>
-              <option value="Universitas Indonesia">Universitas Indonesia</option>
-              <option value="Institut Teknologi Bandung">ITB</option>
-              <option value="Universitas Gadjah Mada">UGM</option>
-              <option value="Institut Teknologi Sepuluh Nopember">ITS</option>
+              {uniqueUniversities.map(u => (
+                <option key={u} value={u}>{u}</option>
+              ))}
             </select>
           </div>
         </div>
       </div>
 
       {/* Table Card */}
-      <div className="rounded-[16px] border border-slate-100 bg-white p-6 shadow-sm">
+      <div className="rounded-[16px] border border-slate-100 bg-white shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
-              <tr className="border-b border-slate-100 text-slate-600 font-bold">
-                <th className="pb-3 pr-3">Mahasiswa</th>
-                <th className="pb-3 px-3">Foto Presensi (R2)</th>
-                <th className="pb-3 px-3">Tanggal & Hari</th>
-                <th className="pb-3 px-3">Absen Masuk</th>
-                <th className="pb-3 px-3">Absen Pulang</th>
-                <th className="pb-3 px-3">Total Jam</th>
-                <th className="pb-3 px-3">Validasi QR & GPS</th>
-                <th className="pb-3 px-3">Status</th>
-                <th className="pb-3 pl-3 text-right">Aksi</th>
+              <tr className="border-b border-slate-100 bg-slate-50/60 text-slate-600 font-bold">
+                <th className="py-3 px-4">Mahasiswa</th>
+                <th className="py-3 px-4">Absen Masuk</th>
+                <th className="py-3 px-4">Absen Pulang</th>
+                <th className="py-3 px-4">Total Jam</th>
+                <th className="py-3 px-4">Validasi QR &amp; GPS</th>
+                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4 text-right">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+            <tbody className="text-slate-700 font-medium">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-400">
-                    Tidak ditemukan data absensi peserta
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <Calendar className="mx-auto mb-2 h-8 w-8 opacity-30" />
+                    <p>Tidak ditemukan data absensi peserta</p>
                   </td>
                 </tr>
               ) : (
-                filteredRecords.map((item) => (
-                  <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
-                    {/* Mahasiswa */}
-                    <td className="py-3.5 pr-3">
-                      <p className="font-bold text-slate-900">{item.studentName}</p>
-                      <p className="text-[11px] text-slate-400">{item.studentNim} • {item.university}</p>
-                    </td>
+                groupedByDate.map(({ date, records }) => {
+                  const label = getDateLabel(date);
+                  const isToday = date === todayStr;
 
-                    {/* Foto Presensi (Cloudflare R2) */}
-                    <td className="py-3.5 px-3">
-                      {item.photoUrl ? (
-                        <div 
-                          onClick={() => setViewingPhotoRecord(item)}
-                          className="group relative flex items-center gap-2 cursor-pointer"
-                          title="Klik untuk memperbesar foto presensi"
-                        >
-                          <div className="relative h-10 w-10 overflow-hidden rounded-xl ring-2 ring-blue-100 shadow-sm transition-transform group-hover:scale-105">
-                            <img
-                              src={item.photoUrl}
-                              alt={`Foto ${item.studentName}`}
-                              className="h-full w-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
-                              <Eye className="h-4 w-4" />
+                  return (
+                    <React.Fragment key={date}>
+                      {/* Date Separator Row */}
+                      <tr>
+                        <td colSpan={7} className="px-0 py-0">
+                          <div className={`flex items-center gap-3 px-4 py-2.5 ${
+                            isToday
+                              ? 'bg-blue-50/80 border-y border-blue-100'
+                              : 'bg-slate-50/70 border-y border-slate-100'
+                          }`}>
+                            <div className={`flex items-center gap-2 text-xs font-bold ${
+                              isToday ? 'text-[#2F80ED]' : 'text-slate-500'
+                            }`}>
+                              <Calendar className="h-3.5 w-3.5" />
+                              <span>{formatDateHeader(date)}</span>
                             </div>
+                            {label && (
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                isToday
+                                  ? 'bg-[#2F80ED] text-white'
+                                  : 'bg-slate-200 text-slate-600'
+                              }`}>
+                                {label}
+                              </span>
+                            )}
+                            <div className="flex-1 h-px bg-current opacity-10" />
+                            <span className={`text-[10px] font-semibold ${
+                              isToday ? 'text-blue-400' : 'text-slate-400'
+                            }`}>
+                              {records.length} peserta
+                            </span>
                           </div>
-                          <span className="text-[10px] font-semibold text-[#2F80ED] group-hover:underline">
-                            Lihat Foto
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="text-[11px] text-slate-400 italic">Tanpa Foto</span>
-                      )}
-                    </td>
+                        </td>
+                      </tr>
 
-                    {/* Tanggal */}
-                    <td className="py-3.5 px-3 whitespace-nowrap">
-                      <p className="font-semibold text-slate-800">{item.dayName}, {item.date}</p>
-                    </td>
+                      {/* Records for this date */}
+                      {records.map((item, idx) => (
+                        <tr
+                          key={item.id}
+                          className={`hover:bg-slate-50/80 transition-colors ${
+                            idx < records.length - 1 ? 'border-b border-slate-100/60' : ''
+                          }`}
+                        >
+                          {/* Mahasiswa */}
+                          <td className="py-3.5 px-4">
+                            <p className="font-bold text-slate-900">{item.studentName}</p>
+                            <p className="text-[11px] text-slate-400">{item.studentNim} • {item.university}</p>
+                          </td>
 
-                    {/* Masuk */}
-                    <td className="py-3.5 px-3">
-                      <span className="font-medium text-slate-800">{item.checkInTime || '—'}</span>
-                    </td>
+                          {/* Masuk */}
+                          <td className="py-3.5 px-4">
+                            <span className="font-medium text-slate-800">{item.checkInTime || '—'}</span>
+                          </td>
 
-                    {/* Pulang */}
-                    <td className="py-3.5 px-3">
-                      <span className="font-medium text-slate-800">{item.checkOutTime || '—'}</span>
-                    </td>
+                          {/* Pulang */}
+                          <td className="py-3.5 px-4">
+                            <span className="font-medium text-slate-800">{item.checkOutTime || '—'}</span>
+                          </td>
 
-                    {/* Total Jam */}
-                    <td className="py-3.5 px-3">
-                      <span className="font-medium text-slate-800">{item.totalHours || '—'}</span>
-                    </td>
+                          {/* Total Jam */}
+                          <td className="py-3.5 px-4">
+                            <span className="font-medium text-slate-800">{item.totalHours || '—'}</span>
+                          </td>
 
-                    {/* Validasi QR & Lokasi */}
-                    <td className="py-3.5 px-3">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold ${
-                          item.isQrValid ? 'bg-blue-50 text-[#2F80ED]' : 'bg-slate-100 text-slate-400'
-                        }`}>
-                          <QrCode className="h-3 w-3" />
-                          {item.isQrValid ? 'QR Valid' : 'No QR'}
-                        </span>
+                          {/* Validasi QR & Lokasi */}
+                          <td className="py-3.5 px-4">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold ${
+                                item.isQrValid ? 'bg-blue-50 text-[#2F80ED]' : 'bg-slate-100 text-slate-400'
+                              }`}>
+                                <QrCode className="h-3 w-3" />
+                                {item.isQrValid ? 'QR Valid' : 'No QR'}
+                              </span>
 
-                        <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold ${
-                          item.isLocationValid ? 'bg-emerald-50 text-[#27AE60]' : 'bg-slate-100 text-slate-400'
-                        }`}>
-                          <MapPin className="h-3 w-3" />
-                          {item.isLocationValid ? 'Area Kantor' : 'Luar Area'}
-                        </span>
+                              <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-semibold ${
+                                item.isLocationValid ? 'bg-emerald-50 text-[#27AE60]' : 'bg-slate-100 text-slate-400'
+                              }`}>
+                                <MapPin className="h-3 w-3" />
+                                {item.isLocationValid ? 'Area Kantor' : 'Luar Area'}
+                              </span>
 
-                        {item.locationName && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 border border-blue-100">
-                            📍 {item.locationName}
-                          </span>
-                        )}
-                      </div>
-                    </td>
+                              {item.locationName && (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-600 border border-blue-100">
+                                  📍 {item.locationName}
+                                </span>
+                              )}
+                            </div>
+                          </td>
 
-                    {/* Status */}
-                    <td className="py-3.5 px-3 whitespace-nowrap">
-                      {item.status === 'Hadir' && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-[#27AE60]">
-                          <span className="h-1.5 w-1.5 rounded-full bg-[#27AE60]" />
-                          Hadir
-                        </span>
-                      )}
-                      {item.status === 'Terlambat' && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-[#EB5757]">
-                          <span className="h-1.5 w-1.5 rounded-full bg-[#EB5757]" />
-                          Terlambat
-                        </span>
-                      )}
-                      {(item.status === 'Izin' || item.status === 'Sakit') && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-[#F2994A]">
-                          <span className="h-1.5 w-1.5 rounded-full bg-[#F2994A]" />
-                          {item.status}
-                        </span>
-                      )}
-                      {item.correctedByAdmin && (
-                        <span className="block text-[10px] text-blue-500 mt-0.5">Dikoreksi Admin</span>
-                      )}
-                    </td>
+                          {/* Status */}
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {item.status === 'Hadir' && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-[#27AE60]">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#27AE60]" />
+                                Hadir
+                              </span>
+                            )}
+                            {item.status === 'Terlambat' && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-semibold text-[#EB5757]">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#EB5757]" />
+                                Terlambat
+                              </span>
+                            )}
+                            {(item.status === 'Izin' || item.status === 'Sakit') && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-semibold text-[#F2994A]">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#F2994A]" />
+                                {item.status}
+                              </span>
+                            )}
+                            {item.correctedByAdmin && (
+                              <span className="block text-[10px] text-blue-500 mt-0.5">Dikoreksi Admin</span>
+                            )}
+                          </td>
 
-                    {/* Action */}
-                    <td className="py-3.5 pl-3 text-right whitespace-nowrap">
-                      <button
-                        onClick={() => openCorrectionModal(item)}
-                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-[#2F80ED]"
-                        title="Koreksi Absensi Manual"
-                      >
-                        <Edit3 className="h-3.5 w-3.5 text-[#2F80ED]" />
-                        <span>Koreksi</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                          {/* Action */}
+                          <td className="py-3.5 px-4 text-right whitespace-nowrap">
+                            <button
+                              onClick={() => openCorrectionModal(item)}
+                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-[#2F80ED]"
+                              title="Koreksi Absensi Manual"
+                            >
+                              <Edit3 className="h-3.5 w-3.5 text-[#2F80ED]" />
+                              <span>Koreksi</span>
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
-
-      {/* Modal Pratinjau Foto Presensi Mahasiswa */}
-      {viewingPhotoRecord && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-xs" onClick={() => setViewingPhotoRecord(null)} />
-          <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-3xl bg-white p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
-              <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-600">
-                  <Cloud className="h-4 w-4" />
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-[#183B66]">Bukti Foto Presensi Mahasiswa</h3>
-                  <p className="text-[11px] text-slate-400">Tersimpan di Cloudflare R2 Object Storage</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setViewingPhotoRecord(null)} 
-                className="rounded-lg p-1 text-slate-400 hover:text-slate-600"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {/* Photo & Snapshot Container */}
-            <div className="mt-4 flex flex-col items-center">
-              <div className="relative h-64 w-64 overflow-hidden rounded-2xl border-4 border-white shadow-xl ring-2 ring-slate-100 bg-slate-100">
-                <img
-                  src={viewingPhotoRecord.photoUrl || ''}
-                  alt={`Bukti presensi ${viewingPhotoRecord.studentName}`}
-                  className="h-full w-full object-cover"
-                />
-                <div className="absolute bottom-2 left-2 rounded-md bg-slate-900/80 px-2 py-0.5 text-[10px] font-semibold text-white backdrop-blur-xs">
-                  {viewingPhotoRecord.checkInTime || 'Presensi'}
-                </div>
-              </div>
-
-              <h4 className="mt-3 text-base font-bold text-slate-900">{viewingPhotoRecord.studentName}</h4>
-              <p className="text-xs text-slate-500">{viewingPhotoRecord.studentNim} • {viewingPhotoRecord.university}</p>
-            </div>
-
-            {/* Metadata Badges */}
-            <div className="mt-4 grid grid-cols-2 gap-2.5 rounded-2xl bg-slate-50 p-3.5 text-xs text-slate-700 border border-slate-100">
-              <div>
-                <span className="text-[10px] text-slate-400 font-medium">TANGGAL & HARI</span>
-                <p className="font-bold text-slate-800">{viewingPhotoRecord.dayName}, {viewingPhotoRecord.date}</p>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-medium">JAM MASUK / PULANG</span>
-                <p className="font-bold text-slate-800">{viewingPhotoRecord.checkInTime || '-'} s/d {viewingPhotoRecord.checkOutTime || '-'}</p>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-medium">STATUS LOKASI GEOFENCE</span>
-                <p className="font-bold text-[#27AE60] flex items-center gap-1">
-                  <ShieldCheck className="h-3.5 w-3.5" />
-                  Dalam Jangkauan (&lt; 200m)
-                </p>
-              </div>
-              <div>
-                <span className="text-[10px] text-slate-400 font-medium">TOKEN QR DIGUNAKAN</span>
-                <p className="font-mono text-[11px] font-bold text-blue-600 truncate">{viewingPhotoRecord.qrSessionId || qrConfig.currentToken}</p>
-              </div>
-            </div>
-
-            {/* Cloudflare CDN URL Box */}
-            <div className="mt-3 flex items-center justify-between rounded-xl bg-orange-50/70 p-2.5 border border-orange-100 text-xs">
-              <div className="flex items-center gap-1.5 truncate mr-2">
-                <Cloud className="h-3.5 w-3.5 text-orange-600 shrink-0" />
-                <code className="text-[11px] text-orange-950 font-mono truncate">
-                  {viewingPhotoRecord.photoUrl?.startsWith('data:') 
-                    ? `https://cdn.magangku.id/absensi/${viewingPhotoRecord.studentNim}_${viewingPhotoRecord.date}.jpg`
-                    : viewingPhotoRecord.photoUrl}
-                </code>
-              </div>
-              <button
-                onClick={() => handleCopyCDNUrl(viewingPhotoRecord.photoUrl || '')}
-                className="flex items-center gap-1 text-[11px] font-semibold text-orange-700 hover:underline shrink-0"
-              >
-                {copiedUrl ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                <span>{copiedUrl ? 'Tersalin' : 'Salin CDN'}</span>
-              </button>
-            </div>
-
-            <div className="mt-5 flex justify-end">
-              <button
-                onClick={() => setViewingPhotoRecord(null)}
-                className="w-full rounded-xl bg-[#2F80ED] py-2.5 text-xs font-semibold text-white hover:bg-blue-600"
-              >
-                Tutup Pratinjau
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Manual Correction Modal with Audit Log */}
       {editingRecord && (
