@@ -271,6 +271,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const dateStr = r.date as string;
     const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const dayName = dayNames[new Date(dateStr + 'T00:00:00').getDay()];
+
+    const checkInFormatted = r.check_in_time ? new Date(r.check_in_time as string).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : null;
+    const checkOutFormatted = r.check_out_time ? new Date(r.check_out_time as string).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : null;
+
+    let computedTotalHours = r.total_hours as string | null;
+    if (r.check_in_time && r.check_out_time) {
+      const inTime = new Date(r.check_in_time as string).getTime();
+      const outTime = new Date(r.check_out_time as string).getTime();
+      if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
+        const diffMinutes = Math.round((outTime - inTime) / 60000);
+        const hours = Math.floor(diffMinutes / 60);
+        const mins = diffMinutes % 60;
+        computedTotalHours = `${hours} jam ${mins} menit`;
+      }
+    }
+
     return {
       id: r.id as string,
       userId: r.user_id as string,
@@ -279,9 +295,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       university: p?.university || (currentUser?.id === r.user_id ? (currentUser?.university || '-') : '-'),
       date: dateStr,
       dayName,
-      checkInTime: r.check_in_time ? new Date(r.check_in_time as string).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : null,
-      checkOutTime: r.check_out_time ? new Date(r.check_out_time as string).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : null,
-      totalHours: r.total_hours as string | null,
+      checkInTime: checkInFormatted,
+      checkOutTime: checkOutFormatted,
+      totalHours: computedTotalHours,
       status: r.status as AttendanceStatus,
       notes: r.notes as string | undefined,
       qrSessionId: r.qr_session_id as string | undefined,
@@ -694,10 +710,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (todayAttendance.isCheckedOut) return { success: false, message: 'Anda sudah melakukan absen pulang hari ini.' };
 
     const now = new Date();
-    // Calculate total hours
-    const checkInTime = new Date(now); // fallback
-    const totalMinutes = Math.max(0, Math.round((now.getTime() - checkInTime.getTime()) / 60000));
-    const totalHoursStr = `${Math.floor(totalMinutes / 60)} jam ${totalMinutes % 60} menit`;
+
+    // Fetch actual check_in_time to accurately calculate total hours
+    const { data: currentRecord } = await supabase
+      .from('attendance_records')
+      .select('check_in_time')
+      .eq('user_id', currentUser.id)
+      .eq('date', todayStr)
+      .maybeSingle();
+
+    const checkInIso = currentRecord?.check_in_time;
+    let totalHoursStr = '0 jam 0 menit';
+    if (checkInIso) {
+      const inTime = new Date(checkInIso).getTime();
+      const outTime = now.getTime();
+      if (!isNaN(inTime) && outTime >= inTime) {
+        const totalMinutes = Math.round((outTime - inTime) / 60000);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
+        totalHoursStr = `${hours} jam ${minutes} menit`;
+      }
+    }
 
     const { error } = await supabase
       .from('attendance_records')
@@ -716,15 +749,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'Gagal menyimpan absen pulang. Coba lagi.' };
     }
 
-    await addAuditLog('Absen Pulang', 'Absensi', `Absen pulang pukul ${getTimeJakarta()}`);
+    await addAuditLog('Absen Pulang', 'Absensi', `Absen pulang pukul ${getTimeJakarta()} | Total: ${totalHoursStr}`);
     await refreshAttendances();
-    return { success: true, message: `Absen Pulang Berhasil! Waktu: ${getTimeJakarta()}.` };
+    return { success: true, message: `Absen Pulang Berhasil! Total Kerja: ${totalHoursStr}.` };
   };
 
   const adminCorrectAttendance = async (id: string, checkIn: string, checkOut: string, status: AttendanceStatus, reason: string) => {
+    let totalHoursStr: string | null = null;
+    if (checkIn && checkOut) {
+      const inTime = new Date(checkIn).getTime();
+      const outTime = new Date(checkOut).getTime();
+      if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
+        const diffMinutes = Math.round((outTime - inTime) / 60000);
+        const hours = Math.floor(diffMinutes / 60);
+        const mins = diffMinutes % 60;
+        totalHoursStr = `${hours} jam ${mins} menit`;
+      }
+    }
+
     await supabase.from('attendance_records').update({
       check_in_time: checkIn ? new Date(checkIn).toISOString() : null,
       check_out_time: checkOut ? new Date(checkOut).toISOString() : null,
+      total_hours: totalHoursStr,
       status,
       corrected_by: currentUser?.id,
       correction_reason: reason,
