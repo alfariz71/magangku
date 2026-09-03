@@ -36,7 +36,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onGoToRegister }) => {
         redirectTo: window.location.origin,
       });
       if (error) {
-        setForgotError('Gagal mengirim email. Pastikan email sudah terdaftar.');
+        console.error('Reset password error:', error);
+        setForgotError(error.message || 'Gagal mengirim email. Pastikan email sudah terdaftar.');
       } else {
         setForgotSubmitted(true);
       }
