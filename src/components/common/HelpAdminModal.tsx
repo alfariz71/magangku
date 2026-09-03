@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Headphones, Mail, Phone, MessageSquare, X, CheckCircle2, HelpCircle } from 'lucide-react';
+import { Headphones, X, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 
 interface HelpAdminModalProps {
   isOpen: boolean;
@@ -12,16 +13,36 @@ export const HelpAdminModal: React.FC<HelpAdminModalProps> = ({ isOpen, onClose 
   const [topic, setTopic] = useState('Kendala Absensi & GPS');
   const [message, setMessage] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      onClose();
-    }, 2500);
+    if (!message.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const { error: insertError } = await supabase.from('help_messages').insert({
+        user_id: currentUser?.id ?? null,
+        student_name: currentUser?.name ?? 'Anonim',
+        topic,
+        message: message.trim(),
+        is_read: false,
+      });
+      if (insertError) throw insertError;
+      setSubmitted(true);
+      setTimeout(() => {
+        setSubmitted(false);
+        setMessage('');
+        onClose();
+      }, 2500);
+    } catch {
+      setError('Gagal mengirim pesan. Silakan coba lagi.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -57,13 +78,17 @@ export const HelpAdminModal: React.FC<HelpAdminModalProps> = ({ isOpen, onClose 
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                 <p className="text-[10px] text-slate-400 font-semibold">EMAIL HELPDESK</p>
-                <p className="font-bold text-[#2F80ED] truncate mt-0.5">magangku.official@gmail.com </p>
+                <p className="font-bold text-[#2F80ED] truncate mt-0.5">magangku.official@gmail.com</p>
               </div>
               <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                 <p className="text-[10px] text-slate-400 font-semibold">WHATSAPP PIC</p>
                 <p className="font-bold text-emerald-600 mt-0.5">0895-6218-51837</p>
               </div>
             </div>
+
+            {error && (
+              <p className="text-[11px] text-rose-500">{error}</p>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
@@ -103,9 +128,10 @@ export const HelpAdminModal: React.FC<HelpAdminModalProps> = ({ isOpen, onClose 
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-[#2F80ED] px-5 py-2 text-xs font-semibold text-white hover:bg-blue-600 shadow-md"
+                  disabled={loading}
+                  className="rounded-xl bg-[#2F80ED] px-5 py-2 text-xs font-semibold text-white hover:bg-blue-600 shadow-md disabled:opacity-60"
                 >
-                  Kirim Pesan Bantuan
+                  {loading ? 'Mengirim...' : 'Kirim Pesan Bantuan'}
                 </button>
               </div>
             </form>
