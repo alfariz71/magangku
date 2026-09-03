@@ -43,7 +43,8 @@ export const AktivitasAdminView: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-slate-600 font-bold">
-                <th className="pb-3 pr-4">Hari & Tanggal</th>
+                <th className="pb-3 pr-4">Mahasiswa</th>
+                <th className="pb-3 px-4">Hari & Tanggal</th>
                 <th className="pb-3 px-4">Judul & Rincian Aktivitas</th>
                 <th className="pb-3 pl-4">Waktu Pengerjaan</th>
               </tr>
@@ -53,7 +54,12 @@ export const AktivitasAdminView: React.FC = () => {
                 return (
                   <tr key={act.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-4 pr-4 whitespace-nowrap">
-                      <p className="font-bold text-slate-900">{act.day || act.activityDate || '-'}</p>
+                      <p className="font-bold text-slate-900">{act.studentName || 'Peserta'}</p>
+                      <p className="text-[11px] text-slate-400">{act.studentNim || '-'}</p>
+                    </td>
+
+                    <td className="py-4 px-4 whitespace-nowrap">
+                      <p className="font-semibold text-slate-800">{act.day || act.activityDate || '-'}</p>
                       <p className="text-[11px] text-slate-400">{act.date || act.activityDate || '-'}</p>
                     </td>
 

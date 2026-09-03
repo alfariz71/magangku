@@ -60,6 +60,8 @@ export interface AttendanceRecord {
 export interface ActivityRecord {
   id: string;
   userId: string;
+  studentName?: string;
+  studentNim?: string;
   activityDate: string; // YYYY-MM-DD
   day?: string;
   date?: string; // kept for compatibility

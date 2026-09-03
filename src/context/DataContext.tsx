@@ -743,21 +743,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (currentUser.role !== 'admin') query = query.eq('user_id', currentUser.id);
       const { data } = await query;
       if (data) {
-        setActivities(data.map((a: Record<string, unknown>) => ({
-          id: a.id as string,
-          userId: a.user_id as string,
-          activityDate: a.activity_date as string,
-          day: a.activity_date as string,
-          date: a.activity_date as string,
-          title: a.title as string,
-          description: a.description as string | undefined,
-          startTime: a.start_time as string | undefined,
-          endTime: a.end_time as string | undefined,
-          time: a.start_time ? `${a.start_time} - ${a.end_time}` : undefined,
-          category: a.category as string | undefined,
-          attachmentUrl: a.attachment_url as string | undefined,
-          createdAt: a.created_at as string,
-        })));
+        const { data: profiles } = await supabase.from('user_profiles').select('id, full_name, nim');
+        const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+
+        setActivities(data.map((a: Record<string, unknown>) => {
+          const p = profileMap.get(a.user_id as string);
+          return {
+            id: a.id as string,
+            userId: a.user_id as string,
+            studentName: p?.full_name || (currentUser?.id === a.user_id ? (currentUser?.name || 'Peserta') : 'Peserta'),
+            studentNim: p?.nim || (currentUser?.id === a.user_id ? (currentUser?.nim || '-') : '-'),
+            activityDate: a.activity_date as string,
+            day: a.activity_date as string,
+            date: a.activity_date as string,
+            title: a.title as string,
+            description: a.description as string | undefined,
+            startTime: a.start_time as string | undefined,
+            endTime: a.end_time as string | undefined,
+            time: a.start_time ? `${a.start_time} - ${a.end_time}` : undefined,
+            category: a.category as string | undefined,
+            attachmentUrl: a.attachment_url as string | undefined,
+            createdAt: a.created_at as string,
+          };
+        }));
       }
     } finally {
       setIsActivitiesLoading(false);
@@ -806,22 +814,30 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (currentUser.role !== 'admin') query = query.eq('user_id', currentUser.id);
       const { data } = await query;
       if (data) {
-        setLeaveRequests(data.map((r: Record<string, unknown>) => ({
-          id: r.id as string,
-          userId: r.user_id as string,
-          studentName: '', studentNim: '', university: '',
-          requestDate: new Date(r.created_at as string).toLocaleDateString('id-ID'),
-          startDate: r.start_date as string,
-          endDate: r.end_date as string,
-          leaveType: r.leave_type as any,
-          reason: r.reason as string,
-          documentName: r.document_name as string | undefined,
-          documentUrl: r.document_url as string | undefined,
-          status: r.status as LeaveStatus,
-          adminNotes: r.admin_notes as string | undefined,
-          reviewedAt: r.reviewed_at as string | undefined,
-          reviewedBy: r.reviewed_by as string | undefined,
-        })));
+        const { data: profiles } = await supabase.from('user_profiles').select('id, full_name, nim, university');
+        const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+
+        setLeaveRequests(data.map((r: Record<string, unknown>) => {
+          const p = profileMap.get(r.user_id as string);
+          return {
+            id: r.id as string,
+            userId: r.user_id as string,
+            studentName: p?.full_name || (currentUser?.id === r.user_id ? (currentUser?.name || 'Peserta') : 'Peserta'),
+            studentNim: p?.nim || (currentUser?.id === r.user_id ? (currentUser?.nim || '-') : '-'),
+            university: p?.university || (currentUser?.id === r.user_id ? (currentUser?.university || '-') : '-'),
+            requestDate: new Date(r.created_at as string).toLocaleDateString('id-ID'),
+            startDate: r.start_date as string,
+            endDate: r.end_date as string,
+            leaveType: r.leave_type as any,
+            reason: r.reason as string,
+            documentName: r.document_name as string | undefined,
+            documentUrl: r.document_url as string | undefined,
+            status: r.status as LeaveStatus,
+            adminNotes: r.admin_notes as string | undefined,
+            reviewedAt: r.reviewed_at as string | undefined,
+            reviewedBy: r.reviewed_by as string | undefined,
+          };
+        }));
       }
     } finally {
       setIsLeaveLoading(false);
@@ -879,22 +895,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (currentUser.role !== 'admin') query = query.eq('user_id', currentUser.id);
     const { data } = await query;
     if (data) {
-      setCorrectionRequests(data.map((r: Record<string, unknown>) => ({
-        id: r.id as string,
-        userId: r.user_id as string,
-        studentName: '',
-        attendanceDate: r.attendance_date as string,
-        correctionType: r.correction_type as string,
-        requestedCheckIn: r.requested_check_in as string | undefined,
-        requestedCheckOut: r.requested_check_out as string | undefined,
-        reason: r.reason as string,
-        evidenceUrl: r.evidence_url as string | undefined,
-        status: r.status as 'Menunggu' | 'Disetujui' | 'Ditolak',
-        adminNotes: r.admin_notes as string | undefined,
-        reviewedBy: r.reviewed_by as string | undefined,
-        reviewedAt: r.reviewed_at as string | undefined,
-        createdAt: r.created_at as string,
-      })));
+      const { data: profiles } = await supabase.from('user_profiles').select('id, full_name, nim');
+      const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+
+      setCorrectionRequests(data.map((r: Record<string, unknown>) => {
+        const p = profileMap.get(r.user_id as string);
+        return {
+          id: r.id as string,
+          userId: r.user_id as string,
+          studentName: p?.full_name || (currentUser?.id === r.user_id ? (currentUser?.name || 'Peserta') : 'Peserta'),
+          studentNim: p?.nim || (currentUser?.id === r.user_id ? (currentUser?.nim || '-') : '-'),
+          attendanceDate: r.attendance_date as string,
+          correctionType: r.correction_type as string,
+          requestedCheckIn: r.requested_check_in as string | undefined,
+          requestedCheckOut: r.requested_check_out as string | undefined,
+          reason: r.reason as string,
+          evidenceUrl: r.evidence_url as string | undefined,
+          status: r.status as 'Menunggu' | 'Disetujui' | 'Ditolak',
+          adminNotes: r.admin_notes as string | undefined,
+          reviewedBy: r.reviewed_by as string | undefined,
+          reviewedAt: r.reviewed_at as string | undefined,
+          createdAt: r.created_at as string,
+        };
+      }));
     }
   };
 
