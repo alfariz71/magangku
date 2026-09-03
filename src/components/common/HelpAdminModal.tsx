@@ -57,11 +57,11 @@ export const HelpAdminModal: React.FC<HelpAdminModalProps> = ({ isOpen, onClose 
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                 <p className="text-[10px] text-slate-400 font-semibold">EMAIL HELPDESK</p>
-                <p className="font-bold text-[#2F80ED] truncate mt-0.5">admin@magangku.id</p>
+                <p className="font-bold text-[#2F80ED] truncate mt-0.5">magangku.official@gmail.com </p>
               </div>
               <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
                 <p className="text-[10px] text-slate-400 font-semibold">WHATSAPP PIC</p>
-                <p className="font-bold text-emerald-600 mt-0.5">0811-9876-5432</p>
+                <p className="font-bold text-emerald-600 mt-0.5">0895-6218-51837</p>
               </div>
             </div>
 
