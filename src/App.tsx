@@ -25,6 +25,8 @@ import { LaporanAdminView } from './components/admin/LaporanAdminView';
 import { PengaturanAdminView } from './components/admin/PengaturanAdminView';
 import LokasiAdminView from './components/admin/LokasiAdminView';
 import KoreksiAdminView from './components/admin/KoreksiAdminView';
+import { ResetPasswordModal } from './components/auth/ResetPasswordModal';
+import { supabase } from './lib/supabase';
 
 const MainLayout: React.FC = () => {
   const { isAuthenticated, role, isLoading } = useAuth();
@@ -33,6 +35,22 @@ const MainLayout: React.FC = () => {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(false);
   const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
   const [showRegister, setShowRegister] = useState<boolean>(false);
+  const [showResetPasswordModal, setShowResetPasswordModal] = useState<boolean>(false);
+
+  // Detect recovery link from email (#type=recovery or PASSWORD_RECOVERY event)
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.hash.includes('type=recovery')) {
+      setShowResetPasswordModal(true);
+    }
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setShowResetPasswordModal(true);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   // If role changes, reset default tab if needed
   useEffect(() => {
@@ -51,10 +69,19 @@ const MainLayout: React.FC = () => {
   }
 
   if (!isAuthenticated) {
-    if (showRegister) {
-      return <RegisterView onGoToLogin={() => setShowRegister(false)} />;
-    }
-    return <LoginView onGoToRegister={() => setShowRegister(true)} />;
+    return (
+      <>
+        {showRegister ? (
+          <RegisterView onGoToLogin={() => setShowRegister(false)} />
+        ) : (
+          <LoginView onGoToRegister={() => setShowRegister(true)} />
+        )}
+        <ResetPasswordModal
+          isOpen={showResetPasswordModal}
+          onClose={() => setShowResetPasswordModal(false)}
+        />
+      </>
+    );
   }
 
   // Render content based on role and activeTab
@@ -136,6 +163,12 @@ const MainLayout: React.FC = () => {
       <HelpAdminModal
         isOpen={isHelpModalOpen}
         onClose={() => setIsHelpModalOpen(false)}
+      />
+
+      {/* Password Reset Modal (from Recovery Link) */}
+      <ResetPasswordModal
+        isOpen={showResetPasswordModal}
+        onClose={() => setShowResetPasswordModal(false)}
       />
     </div>
   );

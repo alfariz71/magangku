@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle, KeyRound } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 import { Logo } from '../common/Logo';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
@@ -16,88 +16,32 @@ export const LoginView: React.FC<LoginViewProps> = ({ onGoToRegister }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Forgot Password State
   const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotSubmitted, setForgotSubmitted] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
-  const [forgotSubmitted, setForgotSubmitted] = useState(false);
-
-  // Reset Password State (when arrived from Gmail link)
-  const [showResetModal, setShowResetModal] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [resetLoading, setResetLoading] = useState(false);
-  const [resetError, setResetError] = useState<string | null>(null);
-  const [resetSuccess, setResetSuccess] = useState(false);
 
   const [isLoading, setIsLoading] = useState(false);
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.location.hash.includes('type=recovery')) {
-      setShowResetModal(true);
-    }
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY') {
-        setShowResetModal(true);
-      }
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const handleForgotSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setForgotError(null);
-    const targetEmail = (forgotEmail || email).trim().toLowerCase();
-    if (!targetEmail) {
-      setForgotError('Silakan masukkan email Anda.');
+  const handleSendResetEmail = async () => {
+    if (!forgotEmail.trim()) {
+      setForgotError('Masukkan email terlebih dahulu.');
       return;
     }
     setForgotLoading(true);
+    setForgotError(null);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(targetEmail, {
-        redirectTo: typeof window !== 'undefined' ? `${window.location.origin}` : undefined,
+      const { error } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim().toLowerCase(), {
+        redirectTo: window.location.origin,
       });
       if (error) {
-        setForgotError(error.message || 'Gagal mengirim email pemulihan kata sandi.');
+        setForgotError('Gagal mengirim email. Pastikan email sudah terdaftar.');
       } else {
         setForgotSubmitted(true);
       }
-    } catch {
-      setForgotError('Terjadi kesalahan saat menghubungi server.');
     } finally {
       setForgotLoading(false);
-    }
-  };
-
-  const handleResetPassword = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setResetError(null);
-    if (!newPassword || newPassword.length < 6) {
-      setResetError('Kata sandi baru minimal 6 karakter.');
-      return;
-    }
-    if (newPassword !== confirmNewPassword) {
-      setResetError('Konfirmasi kata sandi tidak cocok.');
-      return;
-    }
-    setResetLoading(true);
-    try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) {
-        setResetError(error.message || 'Gagal memperbarui kata sandi.');
-      } else {
-        setResetSuccess(true);
-        if (typeof window !== 'undefined') {
-          window.history.replaceState(null, '', window.location.pathname);
-        }
-      }
-    } catch {
-      setResetError('Terjadi kesalahan. Coba lagi.');
-    } finally {
-      setResetLoading(false);
     }
   };
 
@@ -319,7 +263,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onGoToRegister }) => {
                 <CheckCircle className="mx-auto h-12 w-12 text-[#27AE60]" />
                 <h4 className="mt-2 text-sm font-bold text-slate-800">Tautan Terkirim!</h4>
                 <p className="mt-1 text-xs text-slate-500">
-                  Instruksi pemulihan kata sandi telah dikirim ke email Anda. Silakan periksa kotak masuk atau folder spam Anda.
+                  Instruksi pemulihan kata sandi telah dikirim ke email Anda.
                 </p>
                 <button
                   onClick={() => {
@@ -332,125 +276,38 @@ export const LoginView: React.FC<LoginViewProps> = ({ onGoToRegister }) => {
                 </button>
               </div>
             ) : (
-              <form onSubmit={handleForgotSubmit}>
+              <>
                 <p className="mt-1 text-xs text-slate-500">
-                  Masukkan email akun Anda untuk menerima tautan reset kata sandi:
+                  Masukkan email Anda untuk menerima tautan pengaturan ulang kata sandi:
                 </p>
-
-                {forgotError && (
-                  <div className="mt-3 rounded-xl bg-red-50 border border-red-200 p-2.5 text-xs text-red-600">
-                    {forgotError}
-                  </div>
-                )}
-
                 <input
                   type="email"
                   value={forgotEmail}
-                  onChange={(e) => setForgotEmail(e.target.value)}
-                  placeholder="email@contoh.com"
-                  className="mt-3 w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
-                  disabled={forgotLoading}
+                  onChange={(e) => { setForgotEmail(e.target.value); setForgotError(null); }}
+                  placeholder="Masukkan email terdaftar"
+                  className="mt-4 w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
                 />
+                {forgotError && (
+                  <p className="mt-2 text-[11px] text-rose-500 flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" /> {forgotError}
+                  </p>
+                )}
                 <div className="mt-4 flex gap-2">
                   <button
-                    type="button"
-                    onClick={() => setShowForgotModal(false)}
+                    onClick={() => { setShowForgotModal(false); setForgotError(null); setForgotEmail(''); }}
                     className="flex-1 rounded-xl bg-slate-100 py-2.5 text-xs font-medium text-slate-600 hover:bg-slate-200"
-                    disabled={forgotLoading}
                   >
                     Batal
                   </button>
                   <button
-                    type="submit"
+                    onClick={handleSendResetEmail}
                     disabled={forgotLoading}
                     className="flex-1 rounded-xl bg-[#2F80ED] py-2.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-60"
                   >
                     {forgotLoading ? 'Mengirim...' : 'Kirim Tautan'}
                   </button>
                 </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Reset Password Modal (when user clicks link in email) */}
-      {showResetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" />
-          <div className="relative z-10 w-full max-w-sm rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-[#2F80ED]">
-              <KeyRound className="h-6 w-6" />
-            </div>
-            <h3 className="text-center text-base font-bold text-[#183B66]">Atur Kata Sandi Baru</h3>
-
-            {resetSuccess ? (
-              <div className="mt-4 text-center">
-                <CheckCircle className="mx-auto h-12 w-12 text-[#27AE60]" />
-                <h4 className="mt-2 text-sm font-bold text-slate-800">Berhasil Diperbarui!</h4>
-                <p className="mt-1 text-xs text-slate-500">
-                  Kata sandi baru Anda telah tersimpan. Silakan login menggunakan kata sandi baru.
-                </p>
-                <button
-                  onClick={() => setShowResetModal(false)}
-                  className="mt-4 w-full rounded-xl bg-[#2F80ED] py-2.5 text-xs font-semibold text-white"
-                >
-                  Masuk Sekarang
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleResetPassword} className="mt-3 space-y-3">
-                <p className="text-center text-xs text-slate-500">
-                  Silakan masukkan kata sandi baru untuk akun Anda.
-                </p>
-
-                {resetError && (
-                  <div className="rounded-xl bg-red-50 border border-red-200 p-2.5 text-xs text-red-600">
-                    {resetError}
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Kata Sandi Baru</label>
-                  <div className="relative">
-                    <input
-                      type={showNewPassword ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      placeholder="Minimal 6 karakter"
-                      className="w-full rounded-xl border border-slate-200 p-3 pr-10 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
-                      disabled={resetLoading}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowNewPassword(!showNewPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400"
-                    >
-                      {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-600 mb-1">Ulangi Kata Sandi</label>
-                  <input
-                    type={showNewPassword ? 'text' : 'password'}
-                    value={confirmNewPassword}
-                    onChange={(e) => setConfirmNewPassword(e.target.value)}
-                    placeholder="Ulangi kata sandi baru"
-                    className="w-full rounded-xl border border-slate-200 p-3 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
-                    disabled={resetLoading}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={resetLoading}
-                  className="mt-2 w-full rounded-xl bg-[#2F80ED] py-2.5 text-xs font-semibold text-white hover:bg-blue-600 disabled:opacity-60"
-                >
-                  {resetLoading ? 'Menyimpan...' : 'Simpan Kata Sandi Baru'}
-                </button>
-              </form>
+              </>
             )}
           </div>
         </div>
