@@ -1078,30 +1078,150 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // ---- NOTIFICATIONS ----
+  // Generate notifikasi dari data nyata (absensi, izin, koreksi)
   const refreshNotifications = async () => {
     if (!currentUser?.id) return;
-    const { data } = await supabase.from('notifications').select('*').eq('user_id', currentUser.id).order('created_at', { ascending: false });
-    if (data) {
-      setNotifications(data.map((n: Record<string, unknown>) => ({
-        id: n.id as string,
-        title: n.title as string,
-        message: n.message as string,
-        time: new Date(n.created_at as string).toLocaleString('id-ID'),
-        read: n.is_read as boolean,
-        type: (n.type as NotificationItem['type']) || 'info',
-        linkTab: n.link_tab as string | undefined,
-      })));
+    const isAdmin = currentUser.role === 'admin';
+    const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    const notifs: NotificationItem[] = [];
+
+    if (isAdmin) {
+      // 1. Pengajuan izin yang pending
+      const { data: pendingLeave } = await supabase
+        .from('leave_requests')
+        .select('id, created_at')
+        .eq('status', 'Menunggu')
+        .order('created_at', { ascending: false });
+      if (pendingLeave && pendingLeave.length > 0) {
+        notifs.push({
+          id: 'notif-izin-pending',
+          title: `${pendingLeave.length} Pengajuan Izin Menunggu`,
+          message: `Ada ${pendingLeave.length} pengajuan izin mahasiswa yang belum diproses.`,
+          time: 'Hari ini',
+          read: false,
+          type: 'warning',
+          linkTab: 'izin',
+        });
+      }
+
+      // 2. Koreksi absensi yang pending
+      const { data: pendingCorr } = await supabase
+        .from('attendance_corrections')
+        .select('id, created_at')
+        .eq('status', 'Menunggu')
+        .order('created_at', { ascending: false });
+      if (pendingCorr && pendingCorr.length > 0) {
+        notifs.push({
+          id: 'notif-koreksi-pending',
+          title: `${pendingCorr.length} Koreksi Absensi Diajukan`,
+          message: `Ada ${pendingCorr.length} permintaan koreksi absensi yang perlu ditinjau.`,
+          time: 'Hari ini',
+          read: false,
+          type: 'warning',
+          linkTab: 'koreksi',
+        });
+      }
+
+      // 3. Mahasiswa yang absen masuk hari ini tapi belum pulang
+      const { data: checkInOnly } = await supabase
+        .from('attendance_records')
+        .select('id')
+        .eq('date', todayStr)
+        .not('check_in_time', 'is', null)
+        .is('check_out_time', null);
+      if (checkInOnly && checkInOnly.length > 0) {
+        notifs.push({
+          id: 'notif-belum-pulang',
+          title: `${checkInOnly.length} Peserta Belum Absen Pulang`,
+          message: `${checkInOnly.length} peserta sudah absen masuk hari ini namun belum melakukan absen pulang.`,
+          time: 'Hari ini',
+          read: false,
+          type: 'reminder',
+          linkTab: 'absensi',
+        });
+      }
+
+      // 4. Peserta baru yang terdaftar hari ini
+      const { data: newStudents } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('role', 'user')
+        .gte('created_at', todayStr + 'T00:00:00+07:00');
+      if (newStudents && newStudents.length > 0) {
+        notifs.push({
+          id: 'notif-peserta-baru',
+          title: `${newStudents.length} Peserta Baru Terdaftar`,
+          message: `${newStudents.length} peserta magang baru mendaftar hari ini.`,
+          time: 'Hari ini',
+          read: false,
+          type: 'info',
+          linkTab: 'datapeserta',
+        });
+      }
+
+    } else {
+      // USER notifications
+      // 1. Status izin yang baru diupdate
+      const { data: updatedLeave } = await supabase
+        .from('leave_requests')
+        .select('id, status, leave_type, updated_at')
+        .eq('user_id', currentUser.id)
+        .in('status', ['Disetujui', 'Ditolak'])
+        .order('updated_at', { ascending: false })
+        .limit(3);
+      if (updatedLeave) {
+        updatedLeave.forEach((l: any) => {
+          notifs.push({
+            id: `notif-izin-${l.id}`,
+            title: l.status === 'Disetujui' ? '✅ Izin Disetujui' : '❌ Izin Ditolak',
+            message: `Pengajuan ${l.leave_type} Anda telah ${l.status.toLowerCase()} oleh admin.`,
+            time: new Date(l.updated_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+            read: false,
+            type: l.status === 'Disetujui' ? 'success' : 'warning',
+            linkTab: 'izin',
+          });
+        });
+      }
+
+      // 2. Absensi hari ini
+      const { data: todayAbs } = await supabase
+        .from('attendance_records')
+        .select('id, check_in_time, check_out_time, status')
+        .eq('user_id', currentUser.id)
+        .eq('date', todayStr)
+        .maybeSingle();
+      if (todayAbs?.check_in_time && !todayAbs?.check_out_time) {
+        notifs.push({
+          id: 'notif-belum-pulang-user',
+          title: '⏰ Jangan Lupa Absen Pulang',
+          message: `Anda sudah absen masuk pukul ${todayAbs.check_in_time}. Jangan lupa absen pulang sebelum meninggalkan kantor.`,
+          time: 'Hari ini',
+          read: false,
+          type: 'reminder',
+          linkTab: 'dashboard',
+        });
+      }
+      if (todayAbs?.check_in_time && todayAbs?.check_out_time) {
+        notifs.push({
+          id: 'notif-absen-selesai',
+          title: '✅ Absensi Hari Ini Selesai',
+          message: `Absensi hari ini sudah tercatat lengkap. Status: ${todayAbs.status}.`,
+          time: 'Hari ini',
+          read: true,
+          type: 'success',
+          linkTab: 'dashboard',
+        });
+      }
     }
+
+    setNotifications(notifs);
   };
 
   const markNotificationAsRead = async (id: string) => {
-    await supabase.from('notifications').update({ is_read: true }).eq('id', id);
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
   const markAllNotificationsAsRead = async () => {
-    if (!currentUser?.id) return;
-    await supabase.from('notifications').update({ is_read: true }).eq('user_id', currentUser.id);
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 

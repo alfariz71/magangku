@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Search, 
   Bell, 
   ChevronDown, 
   LogOut, 
@@ -22,7 +21,6 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
 
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -74,22 +72,6 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
               {currentUser?.name || (role === 'admin' ? 'Admin' : 'Pengguna')}
             </span>
           </h1>
-        </div>
-      </div>
-
-      {/* Center: Search input */}
-      <div className="hidden md:flex items-center flex-1 max-w-md mx-6">
-        <div className="relative w-full">
-          <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-slate-400">
-            <Search className="w-4 h-4" />
-          </div>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Cari sesuatu..."
-            className="w-full rounded-full border border-slate-200 bg-slate-50/70 py-2 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 transition-all focus:border-[#2F80ED] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#2F80ED]/20"
-          />
         </div>
       </div>
 
