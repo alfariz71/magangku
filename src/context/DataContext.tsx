@@ -207,6 +207,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, [currentUser?.id]);
 
+  // Helper to calculate numeric timestamp score for sorting attendances (newest check-in first)
+  const getAttendanceTimeScore = (record: { date: string; rawCheckInTime?: string; checkInTime?: string | null }): number => {
+    if (record.rawCheckInTime) {
+      const t = new Date(record.rawCheckInTime).getTime();
+      if (!isNaN(t)) return t;
+    }
+    if (record.checkInTime) {
+      const match = record.checkInTime.match(/(\d{1,2})[:.](\d{2})/);
+      if (match) {
+        const hh = match[1].padStart(2, '0');
+        const mm = match[2];
+        const d = new Date(`${record.date}T${hh}:${mm}:00+07:00`);
+        const t = d.getTime();
+        if (!isNaN(t)) return t;
+      }
+    }
+    return 0;
+  };
+
   // ---- ATTENDANCES ----
   const refreshAttendances = async () => {
     if (!currentUser?.id) return;
@@ -215,7 +234,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       let query = supabase
         .from('attendance_records')
         .select('*')
-        .order('date', { ascending: false });
+        .order('date', { ascending: false })
+        .order('check_in_time', { ascending: false, nullsFirst: false });
 
       if (currentUser.role !== 'admin') {
         query = query.eq('user_id', currentUser.id);
@@ -255,6 +275,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const locId = r.qr_session_id ? qrLocMap.get(r.qr_session_id as string) : null;
         const locName = locId ? locNameMap.get(locId) : null;
         return mapDbAttendance(r, p, locName);
+      });
+
+      // Sort attendances descending: newest date first, then newest check-in first (yang baru absen paling atas)
+      mapped.sort((a, b) => {
+        if (a.date !== b.date) {
+          return b.date.localeCompare(a.date);
+        }
+        return getAttendanceTimeScore(b) - getAttendanceTimeScore(a);
       });
 
       setAttendances(mapped);
@@ -309,6 +337,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       checkInDistanceMeters: r.check_in_distance_meters as number | undefined,
       checkOutLat: r.check_out_lat as number | undefined,
       checkOutLon: r.check_out_lon as number | undefined,
+      checkOutAccuracy: r.check_out_accuracy as number | undefined,
       photoUrl: (r.photo_url as string) || p?.photo_url || undefined,
       isQrValid: r.is_qr_valid as boolean,
       isLocationValid: r.is_location_valid as boolean,
@@ -316,6 +345,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       correctionReason: r.correction_reason as string | undefined,
       updatedAt: r.corrected_at as string | undefined,
       locationName: locName || undefined,
+      rawCheckInTime: (r.check_in_time as string) || (r.created_at as string) || undefined,
+      createdAt: (r.created_at as string) || undefined,
     };
   }
 

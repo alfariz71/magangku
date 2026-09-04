@@ -55,6 +55,8 @@ export interface AttendanceRecord {
   correctionReason?: string;
   updatedAt?: string;
   locationName?: string;
+  rawCheckInTime?: string;
+  createdAt?: string;
 }
 
 export interface ActivityRecord {

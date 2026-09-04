@@ -124,6 +124,14 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
     return matchQuery && matchStatus;
   });
 
+  // Urutkan riwayat absensi terbaru paling atas
+  filteredRecords.sort((a, b) => {
+    if (a.date !== b.date) return b.date.localeCompare(a.date);
+    const timeA = a.rawCheckInTime || a.checkInTime || '';
+    const timeB = b.rawCheckInTime || b.checkInTime || '';
+    return timeB.localeCompare(timeA);
+  });
+
   // Today date string
   const todayStr = new Date().toLocaleDateString('id-ID', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'

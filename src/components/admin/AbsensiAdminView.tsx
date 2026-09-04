@@ -94,6 +94,25 @@ export const AbsensiAdminView: React.FC = () => {
   // Get today's date string in 'sv-SE' format (YYYY-MM-DD)
   const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 
+  // Helper to calculate numeric timestamp score for sorting attendances (newest check-in first)
+  const getRecordTimeScore = (record: AttendanceRecord): number => {
+    if (record.rawCheckInTime) {
+      const t = new Date(record.rawCheckInTime).getTime();
+      if (!isNaN(t)) return t;
+    }
+    if (record.checkInTime) {
+      const match = record.checkInTime.match(/(\d{1,2})[:.](\d{2})/);
+      if (match) {
+        const hh = match[1].padStart(2, '0');
+        const mm = match[2];
+        const d = new Date(`${record.date}T${hh}:${mm}:00+07:00`);
+        const t = d.getTime();
+        if (!isNaN(t)) return t;
+      }
+    }
+    return 0;
+  };
+
   // Group records by date
   const groupedByDate: { date: string; records: AttendanceRecord[] }[] = [];
   filteredRecords.forEach(record => {
@@ -103,6 +122,14 @@ export const AbsensiAdminView: React.FC = () => {
     } else {
       groupedByDate.push({ date: record.date, records: [record] });
     }
+  });
+
+  // Urutkan tanggal terbaru paling atas
+  groupedByDate.sort((a, b) => b.date.localeCompare(a.date));
+
+  // Di dalam setiap tanggal, urutkan jam absen masuk terbaru paling atas (yang baru absen paling atas)
+  groupedByDate.forEach(g => {
+    g.records.sort((a, b) => getRecordTimeScore(b) - getRecordTimeScore(a));
   });
 
   const getDateLabel = (dateStr: string) => {
