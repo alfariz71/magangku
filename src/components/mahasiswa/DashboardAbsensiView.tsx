@@ -427,11 +427,11 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
       <CameraScannerModal
         isOpen={isScannerOpen}
         onClose={() => setIsScannerOpen(false)}
-        onSuccessScan={async () => {
+        onSuccessScan={async (_photo, scannedToken) => {
           setIsScannerOpen(false);
-          // Langsung otomatis catat Absen Masuk saat scan QR berhasil
+          // Langsung otomatis catat Absen Masuk saat scan QR berhasil (1x scan langsung masuk)
           if (!todayAttendance.isCheckedIn) {
-            const res = await performCheckIn();
+            const res = await performCheckIn(scannedToken);
             if (res.success) {
               showToast('success', res.message);
               try { confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } }); } catch { /* ignore */ }

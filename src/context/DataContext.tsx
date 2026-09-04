@@ -54,7 +54,7 @@ interface DataContextType {
   };
   attendanceStats: { hadir: number; terlambat: number; izin: number; alpha: number };
   isAttendanceLoading: boolean;
-  performCheckIn: () => Promise<{ success: boolean; message: string }>;
+  performCheckIn: (explicitToken?: string) => Promise<{ success: boolean; message: string }>;
   performCheckOut: () => Promise<{ success: boolean; message: string }>;
   adminCorrectAttendance: (id: string, checkIn: string, checkOut: string, status: AttendanceStatus, reason: string) => Promise<void>;
   deleteAttendance: (id: string) => Promise<boolean>;
@@ -173,6 +173,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
   const [isQrScannedToday, setIsQrScannedToday] = useState(false);
+  const isQrScannedTodayRef = useRef(false);
   const [qrConfig, setQrConfig] = useState<QRCodeConfig>({
     officeName: 'Kantor Pusat',
     latitude: -6.208763,
@@ -509,7 +510,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       .eq('date', todayStr)
       .maybeSingle();
 
-    setIsQrScannedToday(!!data?.check_in_time);
+    const checkedIn = !!data?.check_in_time;
+    isQrScannedTodayRef.current = checkedIn;
+    setIsQrScannedToday(checkedIn);
   };
 
   const scanQrToken = async (token: string): Promise<{ success: boolean; message: string }> => {
@@ -558,12 +561,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
+    isQrScannedTodayRef.current = true;
     setIsQrScannedToday(true);
     setQrConfig(prev => ({ ...prev, currentToken: token }));
     return { success: true, message: 'QR Code valid dan berhasil diverifikasi!' };
   };
 
-  const resetQrScan = () => setIsQrScannedToday(false);
+  const resetQrScan = () => {
+    isQrScannedTodayRef.current = false;
+    setIsQrScannedToday(false);
+  };
 
 
   // ---- GPS ----
@@ -653,7 +660,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const retryGps = useCallback(() => { stopGpsWatch(); startGpsWatch(); }, [stopGpsWatch, startGpsWatch]);
 
   // ---- CHECK IN / OUT ----
-  const performCheckIn = async (): Promise<{ success: boolean; message: string }> => {
+  const performCheckIn = async (explicitToken?: string): Promise<{ success: boolean; message: string }> => {
     if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
     const officeName = gpsState.nearestLocationName || qrConfig.officeName || 'kantor';
     const radius = gpsState.targetRadiusMeters || qrConfig.radiusMeters || 50;
@@ -663,7 +670,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (gpsState.status === 'loading' || gpsState.status === 'idle') return { success: false, message: 'Tunggu GPS mengambil koordinat Anda...' };
     if (gpsState.status === 'unavailable') return { success: false, message: 'GPS tidak tersedia di perangkat ini.' };
     if (gpsState.status === 'low_accuracy') return { success: false, message: `Akurasi GPS terlalu rendah (${gpsState.accuracy?.toFixed(0)}m). Anda berada di luar radius ${officeName}. Dekati area kantor.` };
-    if (!isQrScannedToday) return { success: false, message: 'Pindai QR Code di lokasi magang terlebih dahulu.' };
+    
+    // Cek bukti scan QR: bisa via parameter langsung, ref instan, atau state
+    const tokenToUse = explicitToken || qrConfig.currentToken;
+    const hasScanned = !!explicitToken || isQrScannedTodayRef.current || isQrScannedToday;
+    if (!hasScanned) return { success: false, message: 'Pindai QR Code di lokasi magang terlebih dahulu.' };
     if (todayAttendance.isCheckedIn) return { success: false, message: 'Anda sudah melakukan absen masuk hari ini.' };
 
     const now = new Date();
@@ -672,11 +683,15 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const status: AttendanceStatus = isLate ? 'Terlambat' : 'Hadir';
 
     // Check for existing QR session
-    const { data: qrSession } = await supabase
-      .from('qr_sessions')
-      .select('id')
-      .eq('token', qrConfig.currentToken)
-      .maybeSingle();
+    let qrSessionId: string | null = null;
+    if (tokenToUse) {
+      const { data: qrSession } = await supabase
+        .from('qr_sessions')
+        .select('id')
+        .eq('token', tokenToUse)
+        .maybeSingle();
+      qrSessionId = qrSession?.id || null;
+    }
 
     const { error } = await supabase.from('attendance_records').insert({
       user_id: currentUser.id,
@@ -687,7 +702,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       check_in_lon: gpsState.longitude,
       check_in_accuracy: gpsState.accuracy,
       check_in_distance_meters: gpsState.distanceMeters,
-      qr_session_id: qrSession?.id || null,
+      qr_session_id: qrSessionId,
       is_qr_valid: true,
       is_location_valid: true,
     });

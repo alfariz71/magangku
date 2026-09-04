@@ -20,7 +20,7 @@ import { useAuth } from '../../context/AuthContext';
 interface CameraScannerModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccessScan?: (capturedPhoto?: string) => void;
+  onSuccessScan?: (capturedPhoto?: string, scannedToken?: string) => void;
 }
 
 export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
@@ -126,7 +126,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
       }
 
       setTimeout(() => {
-        if (onSuccessScan) onSuccessScan(photoToSave);
+        if (onSuccessScan) onSuccessScan(photoToSave, cleanToken);
         onClose();
       }, 1500);
     } else {
