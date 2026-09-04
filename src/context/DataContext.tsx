@@ -1214,14 +1214,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    setNotifications(notifs);
+    // Cek notif mana yang sudah dibaca (dari localStorage agar tahan refresh)
+    const storageKey = `notif_read_${currentUser.id}`;
+    const readIds: Set<string> = new Set(JSON.parse(localStorage.getItem(storageKey) || '[]'));
+
+    // Tandai notif sebagai read jika ID-nya sudah ada di localStorage
+    const withReadState = notifs.map(n => ({ ...n, read: readIds.has(n.id) ? true : n.read }));
+
+    setNotifications(withReadState);
   };
 
   const markNotificationAsRead = async (id: string) => {
+    // Simpan ke localStorage
+    if (currentUser?.id) {
+      const storageKey = `notif_read_${currentUser.id}`;
+      const readIds: string[] = JSON.parse(localStorage.getItem(storageKey) || '[]');
+      if (!readIds.includes(id)) {
+        localStorage.setItem(storageKey, JSON.stringify([...readIds, id]));
+      }
+    }
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
   const markAllNotificationsAsRead = async () => {
+    // Simpan semua ID ke localStorage
+    if (currentUser?.id) {
+      const storageKey = `notif_read_${currentUser.id}`;
+      const allIds = notifications.map(n => n.id);
+      localStorage.setItem(storageKey, JSON.stringify(allIds));
+    }
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
