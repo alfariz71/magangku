@@ -57,6 +57,7 @@ interface DataContextType {
   performCheckIn: () => Promise<{ success: boolean; message: string }>;
   performCheckOut: () => Promise<{ success: boolean; message: string }>;
   adminCorrectAttendance: (id: string, checkIn: string, checkOut: string, status: AttendanceStatus, reason: string) => Promise<void>;
+  deleteAttendance: (id: string) => Promise<boolean>;
   refreshAttendances: () => Promise<void>;
 
   // QR & Location
@@ -780,6 +781,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await refreshAttendances();
   };
 
+  const deleteAttendance = async (id: string): Promise<boolean> => {
+    if (!currentUser?.id || currentUser.role !== 'admin') return false;
+    try {
+      const { data, error } = await supabase
+        .from('attendance_records')
+        .delete()
+        .eq('id', id)
+        .select();
+
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        console.warn('No rows deleted in DB - RLS policy delete on attendance_records may be missing');
+        return false;
+      }
+
+      // Langsung hapus dari state agar hilang seketika di UI
+      setAttendances(prev => prev.filter(a => a.id !== id));
+      await addAuditLog('Hapus Absensi', 'Absensi', `Menghapus record absensi ID: ${id}`);
+      return true;
+    } catch (err) {
+      console.error('Failed to delete attendance record:', err);
+      return false;
+    }
+  };
+
   // ---- ACTIVITIES ----
   const refreshActivities = async () => {
     if (!currentUser?.id) return;
@@ -1273,7 +1299,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <DataContext.Provider
       value={{
         attendances, todayAttendance, attendanceStats, isAttendanceLoading,
-        performCheckIn, performCheckOut, adminCorrectAttendance, refreshAttendances,
+        performCheckIn, performCheckOut, adminCorrectAttendance, deleteAttendance, refreshAttendances,
         qrConfig, activeLocation, locations, locationQrMap, updateQrConfig, regenerateQrToken, generateQrForLocationId, isQrScannedToday, scanQrToken, resetQrScan, refreshLocations, addLocation, updateLocation, toggleLocationStatus, deleteLocation,
         gpsState, startGpsWatch, stopGpsWatch, retryGps,
         activities, isActivitiesLoading, addActivity, updateActivity, deleteActivity, refreshActivities,

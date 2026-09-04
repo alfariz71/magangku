@@ -11,12 +11,13 @@ import {
   X,
   AlertCircle,
   ShieldCheck,
+  Trash2,
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { AttendanceRecord, AttendanceStatus } from '../../types';
 
 export const AbsensiAdminView: React.FC = () => {
-  const { attendances, adminCorrectAttendance, qrConfig } = useData();
+  const { attendances, adminCorrectAttendance, deleteAttendance, qrConfig } = useData();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua');
@@ -30,6 +31,11 @@ export const AbsensiAdminView: React.FC = () => {
   const [corrReason, setCorrReason] = useState('');
   const [corrError, setCorrError] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState(false);
+
+  // Delete Modal States
+  const [deletingRecord, setDeletingRecord] = useState<AttendanceRecord | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteToast, setDeleteToast] = useState(false);
 
   const openCorrectionModal = (record: AttendanceRecord) => {
     setEditingRecord(record);
@@ -121,6 +127,13 @@ export const AbsensiAdminView: React.FC = () => {
         <div className="flex items-center gap-2.5 rounded-xl bg-emerald-50 p-4 text-xs font-semibold text-[#27AE60] border border-emerald-200 shadow-sm animate-in fade-in">
           <CheckCircle2 className="h-4 w-4" />
           <span>Koreksi absensi berhasil disimpan dan dicatat ke dalam audit log sistem!</span>
+        </div>
+      )}
+
+      {deleteToast && (
+        <div className="flex items-center gap-2.5 rounded-xl bg-rose-50 p-4 text-xs font-semibold text-rose-600 border border-rose-200 shadow-sm animate-in fade-in">
+          <CheckCircle2 className="h-4 w-4" />
+          <span>Data absensi berhasil dihapus dari sistem!</span>
         </div>
       )}
 
@@ -309,14 +322,24 @@ export const AbsensiAdminView: React.FC = () => {
 
                           {/* Action */}
                           <td className="py-3.5 px-4 text-right whitespace-nowrap">
-                            <button
-                              onClick={() => openCorrectionModal(item)}
-                              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-[#2F80ED]"
-                              title="Koreksi Absensi Manual"
-                            >
-                              <Edit3 className="h-3.5 w-3.5 text-[#2F80ED]" />
-                              <span>Koreksi</span>
-                            </button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                onClick={() => openCorrectionModal(item)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 hover:border-[#2F80ED] transition"
+                                title="Koreksi Absensi Manual"
+                              >
+                                <Edit3 className="h-3.5 w-3.5 text-[#2F80ED]" />
+                                <span>Koreksi</span>
+                              </button>
+                              <button
+                                onClick={() => setDeletingRecord(item)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50/60 px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-100/70 hover:border-rose-300 transition"
+                                title="Hapus Data Absensi"
+                              >
+                                <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                                <span>Hapus</span>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -424,6 +447,61 @@ export const AbsensiAdminView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deletingRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onClick={() => !isDeleting && setDeletingRecord(null)} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
+            <div className="flex items-center gap-3 text-rose-600 mb-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rose-100">
+                <Trash2 className="h-5 w-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Hapus Data Absensi?</h3>
+                <p className="text-xs text-slate-500">Tindakan ini permanen dan tidak dapat dibatalkan</p>
+              </div>
+            </div>
+
+            <div className="rounded-xl bg-slate-50 p-3.5 border border-slate-100 my-4 text-xs text-slate-600 space-y-1.5">
+              <p><span className="text-slate-400">Mahasiswa:</span> <strong className="text-slate-900">{deletingRecord.studentName}</strong> ({deletingRecord.studentNim})</p>
+              <p><span className="text-slate-400">Tanggal:</span> <strong>{deletingRecord.dayName}, {deletingRecord.date}</strong></p>
+              <p><span className="text-slate-400">Status:</span> <strong>{deletingRecord.status}</strong> ({deletingRecord.checkInTime || '-'} s/d {deletingRecord.checkOutTime || '-'})</p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={() => setDeletingRecord(null)}
+                className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={isDeleting}
+                onClick={async () => {
+                  setIsDeleting(true);
+                  const success = await deleteAttendance(deletingRecord.id);
+                  setIsDeleting(false);
+                  if (success) {
+                    setDeletingRecord(null);
+                    setDeleteToast(true);
+                    setTimeout(() => setDeleteToast(false), 3000);
+                  } else {
+                    alert('Gagal menghapus data absensi. Silakan coba lagi.');
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-rose-600 px-4 py-2 text-xs font-semibold text-white hover:bg-rose-700 shadow-md shadow-rose-600/20 disabled:opacity-60 transition"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>{isDeleting ? 'Menghapus...' : 'Ya, Hapus Absen'}</span>
+              </button>
+            </div>
           </div>
         </div>
       )}
