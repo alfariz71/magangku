@@ -17,6 +17,7 @@ import {
   MessageSquare,
   ChevronDown,
   ChevronUp,
+  Trash2,
 } from 'lucide-react';
 import { Logo } from './Logo';
 import { useAuth } from '../../context/AuthContext';
@@ -53,6 +54,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { role } = useAuth();
   const [inboxOpen, setInboxOpen] = useState(false);
   const [messages, setMessages] = useState<HelpMessage[]>([]);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Fetch messages for admin
   useEffect(() => {
@@ -68,7 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
     const channel = supabase
       .channel('sidebar_help_messages')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'help_messages' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'help_messages' }, () => {
         fetchMessages();
       })
       .subscribe();
@@ -79,6 +81,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const markAsRead = async (id: string) => {
     await supabase.from('help_messages').update({ is_read: true }).eq('id', id);
     setMessages(prev => prev.map(m => m.id === id ? { ...m, is_read: true } : m));
+  };
+
+  const handleMessageClick = (msg: HelpMessage) => {
+    if (!msg.is_read) {
+      markAsRead(msg.id);
+    }
+    setExpandedId(prev => (prev === msg.id ? null : msg.id));
+  };
+
+  const deleteMessage = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Hapus pesan ini?')) return;
+
+    // Optimistic UI update
+    setMessages(prev => prev.filter(m => m.id !== id));
+    if (expandedId === id) setExpandedId(null);
+
+    const { error } = await supabase.from('help_messages').delete().eq('id', id);
+    if (error) {
+      console.error('Gagal menghapus pesan:', error);
+      // Rollback on error
+      const { data } = await supabase
+        .from('help_messages')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (data) setMessages(data);
+      alert('Gagal menghapus pesan: ' + (error.message || 'Periksa izin database.'));
+    }
   };
 
   const unreadCount = messages.filter(m => !m.is_read).length;
@@ -160,31 +190,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Message list */}
           {inboxOpen && (
-            <div className="border-t border-[#1E3A5F]/40 max-h-52 overflow-y-auto divide-y divide-[#1E3A5F]/30">
+            <div className="border-t border-[#1E3A5F]/40 max-h-56 overflow-y-auto divide-y divide-[#1E3A5F]/30">
               {messages.length === 0 ? (
                 <p className="py-4 text-center text-[11px] text-slate-500">Belum ada pesan</p>
               ) : (
                 messages.map(msg => (
                   <div
                     key={msg.id}
-                    onClick={() => !msg.is_read && markAsRead(msg.id)}
-                    className={`px-3.5 py-2.5 cursor-pointer hover:bg-[#1B3658]/50 transition-colors ${
+                    onClick={() => handleMessageClick(msg)}
+                    className={`group relative px-3.5 py-2.5 cursor-pointer hover:bg-[#1B3658]/50 transition-colors ${
                       !msg.is_read ? 'bg-[#1E3A5F]/30' : ''
                     }`}
                   >
                     <div className="flex items-center justify-between gap-1">
-                      <span className={`text-[11px] font-semibold truncate ${!msg.is_read ? 'text-white' : 'text-slate-400'}`}>
-                        {msg.student_name}
-                      </span>
-                      {!msg.is_read && (
-                        <span className="h-1.5 w-1.5 rounded-full bg-rose-400 shrink-0" />
-                      )}
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        {!msg.is_read && (
+                          <span className="h-1.5 w-1.5 rounded-full bg-rose-400 shrink-0" />
+                        )}
+                        <span className={`text-[11px] font-semibold truncate ${!msg.is_read ? 'text-white' : 'text-slate-400'}`}>
+                          {msg.student_name}
+                        </span>
+                      </div>
+                      <button
+                        onClick={(e) => deleteMessage(e, msg.id)}
+                        title="Hapus pesan ini"
+                        className="opacity-50 group-hover:opacity-100 p-1 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition shrink-0"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
                     </div>
-                    <p className="text-[10px] text-slate-500">{msg.topic}</p>
-                    <p className={`mt-0.5 text-[11px] line-clamp-2 ${!msg.is_read ? 'text-slate-300' : 'text-slate-500'}`}>
+                    <p className="text-[10px] text-slate-400 font-medium">{msg.topic}</p>
+                    <p className={`mt-0.5 text-[11px] ${expandedId === msg.id ? 'text-slate-200 whitespace-pre-wrap' : 'line-clamp-2 ' + (!msg.is_read ? 'text-slate-200' : 'text-slate-400')}`}>
                       {msg.message}
                     </p>
-                    <p className="mt-0.5 text-[10px] text-slate-600">{formatTime(msg.created_at)}</p>
+                    <p className="mt-1 text-[10px] text-slate-500">{formatTime(msg.created_at)}</p>
                   </div>
                 ))
               )}

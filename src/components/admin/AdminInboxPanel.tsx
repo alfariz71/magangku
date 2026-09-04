@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { MessageSquare, X, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
 interface HelpMessage {
@@ -29,7 +29,7 @@ export const AdminInboxPanel: React.FC = () => {
     // Realtime subscription
     const channel = supabase
       .channel('help_messages_changes')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'help_messages' }, () => {
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'help_messages' }, () => {
         fetchMessages();
       })
       .subscribe();
@@ -40,6 +40,17 @@ export const AdminInboxPanel: React.FC = () => {
   const markAsRead = async (id: string) => {
     await supabase.from('help_messages').update({ is_read: true }).eq('id', id);
     setMessages(prev => prev.map(m => m.id === id ? { ...m, is_read: true } : m));
+  };
+
+  const deleteMessage = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Hapus pesan ini?')) return;
+    setMessages(prev => prev.filter(m => m.id !== id));
+    const { error } = await supabase.from('help_messages').delete().eq('id', id);
+    if (error) {
+      console.error('Failed to delete message:', error);
+      fetchMessages();
+    }
   };
 
   const unreadCount = messages.filter(m => !m.is_read).length;
@@ -76,7 +87,7 @@ export const AdminInboxPanel: React.FC = () => {
               messages.map(msg => (
                 <div
                   key={msg.id}
-                  className={`px-3 py-2.5 text-[11px] cursor-pointer hover:bg-slate-50 transition-colors ${
+                  className={`group relative px-3 py-2.5 text-[11px] cursor-pointer hover:bg-slate-50 transition-colors ${
                     !msg.is_read ? 'bg-blue-50/40' : ''
                   }`}
                   onClick={() => !msg.is_read && markAsRead(msg.id)}
@@ -85,7 +96,16 @@ export const AdminInboxPanel: React.FC = () => {
                     <span className={`font-semibold truncate ${!msg.is_read ? 'text-slate-900' : 'text-slate-600'}`}>
                       {msg.student_name}
                     </span>
-                    <span className="text-[10px] text-slate-400 shrink-0">{formatTime(msg.created_at)}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-[10px] text-slate-400">{formatTime(msg.created_at)}</span>
+                      <button
+                        onClick={(e) => deleteMessage(e, msg.id)}
+                        title="Hapus pesan"
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
                   <span className="text-[10px] text-slate-400">{msg.topic}</span>
                   <p className={`mt-0.5 line-clamp-2 ${!msg.is_read ? 'text-slate-700' : 'text-slate-500'}`}>
