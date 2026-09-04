@@ -1,71 +1,61 @@
-import React, { useState, useEffect } from 'react';
-import { ClipboardCheck, Search, Filter, Check, X, Eye, AlertCircle, Clock } from 'lucide-react';
-import { AttendanceCorrectionRequest, User, AuditLog } from '../../types';
+import React, { useState } from 'react';
+import { ClipboardCheck, Search, Filter, Check, X, Eye, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { useData } from '../../context/DataContext';
+import { AttendanceCorrectionRequest } from '../../types';
 
 export default function KoreksiAdminView() {
-  const [requests, setRequests] = useState<AttendanceCorrectionRequest[]>(() => {
-    const saved = localStorage.getItem('magangku_correction_requests');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [students, setStudents] = useState<User[]>(() => {
-    const users = localStorage.getItem('magangku_users');
-    return users ? JSON.parse(users) : [];
-  });
+  const { correctionRequests, reviewCorrectionRequest, refreshCorrectionRequests } = useData();
 
   const [filter, setFilter] = useState('Semua');
   const [search, setSearch] = useState('');
-  
   const [selectedReq, setSelectedReq] = useState<AttendanceCorrectionRequest | null>(null);
   const [adminNotes, setAdminNotes] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Stats
-  const total = requests.length;
-  const waiting = requests.filter(r => r.status === 'Menunggu').length;
-  const approved = requests.filter(r => r.status === 'Disetujui').length;
-  const rejected = requests.filter(r => r.status === 'Ditolak').length;
+  const showToast = (type: 'success' | 'error', message: string) => {
+    setToast({ type, message });
+    setTimeout(() => setToast(null), 4000);
+  };
 
-  const filteredRequests = requests.filter(r => {
+  const total = correctionRequests.length;
+  const waiting = correctionRequests.filter(r => r.status === 'Menunggu').length;
+  const approved = correctionRequests.filter(r => r.status === 'Disetujui').length;
+  const rejected = correctionRequests.filter(r => r.status === 'Ditolak').length;
+
+  const filteredRequests = correctionRequests.filter(r => {
     if (filter !== 'Semua' && r.status !== filter) return false;
-    const student = students.find(s => s.id === r.userId);
-    if (search && !student?.name.toLowerCase().includes(search.toLowerCase()) && !r.userId.includes(search)) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!r.studentName?.toLowerCase().includes(q) && !r.studentNim?.toLowerCase().includes(q)) return false;
+    }
     return true;
   });
 
-  const handleProcess = (status: 'Disetujui' | 'Ditolak') => {
+  const handleProcess = async (status: 'Disetujui' | 'Ditolak') => {
     if (!selectedReq) return;
     if (status === 'Ditolak' && !adminNotes.trim()) {
-      alert('Alasan penolakan wajib diisi');
+      showToast('error', 'Alasan penolakan wajib diisi');
       return;
     }
-
-    // Update Request
-    const updatedRequests = requests.map(r => 
-      r.id === selectedReq.id ? { ...r, status, adminNotes, resolvedAt: new Date().toISOString() } : r
-    );
-    setRequests(updatedRequests);
-    localStorage.setItem('magangku_correction_requests', JSON.stringify(updatedRequests));
-
-    if (status === 'Disetujui') {
-      // Logic for modifying attendance
-      // const attendances = JSON.parse(localStorage.getItem('magangku_attendances') || '[]');
-      // ... modify attendances based on request ...
-      // localStorage.setItem('magangku_attendances', JSON.stringify(attendances));
+    setIsProcessing(true);
+    try {
+      await reviewCorrectionRequest(selectedReq.id, status, adminNotes);
+      showToast('success', `Koreksi berhasil ${status === 'Disetujui' ? 'disetujui' : 'ditolak'}.`);
+      setSelectedReq(null);
+      setAdminNotes('');
+    } catch {
+      showToast('error', 'Gagal memproses permintaan. Coba lagi.');
+    } finally {
+      setIsProcessing(false);
     }
+  };
 
-    // Audit log
-    const auditLogs = JSON.parse(localStorage.getItem('magangku_audit_logs') || '[]');
-    auditLogs.push({
-      id: `log-${Date.now()}`,
-      action: `Koreksi Absensi ${status}`,
-      details: `Koreksi untuk user ${selectedReq.userId} pada tanggal ${selectedReq.attendanceDate} berstatus ${status}`,
-      timestamp: new Date().toISOString()
-    });
-    localStorage.setItem('magangku_audit_logs', JSON.stringify(auditLogs));
-
-    alert(`Permintaan koreksi telah ${status}`);
-    setSelectedReq(null);
-    setAdminNotes('');
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await refreshCorrectionRequests();
+    setIsRefreshing(false);
   };
 
   const getStatusBadge = (status: string) => {
@@ -77,6 +67,9 @@ export default function KoreksiAdminView() {
     }
   };
 
+  const formatDate = (s: string) => s ? new Date(s).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '-';
+  const formatDateShort = (s: string) => s ? new Date(s).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '-';
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -84,7 +77,20 @@ export default function KoreksiAdminView() {
           <h1 className="text-2xl font-bold text-[#183B66]">Koreksi Absensi</h1>
           <p className="text-gray-500">Proses permintaan koreksi absensi peserta</p>
         </div>
+        <button onClick={handleRefresh} disabled={isRefreshing}
+          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-[#2F80ED] transition disabled:opacity-50 border border-gray-200 px-3 py-2 rounded-xl">
+          <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />Refresh
+        </button>
       </div>
+
+      {toast && (
+        <div className={`rounded-xl p-4 flex items-start border ${toast.type === 'success' ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+          {toast.type === 'success'
+            ? <Check className="h-5 w-5 text-green-500 mt-0.5 mr-3 flex-shrink-0" />
+            : <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 mr-3 flex-shrink-0" />}
+          <p className={`text-sm font-medium ${toast.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>{toast.message}</p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
@@ -109,21 +115,14 @@ export default function KoreksiAdminView() {
         <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between bg-gray-50">
           <div className="relative w-full md:w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Cari nama atau NIM peserta..." 
+            <input type="text" placeholder="Cari nama atau NIM peserta..."
               className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 outline-none focus:border-[#2F80ED] focus:ring-1 focus:ring-[#2F80ED] transition"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
+              value={search} onChange={e => setSearch(e.target.value)} />
           </div>
           <div className="flex items-center gap-2">
             <Filter size={18} className="text-gray-400 hidden sm:block" />
-            <select 
-              className="w-full sm:w-auto border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-[#2F80ED] focus:ring-1 focus:ring-[#2F80ED] transition bg-white"
-              value={filter}
-              onChange={e => setFilter(e.target.value)}
-            >
+            <select className="w-full sm:w-auto border border-gray-200 rounded-xl px-4 py-2.5 outline-none focus:border-[#2F80ED] focus:ring-1 focus:ring-[#2F80ED] transition bg-white"
+              value={filter} onChange={e => setFilter(e.target.value)}>
               <option value="Semua">Semua Status</option>
               <option value="Menunggu">Hanya Menunggu</option>
               <option value="Disetujui">Disetujui</option>
@@ -145,45 +144,36 @@ export default function KoreksiAdminView() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filteredRequests.map(req => {
-                  const student = students.find(s => s.id === req.userId);
-                  return (
-                    <tr key={req.id} className="hover:bg-blue-50/30 transition">
-                      <td className="p-4">
-                        <p className="font-bold text-[#183B66]">{student?.name || 'Peserta Tidak Ditemukan'}</p>
-                        <p className="text-xs text-gray-500 font-mono mt-1">{student?.nim || req.userId}</p>
-                      </td>
-                      <td className="p-4">
-                        <p className="font-medium text-gray-800">{new Date(req.attendanceDate).toLocaleDateString('id-ID', {day: 'numeric', month: 'long', year: 'numeric'})}</p>
-                        <p className="text-xs font-semibold text-[#2F80ED] mt-1">{req.correctionType}</p>
-                      </td>
-                      <td className="p-4 max-w-xs" title={req.reason}>
-                        <p className="text-sm text-gray-600 truncate">{req.reason}</p>
-                        <p className="text-[10px] text-gray-400 mt-1">Diajukan: {new Date(req.createdAt).toLocaleDateString('id-ID')}</p>
-                      </td>
-                      <td className="p-4">
-                        {getStatusBadge(req.status)}
-                      </td>
-                      <td className="p-4">
-                        {req.status === 'Menunggu' ? (
-                          <button 
-                            onClick={() => setSelectedReq(req)}
-                            className="flex items-center gap-1.5 bg-[#2F80ED] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-600 transition shadow-sm active:scale-95"
-                          >
-                            <Eye size={16} /> Proses
-                          </button>
-                        ) : (
-                          <button 
-                            onClick={() => setSelectedReq(req)}
-                            className="flex items-center gap-1.5 border border-gray-200 text-gray-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition active:scale-95"
-                          >
-                            <Eye size={16} /> Detail
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {filteredRequests.map(req => (
+                  <tr key={req.id} className="hover:bg-blue-50/30 transition">
+                    <td className="p-4">
+                      <p className="font-bold text-[#183B66]">{req.studentName || 'Peserta'}</p>
+                      <p className="text-xs text-gray-500 font-mono mt-1">{req.studentNim || '-'}</p>
+                    </td>
+                    <td className="p-4">
+                      <p className="font-medium text-gray-800">{formatDateShort(req.attendanceDate)}</p>
+                      <p className="text-xs font-semibold text-[#2F80ED] mt-1">{req.correctionType}</p>
+                    </td>
+                    <td className="p-4 max-w-xs" title={req.reason}>
+                      <p className="text-sm text-gray-600 truncate">{req.reason}</p>
+                      <p className="text-[10px] text-gray-400 mt-1">Diajukan: {formatDateShort(req.createdAt)}</p>
+                    </td>
+                    <td className="p-4">{getStatusBadge(req.status)}</td>
+                    <td className="p-4">
+                      {req.status === 'Menunggu' ? (
+                        <button onClick={() => { setSelectedReq(req); setAdminNotes(''); }}
+                          className="flex items-center gap-1.5 bg-[#2F80ED] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-600 transition shadow-sm active:scale-95">
+                          <Eye size={16} /> Proses
+                        </button>
+                      ) : (
+                        <button onClick={() => { setSelectedReq(req); setAdminNotes(''); }}
+                          className="flex items-center gap-1.5 border border-gray-200 text-gray-600 px-4 py-2 rounded-xl text-sm font-medium hover:bg-gray-50 transition active:scale-95">
+                          <Eye size={16} /> Detail
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           ) : (
@@ -196,31 +186,30 @@ export default function KoreksiAdminView() {
         </div>
       </div>
 
-      {/* Modal Proses / Detail */}
       {selectedReq && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
             <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="font-bold text-[#183B66] text-lg flex items-center gap-2">
-                <ClipboardCheck size={20} className="text-[#2F80ED]" />
-                Detail Koreksi Absensi
+                <ClipboardCheck size={20} className="text-[#2F80ED]" />Detail Koreksi Absensi
               </h3>
-              <button onClick={() => { setSelectedReq(null); setAdminNotes(''); }} className="text-gray-400 hover:text-gray-600 hover:bg-gray-200 p-1.5 rounded-lg transition">
+              <button onClick={() => { setSelectedReq(null); setAdminNotes(''); }}
+                className="text-gray-400 hover:text-gray-600 hover:bg-gray-200 p-1.5 rounded-lg transition">
                 <X size={20} />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-5">
               <div className="bg-gray-50 p-4 rounded-xl border border-gray-100">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <p className="text-gray-500 text-xs font-semibold uppercase mb-1">Peserta</p>
-                    <p className="font-bold text-[#183B66]">{students.find(s => s.id === selectedReq.userId)?.name}</p>
-                    <p className="text-xs text-gray-500 font-mono mt-0.5">{selectedReq.userId}</p>
+                    <p className="font-bold text-[#183B66]">{selectedReq.studentName || 'Peserta'}</p>
+                    <p className="text-xs text-gray-500 font-mono mt-0.5">{selectedReq.studentNim || '-'}</p>
                   </div>
                   <div>
                     <p className="text-gray-500 text-xs font-semibold uppercase mb-1">Tanggal Absensi</p>
-                    <p className="font-bold text-gray-800">{new Date(selectedReq.attendanceDate).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                    <p className="font-bold text-gray-800">{formatDate(selectedReq.attendanceDate)}</p>
                   </div>
                   <div>
                     <p className="text-gray-500 text-xs font-semibold uppercase mb-1">Jenis Koreksi</p>
@@ -229,15 +218,27 @@ export default function KoreksiAdminView() {
                     </span>
                   </div>
                   <div>
-                    <p className="text-gray-500 text-xs font-semibold uppercase mb-1">Status Saat Ini</p>
+                    <p className="text-gray-500 text-xs font-semibold uppercase mb-1">Status</p>
                     <div>{getStatusBadge(selectedReq.status)}</div>
                   </div>
+                  {selectedReq.requestedCheckIn && (
+                    <div>
+                      <p className="text-gray-500 text-xs font-semibold uppercase mb-1">Jam Masuk Diminta</p>
+                      <p className="font-semibold text-gray-800">{selectedReq.requestedCheckIn}</p>
+                    </div>
+                  )}
+                  {selectedReq.requestedCheckOut && (
+                    <div>
+                      <p className="text-gray-500 text-xs font-semibold uppercase mb-1">Jam Pulang Diminta</p>
+                      <p className="font-semibold text-gray-800">{selectedReq.requestedCheckOut}</p>
+                    </div>
+                  )}
                 </div>
               </div>
-              
+
               <div>
                 <p className="text-gray-700 font-semibold mb-2 text-sm">Alasan / Keterangan Peserta</p>
-                <div className="bg-gray-50 p-4 rounded-xl text-sm border border-gray-200 text-gray-700 leading-relaxed min-h-[80px]">
+                <div className="bg-gray-50 p-4 rounded-xl text-sm border border-gray-200 text-gray-700 leading-relaxed">
                   {selectedReq.reason}
                 </div>
               </div>
@@ -247,10 +248,10 @@ export default function KoreksiAdminView() {
                   <label className="block text-gray-700 font-semibold mb-2 text-sm">
                     Catatan Keputusan <span className="text-red-500 font-normal text-xs">(Wajib diisi jika menolak)</span>
                   </label>
-                  <textarea 
+                  <textarea
                     className="w-full border border-gray-300 rounded-xl p-3 outline-none focus:ring-2 focus:ring-[#2F80ED] focus:border-transparent transition resize-none text-sm"
                     rows={3}
-                    placeholder="Tambahkan catatan untuk peserta mengenai keputusan ini..."
+                    placeholder="Tambahkan catatan untuk peserta..."
                     value={adminNotes}
                     onChange={e => setAdminNotes(e.target.value)}
                   />
@@ -259,7 +260,7 @@ export default function KoreksiAdminView() {
                 selectedReq.adminNotes && (
                   <div>
                     <p className="text-gray-700 font-semibold mb-2 text-sm">Catatan Admin</p>
-                    <div className="bg-blue-50 p-4 rounded-xl text-sm border border-blue-100 text-[#183B66] leading-relaxed">
+                    <div className={`p-4 rounded-xl text-sm border leading-relaxed ${selectedReq.status === 'Disetujui' ? 'bg-green-50 border-green-100 text-green-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
                       {selectedReq.adminNotes}
                     </div>
                   </div>
@@ -267,18 +268,19 @@ export default function KoreksiAdminView() {
               )}
 
               {selectedReq.status === 'Menunggu' && (
-                <div className="flex gap-3 pt-4 border-t border-gray-100 mt-6">
-                  <button 
+                <div className="flex gap-3 pt-4 border-t border-gray-100">
+                  <button
                     onClick={() => handleProcess('Ditolak')}
-                    className="flex-1 bg-white text-red-600 border-2 border-red-100 py-3 rounded-xl font-bold hover:bg-red-50 hover:border-red-200 transition active:scale-95 flex justify-center items-center gap-2"
-                  >
-                    <X size={18} /> Tolak Permintaan
+                    disabled={isProcessing}
+                    className="flex-1 bg-white text-red-600 border-2 border-red-100 py-3 rounded-xl font-bold hover:bg-red-50 hover:border-red-200 transition active:scale-95 flex justify-center items-center gap-2 disabled:opacity-50">
+                    <X size={18} /> Tolak
                   </button>
-                  <button 
+                  <button
                     onClick={() => handleProcess('Disetujui')}
-                    className="flex-1 bg-[#2F80ED] text-white py-3 rounded-xl font-bold hover:bg-blue-600 shadow-sm transition active:scale-95 flex justify-center items-center gap-2"
-                  >
-                    <Check size={18} /> Setujui Permintaan
+                    disabled={isProcessing}
+                    className="flex-1 bg-[#2F80ED] text-white py-3 rounded-xl font-bold hover:bg-blue-600 shadow-sm transition active:scale-95 flex justify-center items-center gap-2 disabled:opacity-50">
+                    {isProcessing ? <RefreshCw size={18} className="animate-spin" /> : <Check size={18} />}
+                    {isProcessing ? 'Memproses...' : 'Setujui'}
                   </button>
                 </div>
               )}

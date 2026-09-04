@@ -95,6 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'dashboard', label: 'Dashboard', icon: Home },
     { id: 'aktivitas', label: 'Aktivitas', icon: ClipboardList },
     { id: 'izin', label: 'Pengajuan Izin', icon: FileText },
+    { id: 'koreksi', label: 'Koreksi Absensi', icon: Edit3 },
     { id: 'laporan', label: 'Laporan', icon: BarChart2 },
     { id: 'pengaturan', label: 'Pengaturan', icon: Settings },
   ];

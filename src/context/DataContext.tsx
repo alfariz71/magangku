@@ -1014,7 +1014,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: r.id as string,
           userId: r.user_id as string,
           studentName: p?.full_name || (currentUser?.id === r.user_id ? (currentUser?.name || 'Peserta') : 'Peserta'),
-          studentNim: p?.nim || (currentUser?.id === r.user_id ? (currentUser?.nim || '-') : '-'),
+          studentNim: p?.nim || (currentUser?.id === r.user_id ? (currentUser?.nim || undefined) : undefined),
           attendanceDate: r.attendance_date as string,
           correctionType: r.correction_type as string,
           requestedCheckIn: r.requested_check_in as string | undefined,

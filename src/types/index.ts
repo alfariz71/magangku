@@ -137,6 +137,7 @@ export interface AttendanceCorrectionRequest {
   id: string;
   userId: string;
   studentName: string;
+  studentNim?: string;
   attendanceDate: string;
   correctionType: string; // 'Lupa Absen Masuk' | 'Lupa Absen Pulang' | 'GPS Gagal' | 'QR Bermasalah' | 'Lainnya'
   requestedCheckIn?: string;
