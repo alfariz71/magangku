@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { ClipboardEdit, Clock, AlertCircle, Check, X, FileUp, Calendar, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { ClipboardEdit, Clock, AlertCircle, Check, X, FileUp, Calendar, RefreshCw, ChevronDown, ChevronUp, Image as ImageIcon, ExternalLink, Eye } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { AttendanceCorrectionRequest } from '../../types';
 
 export const KoreksiAbsenView: React.FC = () => {
@@ -19,11 +20,13 @@ export const KoreksiAbsenView: React.FC = () => {
   });
 
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [evidencePreview, setEvidencePreview] = useState<string>('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [expandedReqId, setExpandedReqId] = useState<string | null>(null);
+  const [previewPhotoModal, setPreviewPhotoModal] = useState<string | null>(null);
 
   const showToast = (type: 'success' | 'error', message: string) => {
     setToast({ type, message });
@@ -41,12 +44,68 @@ export const KoreksiAbsenView: React.FC = () => {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      if (file.size > 2 * 1024 * 1024) {
-        showToast('error', 'Ukuran file maksimal 2MB');
+      if (file.size > 5 * 1024 * 1024) {
+        showToast('error', 'Ukuran file maksimal 5MB');
         return;
       }
       setEvidenceFile(file);
+      if (file.type.startsWith('image/')) {
+        setEvidencePreview(URL.createObjectURL(file));
+      } else {
+        setEvidencePreview('');
+      }
     }
+  };
+
+  const removeFile = () => {
+    setEvidenceFile(null);
+    if (evidencePreview) {
+      URL.revokeObjectURL(evidencePreview);
+      setEvidencePreview('');
+    }
+  };
+
+  const compressImage = (file: File, maxSizeMB = 2): Promise<Blob> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        resolve(file);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let { width, height } = img;
+          const maxDim = 1920;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) { height = Math.round((height / width) * maxDim); width = maxDim; }
+            else { width = Math.round((width / height) * maxDim); height = maxDim; }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0, width, height);
+          let quality = 0.85;
+          const tryExport = () => {
+            canvas.toBlob((blob) => {
+              if (!blob) { resolve(file); return; }
+              if (blob.size <= maxSizeMB * 1024 * 1024 || quality <= 0.4) {
+                resolve(blob);
+              } else {
+                quality -= 0.15;
+                tryExport();
+              }
+            }, 'image/jpeg', quality);
+          };
+          tryExport();
+        };
+        img.onerror = () => resolve(file);
+        img.src = ev.target?.result as string;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
   };
 
   const validate = () => {
@@ -65,16 +124,45 @@ export const KoreksiAbsenView: React.FC = () => {
     if (!validate()) return;
     setIsSubmitting(true);
     try {
+      let uploadedUrl: string | undefined = undefined;
+
+      // Upload file bukti jika ada
+      if (evidenceFile && currentUser?.id) {
+        try {
+          const compressed = await compressImage(evidenceFile);
+          const fileExt = evidenceFile.name.split('.').pop() || 'jpg';
+          const fileName = `evidence-${currentUser.id}-${Date.now()}.${fileExt}`;
+          
+          const { data: uploadData, error: uploadErr } = await supabase.storage
+            .from('activity-photos')
+            .upload(fileName, compressed, {
+              upsert: true,
+              contentType: evidenceFile.type.startsWith('image/') ? 'image/jpeg' : evidenceFile.type,
+            });
+
+          if (!uploadErr && uploadData) {
+            const { data: urlData } = supabase.storage.from('activity-photos').getPublicUrl(fileName);
+            uploadedUrl = urlData.publicUrl;
+          } else if (uploadErr) {
+            console.error('Storage upload error:', uploadErr);
+          }
+        } catch (uploadException) {
+          console.error('Error during evidence compression/upload:', uploadException);
+        }
+      }
+
       const result = await submitCorrectionRequest({
         attendanceDate: formData.attendanceDate,
         correctionType: formData.correctionType,
         requestedCheckIn: formData.requestedCheckIn || undefined,
         requestedCheckOut: formData.requestedCheckOut || undefined,
         reason: formData.reason,
+        evidenceUrl: uploadedUrl,
       });
+
       if (result.success) {
         setFormData({ attendanceDate: '', correctionType: '', requestedCheckIn: '', requestedCheckOut: '', reason: '' });
-        setEvidenceFile(null);
+        removeFile();
         showToast('success', result.message);
       } else {
         showToast('error', result.message);
@@ -188,22 +276,40 @@ export const KoreksiAbsenView: React.FC = () => {
               }
             </div>
 
+            {/* Upload Bukti */}
             <div>
-              <label className="block text-sm font-medium text-gray-700">Upload Bukti <span className="text-gray-400 font-normal">(Opsional, maks. 2MB)</span></label>
-              <div className="mt-1 flex items-center gap-3">
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Upload Bukti Foto / Surat <span className="text-gray-400 font-normal">(Opsional, maks. 5MB)</span>
+              </label>
+              <div className="mt-1 flex flex-wrap items-center gap-3">
                 <label className="cursor-pointer bg-white py-2 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 transition">
-                  <span className="flex items-center"><FileUp className="w-4 h-4 mr-2" />Pilih File</span>
+                  <span className="flex items-center"><FileUp className="w-4 h-4 mr-2" />Pilih File / Foto</span>
                   <input type="file" className="sr-only" accept="image/*,.pdf" onChange={handleFileChange} />
                 </label>
                 <span className="text-sm text-gray-500">{evidenceFile ? evidenceFile.name : 'Tidak ada file dipilih'}</span>
-                {evidenceFile && <button type="button" onClick={() => setEvidenceFile(null)} className="text-gray-400 hover:text-red-500"><X size={16} /></button>}
+                {evidenceFile && (
+                  <button type="button" onClick={removeFile} className="text-gray-400 hover:text-red-500 transition" title="Hapus file">
+                    <X size={16} />
+                  </button>
+                )}
               </div>
+
+              {/* Preview Thumbnail */}
+              {evidencePreview && (
+                <div className="mt-3 flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl w-fit">
+                  <img src={evidencePreview} alt="Preview Bukti" className="w-16 h-16 object-cover rounded-lg border border-gray-300 shadow-2xs" />
+                  <div>
+                    <p className="text-xs font-semibold text-gray-700">Preview Bukti Siap Diupload</p>
+                    <p className="text-[11px] text-gray-400">File akan disimpan ke sistem saat form diajukan</p>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="pt-4 flex justify-end">
               <button type="submit" disabled={isSubmitting}
                 className="inline-flex items-center gap-2 py-2.5 px-6 text-sm font-medium rounded-xl text-white bg-[#2F80ED] hover:bg-blue-600 disabled:opacity-50 transition">
-                {isSubmitting ? <><RefreshCw className="animate-spin" size={16} />Mengirim...</> : <><ClipboardEdit size={16} />Ajukan Koreksi</>}
+                {isSubmitting ? <><RefreshCw className="animate-spin" size={16} />Mengunggah & Mengirim...</> : <><ClipboardEdit size={16} />Ajukan Koreksi</>}
               </button>
             </div>
           </form>
@@ -232,7 +338,14 @@ export const KoreksiAbsenView: React.FC = () => {
                 <div className="flex items-center justify-between cursor-pointer"
                   onClick={() => setExpandedReqId(expandedReqId === req.id ? null : req.id)}>
                   <div>
-                    <p className="font-semibold text-sm text-gray-900">{formatDate(req.attendanceDate)}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-semibold text-sm text-gray-900">{formatDate(req.attendanceDate)}</p>
+                      {req.evidenceUrl && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-[#2F80ED]">
+                          <ImageIcon size={11} /> Ada Bukti
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-[#2F80ED] font-medium mt-0.5">{req.correctionType}</p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -260,6 +373,30 @@ export const KoreksiAbsenView: React.FC = () => {
                         <p className="text-xs font-semibold text-gray-400 uppercase mb-1">Alasan</p>
                         <p className="text-gray-700 leading-relaxed">{req.reason}</p>
                       </div>
+
+                      {/* Bukti Lampiran */}
+                      {req.evidenceUrl && (
+                        <div className="col-span-2 pt-2 border-t border-gray-200/60">
+                          <p className="text-xs font-semibold text-gray-400 uppercase mb-2">Bukti Lampiran</p>
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={req.evidenceUrl}
+                              alt="Bukti Absensi"
+                              className="w-16 h-16 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-85 transition"
+                              onClick={() => setPreviewPhotoModal(req.evidenceUrl!)}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setPreviewPhotoModal(req.evidenceUrl!)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition"
+                            >
+                              <Eye size={14} className="text-[#2F80ED]" />
+                              Lihat Foto Bukti
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       <div>
                         <p className="text-xs font-semibold text-gray-400 uppercase mb-1">Diajukan</p>
                         <p className="text-gray-700">{formatDateTime(req.createdAt)}</p>
@@ -271,6 +408,7 @@ export const KoreksiAbsenView: React.FC = () => {
                         </div>
                       )}
                     </div>
+
                     {req.adminNotes && (
                       <div className={`p-4 rounded-xl border text-sm ${req.status === 'Disetujui' ? 'bg-green-50 border-green-100 text-green-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
                         <p className="font-semibold mb-1">Catatan Admin:</p>
@@ -284,6 +422,28 @@ export const KoreksiAbsenView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Modal Preview Foto Lightbox */}
+      {previewPhotoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setPreviewPhotoModal(null)}>
+          <div className="relative max-w-3xl max-h-[90vh] bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <h4 className="font-bold text-[#183B66] text-sm">Bukti Absensi</h4>
+              <div className="flex items-center gap-2">
+                <a href={previewPhotoModal} target="_blank" rel="noopener noreferrer" className="p-1.5 text-gray-500 hover:text-[#2F80ED] rounded-lg transition" title="Buka Tab Baru">
+                  <ExternalLink size={18} />
+                </a>
+                <button onClick={() => setPreviewPhotoModal(null)} className="p-1.5 text-gray-400 hover:text-gray-700 rounded-lg transition">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="p-2 overflow-auto flex items-center justify-center bg-slate-900/5 max-h-[75vh]">
+              <img src={previewPhotoModal} alt="Bukti Absensi" className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClipboardCheck, Search, Filter, Check, X, Eye, AlertCircle, Clock, RefreshCw } from 'lucide-react';
+import { ClipboardCheck, Search, Filter, Check, X, Eye, AlertCircle, Clock, RefreshCw, Image as ImageIcon, ExternalLink } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { AttendanceCorrectionRequest } from '../../types';
 
@@ -13,6 +13,7 @@ export default function KoreksiAdminView() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [selectedEvidenceModal, setSelectedEvidenceModal] = useState<{ url: string; studentName: string; date: string } | null>(null);
 
   const showToast = (type: 'success' | 'error', message: string) => {
     setToast({ type, message });
@@ -139,6 +140,7 @@ export default function KoreksiAdminView() {
                   <th className="p-4 font-semibold text-gray-600 text-sm">Peserta</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Tanggal & Jenis</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Alasan Koreksi</th>
+                  <th className="p-4 font-semibold text-gray-600 text-sm">Bukti Foto</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Status</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Aksi</th>
                 </tr>
@@ -157,6 +159,25 @@ export default function KoreksiAdminView() {
                     <td className="p-4 max-w-xs" title={req.reason}>
                       <p className="text-sm text-gray-600 truncate">{req.reason}</p>
                       <p className="text-[10px] text-gray-400 mt-1">Diajukan: {formatDateShort(req.createdAt)}</p>
+                    </td>
+                    {/* Kolom Bukti Foto */}
+                    <td className="p-4 whitespace-nowrap">
+                      {req.evidenceUrl ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedEvidenceModal({
+                            url: req.evidenceUrl!,
+                            studentName: req.studentName || 'Peserta',
+                            date: formatDateShort(req.attendanceDate)
+                          })}
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-[#2F80ED] text-xs font-semibold hover:bg-blue-100 transition shadow-2xs"
+                        >
+                          <ImageIcon size={13} />
+                          <span>Lihat Bukti</span>
+                        </button>
+                      ) : (
+                        <span className="text-xs text-gray-300 italic">Tanpa Bukti</span>
+                      )}
                     </td>
                     <td className="p-4">{getStatusBadge(req.status)}</td>
                     <td className="p-4">
@@ -186,10 +207,11 @@ export default function KoreksiAdminView() {
         </div>
       </div>
 
+      {/* Modal Detail / Proses */}
       {selectedReq && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl">
-            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+          <div className="bg-white rounded-2xl w-full max-w-lg max-h-[92vh] overflow-y-auto shadow-2xl">
+            <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 sticky top-0 z-10">
               <h3 className="font-bold text-[#183B66] text-lg flex items-center gap-2">
                 <ClipboardCheck size={20} className="text-[#2F80ED]" />Detail Koreksi Absensi
               </h3>
@@ -243,6 +265,46 @@ export default function KoreksiAdminView() {
                 </div>
               </div>
 
+              {/* Bukti Lampiran Foto */}
+              <div>
+                <p className="text-gray-700 font-semibold mb-2 text-sm">Bukti Lampiran</p>
+                {selectedReq.evidenceUrl ? (
+                  <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200 flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={selectedReq.evidenceUrl}
+                        alt="Bukti Absensi"
+                        className="w-16 h-16 object-cover rounded-lg border border-gray-300 cursor-pointer hover:opacity-80 transition shadow-2xs"
+                        onClick={() => setSelectedEvidenceModal({
+                          url: selectedReq.evidenceUrl!,
+                          studentName: selectedReq.studentName || 'Peserta',
+                          date: formatDateShort(selectedReq.attendanceDate)
+                        })}
+                      />
+                      <div>
+                        <p className="text-xs font-bold text-gray-800">Foto Bukti Terlampir</p>
+                        <p className="text-[11px] text-gray-400 mt-0.5">Klik untuk memperbesar gambar</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedEvidenceModal({
+                        url: selectedReq.evidenceUrl!,
+                        studentName: selectedReq.studentName || 'Peserta',
+                        date: formatDateShort(selectedReq.attendanceDate)
+                      })}
+                      className="inline-flex items-center gap-1.5 bg-blue-50 text-[#2F80ED] border border-blue-200 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100 transition"
+                    >
+                      <Eye size={14} /> Lihat Foto
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-100 text-xs text-gray-400 italic">
+                    Tidak ada lampiran foto bukti pada pengajuan ini.
+                  </div>
+                )}
+              </div>
+
               {selectedReq.status === 'Menunggu' ? (
                 <div>
                   <label className="block text-gray-700 font-semibold mb-2 text-sm">
@@ -284,6 +346,41 @@ export default function KoreksiAdminView() {
                   </button>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Lightbox Foto Bukti Penuh */}
+      {selectedEvidenceModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setSelectedEvidenceModal(null)}>
+          <div className="relative max-w-3xl max-h-[90vh] bg-white rounded-2xl overflow-hidden shadow-2xl flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+              <div>
+                <h4 className="font-bold text-[#183B66] text-sm">Bukti Absensi: {selectedEvidenceModal.studentName}</h4>
+                <p className="text-xs text-gray-500">Tanggal: {selectedEvidenceModal.date}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={selectedEvidenceModal.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 text-gray-500 hover:text-[#2F80ED] hover:bg-blue-50 rounded-lg transition"
+                  title="Buka Tab Baru"
+                >
+                  <ExternalLink size={18} />
+                </a>
+                <button onClick={() => setSelectedEvidenceModal(null)} className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-lg transition">
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+            <div className="p-2 overflow-auto flex items-center justify-center bg-slate-900/5 max-h-[75vh]">
+              <img
+                src={selectedEvidenceModal.url}
+                alt="Bukti Absensi"
+                className="max-h-[70vh] w-auto max-w-full object-contain rounded-lg shadow-xs"
+              />
             </div>
           </div>
         </div>
