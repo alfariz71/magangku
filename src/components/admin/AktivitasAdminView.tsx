@@ -14,15 +14,29 @@ export const AktivitasAdminView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoModalState | null>(null);
 
-  const formatDate = (dateStr?: string) => {
-    if (!dateStr) return { day: '-', date: '-' };
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+
+  const getDateLabel = (dateStr: string) => {
+    if (dateStr === todayStr) return 'Hari Ini';
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    if (dateStr === yesterdayStr) return 'Kemarin';
+    return null;
+  };
+
+  const formatDateHeader = (dateStr: string) => {
     try {
       const d = new Date(dateStr + (dateStr.includes('T') ? '' : 'T00:00:00'));
-      const day = d.toLocaleDateString('id-ID', { weekday: 'long' });
-      const date = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-      return { day, date };
+      const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      const day = dayNames[d.getDay()];
+      const dateNum = d.getDate();
+      const month = monthNames[d.getMonth()];
+      const year = d.getFullYear();
+      return `${day}, ${dateNum} ${month} ${year}`;
     } catch {
-      return { day: dateStr, date: dateStr };
+      return dateStr;
     }
   };
 
@@ -34,6 +48,18 @@ export const AktivitasAdminView: React.FC = () => {
       dayStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
       dateStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
       studentStr.toLowerCase().includes(searchQuery.toLowerCase());
+  });
+
+  // Group activities by date
+  const groupedByDate: { date: string; dateActivities: typeof activities }[] = [];
+  filteredActivities.forEach(act => {
+    const actDate = act.activityDate || todayStr;
+    const existing = groupedByDate.find(g => g.date === actDate);
+    if (existing) {
+      existing.dateActivities.push(act);
+    } else {
+      groupedByDate.push({ date: actDate, dateActivities: [act] });
+    }
   });
 
   return (
@@ -65,69 +91,114 @@ export const AktivitasAdminView: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-slate-600 font-bold">
-                <th className="pb-3 pr-4">Mahasiswa</th>
-                <th className="pb-3 px-4">Hari & Tanggal</th>
-                <th className="pb-3 px-4">Judul & Rincian Aktivitas</th>
-                <th className="pb-3 pl-4">Waktu Pengerjaan</th>
+                <th className="py-3 px-4 w-52">Mahasiswa</th>
+                <th className="py-3 px-4 w-60">Judul Aktivitas</th>
+                <th className="py-3 px-4">Deskripsi Kegiatan</th>
+                <th className="py-3 px-4 w-44">Waktu Pengerjaan</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+            <tbody className="text-slate-700 font-medium">
               {filteredActivities.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-8 text-center text-slate-400">
-                    Tidak ada aktivitas yang sesuai dengan pencarian.
+                  <td colSpan={4} className="py-12 text-center text-slate-400">
+                    <Calendar className="mx-auto mb-2 h-8 w-8 opacity-30" />
+                    <p>Tidak ada aktivitas yang sesuai dengan pencarian</p>
                   </td>
                 </tr>
               ) : (
-                filteredActivities.map((act) => {
-                  const { day, date } = formatDate(act.activityDate);
+                groupedByDate.map(({ date, dateActivities }) => {
+                  const label = getDateLabel(date);
+                  const isToday = date === todayStr;
 
                   return (
-                    <tr key={act.id} className="hover:bg-slate-50/80 transition-colors">
-                      {/* Mahasiswa */}
-                      <td className="py-4 pr-4 whitespace-nowrap">
-                        <p className="font-bold text-slate-900">{act.studentName || 'Peserta'}</p>
-                        <p className="text-[11px] text-slate-400">{act.studentNim || '-'}</p>
-                      </td>
+                    <React.Fragment key={date}>
+                      {/* Date Separator Row */}
+                      <tr>
+                        <td colSpan={4} className="px-0 py-0">
+                          <div className={`flex items-center gap-3 px-4 py-2.5 ${
+                            isToday
+                              ? 'bg-blue-50/80 border-y border-blue-100'
+                              : 'bg-slate-50/70 border-y border-slate-100'
+                          }`}>
+                            <div className={`flex items-center gap-2 text-xs font-bold ${
+                              isToday ? 'text-[#2F80ED]' : 'text-slate-500'
+                            }`}>
+                              <Calendar className="h-3.5 w-3.5" />
+                              <span>{formatDateHeader(date)}</span>
+                            </div>
+                            {label && (
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                isToday
+                                  ? 'bg-[#2F80ED] text-white'
+                                  : 'bg-slate-200 text-slate-600'
+                              }`}>
+                                {label}
+                              </span>
+                            )}
+                            <div className="flex-1 h-px bg-current opacity-10" />
+                            <span className={`text-[10px] font-semibold ${
+                              isToday ? 'text-blue-400' : 'text-slate-400'
+                            }`}>
+                              {dateActivities.length} aktivitas
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
 
-                      {/* Hari & Tanggal */}
-                      <td className="py-4 px-4 whitespace-nowrap">
-                        <p className="font-semibold text-slate-800">{day}</p>
-                        <p className="text-[11px] text-slate-400">{date}</p>
-                      </td>
+                      {/* Records for this date */}
+                      {dateActivities.map((act, idx) => (
+                        <tr
+                          key={act.id}
+                          className={`hover:bg-slate-50/80 transition-colors ${
+                            idx < dateActivities.length - 1 ? 'border-b border-slate-100/60' : ''
+                          }`}
+                        >
+                          {/* Mahasiswa */}
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            <p className="font-bold text-slate-900">{act.studentName || 'Peserta'}</p>
+                            <p className="text-[11px] text-slate-400">{act.studentNim || '-'}</p>
+                          </td>
 
-                      {/* Judul & Rincian Aktivitas */}
-                      <td className="py-4 px-4 text-slate-800 font-medium max-w-md">
-                        <p className="font-semibold text-slate-900">{act.title}</p>
-                        {act.description && !act.description.startsWith('Waktu: ') && (
-                          <p className="text-[11px] text-slate-500 mt-1 leading-relaxed whitespace-pre-line">
-                            {act.description}
-                          </p>
-                        )}
-                        {act.attachmentUrl && (
-                          <button
-                            onClick={() => setSelectedPhoto({
-                              url: act.attachmentUrl!,
-                              title: act.title,
-                              student: act.studentName || 'Peserta',
-                              date: `${day}, ${date}`
-                            })}
-                            className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-[11px] font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs"
-                          >
-                            <ImageIcon className="h-3.5 w-3.5" />
-                            <span>Lihat Foto Kegiatan</span>
-                          </button>
-                        )}
-                      </td>
+                          {/* Judul Aktivitas */}
+                          <td className="py-3.5 px-4 text-slate-800 font-medium">
+                            <p className="font-semibold text-slate-900">{act.title}</p>
+                            {act.attachmentUrl && (
+                              <button
+                                onClick={() => setSelectedPhoto({
+                                  url: act.attachmentUrl!,
+                                  title: act.title,
+                                  student: act.studentName || 'Peserta',
+                                  date: formatDateHeader(act.activityDate || date)
+                                })}
+                                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-[11px] font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs"
+                              >
+                                <ImageIcon className="h-3.5 w-3.5" />
+                                <span>Lihat Foto Kegiatan</span>
+                              </button>
+                            )}
+                          </td>
 
-                      {/* Waktu Pengerjaan */}
-                      <td className="py-4 pl-4 whitespace-nowrap text-slate-700">
-                        <div className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 border border-slate-200/70 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                          <Clock className="h-3.5 w-3.5 text-slate-400" />
-                          <span>{act.time || '08:00 - 17:00 WIB'}</span>
-                        </div>
-                      </td>
-                    </tr>
+                          {/* Deskripsi Kegiatan */}
+                          <td className="py-3.5 px-4 text-slate-600 max-w-md">
+                            {act.description && !act.description.startsWith('Waktu: ') ? (
+                              <p className="text-xs leading-relaxed whitespace-pre-line text-slate-600">
+                                {act.description}
+                              </p>
+                            ) : (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
+                          </td>
+
+                          {/* Waktu Pengerjaan */}
+                          <td className="py-3.5 px-4 whitespace-nowrap text-slate-700">
+                            <div className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 border border-slate-200/70 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                              <Clock className="h-3.5 w-3.5 text-slate-400" />
+                              <span>{act.time || '08:00 - 17:00 WIB'}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
                   );
                 })
               )}
