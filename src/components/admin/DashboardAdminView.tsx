@@ -10,7 +10,8 @@ import {
   AlertCircle,
   CalendarDays,
   CheckCircle2,
-  ChevronDown
+  ChevronDown,
+  ClipboardList
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
@@ -19,7 +20,7 @@ interface DashboardAdminViewProps {
 }
 
 export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNavigateTab }) => {
-  const { auditLogs, leaveRequests, attendances, students } = useData();
+  const { auditLogs, leaveRequests, attendances, students, activities } = useData();
   const [selectedPeriod, setSelectedPeriod] = useState<'Minggu Ini' | 'Minggu Lalu' | 'Bulan Ini'>('Minggu Ini');
 
   const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
@@ -29,6 +30,8 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
   const terlambatHariIni = todayAttendances.filter(a => a.status === 'Terlambat').length;
   const izinHariIni = todayAttendances.filter(a => a.status === 'Izin' || a.status === 'Sakit').length;
   const pendingLeaves = leaveRequests.filter(l => l.status === 'Menunggu').length;
+  const todayActivities = activities.filter(a => (a.activityDate === todayStr || a.date === todayStr)).length;
+  const belumPulangCount = todayAttendances.filter(a => a.checkInTime && !a.checkOutTime).length;
 
   // Chart data matching screenshot
   const weeklyData = [
@@ -234,18 +237,18 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
             </h3>
 
             <div className="mt-4 space-y-3">
-              {/* Item 1: Jurnal menunggu pemeriksaan */}
+              {/* Item 1: Aktivitas dicatat hari ini */}
               <div
                 onClick={() => onNavigateTab('aktivitas')}
                 className="group flex cursor-pointer items-center justify-between rounded-2xl border border-slate-100 p-3.5 transition-all hover:border-[#2F80ED]/40 hover:bg-blue-50/30"
               >
                 <div className="flex items-center gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#EBF3FE] text-[#2F80ED]">
-                    <FileText className="h-5 w-5" />
+                    <ClipboardList className="h-5 w-5" />
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-800 group-hover:text-[#2F80ED]">
-                      12 jurnal menunggu pemeriksaan
+                      {todayActivities} aktivitas dicatat hari ini
                     </h4>
                   </div>
                 </div>
@@ -281,7 +284,7 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-800 group-hover:text-[#27AE60]">
-                      9 peserta belum absen pulang
+                      {belumPulangCount} peserta belum absen pulang
                     </h4>
                   </div>
                 </div>
