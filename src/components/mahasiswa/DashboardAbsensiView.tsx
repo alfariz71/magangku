@@ -414,6 +414,9 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
                       }`}>
                         {item.status}
                       </span>
+                      {item.correctedByAdmin && (
+                        <span className="block text-[9px] text-[#2F80ED] font-semibold mt-0.5">Dikoreksi Admin</span>
+                      )}
                     </td>
                   </tr>
                 ))

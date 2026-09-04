@@ -1049,9 +1049,132 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const reviewCorrectionRequest = async (id: string, status: 'Disetujui' | 'Ditolak', adminNotes: string) => {
-    await supabase.from('attendance_correction_requests').update({
-      status, admin_notes: adminNotes, reviewed_by: currentUser?.id, reviewed_at: new Date().toISOString()
+    // 1. Ambil detail pengajuan koreksi terlebih dahulu
+    const { data: reqData } = await supabase
+      .from('attendance_correction_requests')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    // 2. Update status pengajuan koreksi
+    const { error: updateErr } = await supabase.from('attendance_correction_requests').update({
+      status,
+      admin_notes: adminNotes,
+      reviewed_by: currentUser?.id,
+      reviewed_at: new Date().toISOString()
     }).eq('id', id);
+
+    if (updateErr) {
+      console.error('Failed to update correction request status:', updateErr);
+      throw new Error(updateErr.message);
+    }
+
+    // 3. Jika Disetujui, otomatis perbarui / buat record di attendance_records
+    if (status === 'Disetujui' && reqData) {
+      const targetUserId = reqData.user_id as string;
+      const targetDate = reqData.attendance_date as string;
+
+      // Cari record absensi yang sudah ada pada tanggal tersebut
+      const { data: existingAtt } = await supabase
+        .from('attendance_records')
+        .select('*')
+        .eq('user_id', targetUserId)
+        .eq('date', targetDate)
+        .maybeSingle();
+
+      // Hitung jam masuk (ISO timestamptz di zona Asia/Jakarta)
+      let finalCheckIn = existingAtt?.check_in_time ? (existingAtt.check_in_time as string) : null;
+      if (reqData.requested_check_in) {
+        const timePart = (reqData.requested_check_in as string).trim().slice(0, 5);
+        finalCheckIn = new Date(`${targetDate}T${timePart}:00+07:00`).toISOString();
+      }
+
+      // Hitung jam pulang (ISO timestamptz di zona Asia/Jakarta)
+      let finalCheckOut = existingAtt?.check_out_time ? (existingAtt.check_out_time as string) : null;
+      if (reqData.requested_check_out) {
+        const timePart = (reqData.requested_check_out as string).trim().slice(0, 5);
+        finalCheckOut = new Date(`${targetDate}T${timePart}:00+07:00`).toISOString();
+      }
+
+      // Hitung total jam kerja jika masuk & pulang lengkap
+      let computedTotalHours = existingAtt?.total_hours ? (existingAtt.total_hours as string) : null;
+      if (finalCheckIn && finalCheckOut) {
+        const inMs = new Date(finalCheckIn).getTime();
+        const outMs = new Date(finalCheckOut).getTime();
+        if (!isNaN(inMs) && !isNaN(outMs) && outMs >= inMs) {
+          const diffMinutes = Math.round((outMs - inMs) / 60000);
+          const hours = Math.floor(diffMinutes / 60);
+          const mins = diffMinutes % 60;
+          computedTotalHours = `${hours} jam ${mins} menit`;
+        }
+      }
+
+      // Tentukan status kehadiran (Hadir / Terlambat)
+      let finalStatus: AttendanceStatus = (existingAtt?.status as AttendanceStatus) || 'Hadir';
+      if (finalCheckIn) {
+        const inDate = new Date(finalCheckIn);
+        const jktHour = parseInt(inDate.toLocaleTimeString('en-US', { timeZone: 'Asia/Jakarta', hour12: false, hour: '2-digit' }), 10);
+        const jktMin = parseInt(inDate.toLocaleTimeString('en-US', { timeZone: 'Asia/Jakarta', minute: '2-digit' }), 10);
+        const checkInMins = jktHour * 60 + jktMin;
+        const cutoffMins = 8 * 60; // 08:00 WIB
+        if (checkInMins > cutoffMins) {
+          finalStatus = 'Terlambat';
+        } else {
+          finalStatus = 'Hadir';
+        }
+      } else if (!existingAtt?.status || existingAtt?.status === 'Alpha') {
+        finalStatus = 'Hadir';
+      }
+
+      const noteText = `[Koreksi: ${reqData.correction_type}] ${reqData.reason}${adminNotes ? ` (Catatan Admin: ${adminNotes})` : ''}`;
+
+      if (existingAtt) {
+        const { error: attUpdateErr } = await supabase
+          .from('attendance_records')
+          .update({
+            check_in_time: finalCheckIn,
+            check_out_time: finalCheckOut,
+            total_hours: computedTotalHours,
+            status: finalStatus,
+            corrected_by: currentUser?.id,
+            correction_reason: noteText,
+            corrected_at: new Date().toISOString(),
+            is_qr_valid: true,
+            is_location_valid: true
+          })
+          .eq('id', existingAtt.id);
+
+        if (attUpdateErr) {
+          console.error('Failed to update attendance_records from correction:', attUpdateErr);
+          throw new Error(`Gagal memperbarui data absensi: ${attUpdateErr.message}`);
+        }
+      } else {
+        const { error: attInsertErr } = await supabase
+          .from('attendance_records')
+          .insert({
+            user_id: targetUserId,
+            date: targetDate,
+            check_in_time: finalCheckIn,
+            check_out_time: finalCheckOut,
+            total_hours: computedTotalHours,
+            status: finalStatus,
+            corrected_by: currentUser?.id,
+            correction_reason: noteText,
+            corrected_at: new Date().toISOString(),
+            is_qr_valid: true,
+            is_location_valid: true
+          });
+
+        if (attInsertErr) {
+          console.error('Failed to insert attendance_records from correction:', attInsertErr);
+          throw new Error(`Gagal membuat data absensi (RLS): ${attInsertErr.message}`);
+        }
+      }
+
+      // Perbarui state absensi agar langsung ter-render di tabel admin & mahasiswa
+      await refreshAttendances();
+    }
+
     await addAuditLog('Koreksi Absensi', 'Koreksi', `Koreksi ID ${id} → ${status}`);
     await refreshCorrectionRequests();
   };
