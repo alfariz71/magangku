@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Download, FileSpreadsheet, FileText, Filter, Calendar, Users, BarChart3 } from 'lucide-react';
+import { Download, FileSpreadsheet, FileText, Filter, Calendar, Users, BarChart3, Search } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -8,9 +8,63 @@ import { useData } from '../../context/DataContext';
 export const LaporanAdminView: React.FC = () => {
   const { attendances, leaveRequests, activities, students } = useData();
 
+  const userStudents = students.filter(s => s.role === 'user');
+
   const [reportType, setReportType] = useState<'harian' | 'mingguan' | 'bulanan' | 'izin' | 'aktivitas'>('harian');
   const [selectedStudent, setSelectedStudent] = useState('Semua');
-  const [selectedMonth, setSelectedMonth] = useState('Mei 2025');
+  const [selectedMonth, setSelectedMonth] = useState('Semua');
+
+  // Dynamic month list (6 bulan terakhir)
+  const monthOptions = React.useMemo(() => {
+    const options = ['Semua'];
+    const now = new Date();
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      options.push(d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }));
+    }
+    return options;
+  }, []);
+
+  // Filter helper untuk bulan
+  const matchesMonth = (dateStr?: string) => {
+    if (selectedMonth === 'Semua' || !dateStr) return true;
+    try {
+      const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+      const mStr = d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+      return mStr.toLowerCase() === selectedMonth.toLowerCase();
+    } catch {
+      return true;
+    }
+  };
+
+  // Filtered Data
+  const filteredAttendances = attendances.filter(a => {
+    if (selectedStudent !== 'Semua') {
+      if (a.userId !== selectedStudent && a.studentName !== selectedStudent) return false;
+    }
+    if (!matchesMonth(a.date)) return false;
+    return true;
+  });
+
+  const filteredLeaveRequests = leaveRequests.filter(r => {
+    if (selectedStudent !== 'Semua') {
+      if (r.userId !== selectedStudent && r.studentName !== selectedStudent) return false;
+    }
+    if (!matchesMonth(r.startDate || r.requestDate)) return false;
+    return true;
+  });
+
+  const filteredActivities = activities.filter(a => {
+    if (selectedStudent !== 'Semua') {
+      if (a.userId !== selectedStudent && a.studentName !== selectedStudent) return false;
+    }
+    if (!matchesMonth(a.activityDate || a.date)) return false;
+    return true;
+  });
+
+  const studentNameDisplay = selectedStudent === 'Semua' 
+    ? 'Semua Peserta' 
+    : (userStudents.find(s => s.id === selectedStudent)?.name || selectedStudent);
 
   // Export to PDF
   const handleExportPDF = () => {
@@ -21,7 +75,7 @@ export const LaporanAdminView: React.FC = () => {
 
     doc.setFontSize(10);
     doc.setTextColor(100);
-    doc.text(`Periode: ${selectedMonth} | Filter Peserta: ${selectedStudent}`, 14, 26);
+    doc.text(`Periode: ${selectedMonth === 'Semua' ? 'Semua Periode' : selectedMonth} | Filter Peserta: ${studentNameDisplay}`, 14, 26);
     doc.text(`Dicetak oleh Administrator pada: ${new Date().toLocaleDateString('id-ID')}`, 14, 32);
 
     let head: string[][] = [];
@@ -29,13 +83,13 @@ export const LaporanAdminView: React.FC = () => {
 
     if (reportType === 'izin') {
       head = [['Nama Mahasiswa', 'NIM', 'Tgl Pengajuan', 'Periode Izin', 'Jenis Izin', 'Status']];
-      rows = leaveRequests.map(r => [r.studentName, r.studentNim, r.requestDate, `${r.startDate} - ${r.endDate}`, r.leaveType, r.status]);
+      rows = filteredLeaveRequests.map(r => [r.studentName, r.studentNim, r.requestDate, `${r.startDate} - ${r.endDate}`, r.leaveType, r.status]);
     } else if (reportType === 'aktivitas') {
-      head = [['Hari', 'Tanggal', 'Judul Aktivitas', 'Waktu']];
-      rows = activities.map(a => [a.day || '-', a.date || '-', a.title || '-', a.time || '-']);
+      head = [['Mahasiswa', 'Hari', 'Tanggal', 'Judul Aktivitas', 'Waktu']];
+      rows = filteredActivities.map(a => [a.studentName || '-', a.day || '-', a.date || a.activityDate || '-', a.title || '-', a.time || '-']);
     } else {
       head = [['Nama Mahasiswa', 'NIM', 'Tanggal', 'Hari', 'Masuk', 'Pulang', 'Total Jam', 'Status']];
-      rows = attendances.map(a => [
+      rows = filteredAttendances.map(a => [
         a.studentName,
         a.studentNim,
         a.date,
@@ -64,7 +118,7 @@ export const LaporanAdminView: React.FC = () => {
     let dataToExport: any[] = [];
 
     if (reportType === 'izin') {
-      dataToExport = leaveRequests.map(r => ({
+      dataToExport = filteredLeaveRequests.map(r => ({
         'Nama Mahasiswa': r.studentName,
         'NIM': r.studentNim,
         'Universitas': r.university,
@@ -75,14 +129,15 @@ export const LaporanAdminView: React.FC = () => {
         'Status': r.status
       }));
     } else if (reportType === 'aktivitas') {
-      dataToExport = activities.map(a => ({
-        'Hari': a.day,
-        'Tanggal': a.date,
+      dataToExport = filteredActivities.map(a => ({
+        'Nama Mahasiswa': a.studentName || '-',
+        'Hari': a.day || '-',
+        'Tanggal': a.date || a.activityDate || '-',
         'Judul Aktivitas': a.title,
-        'Waktu': a.time
+        'Waktu': a.time || '-'
       }));
     } else {
-      dataToExport = attendances.map(a => ({
+      dataToExport = filteredAttendances.map(a => ({
         'Nama Mahasiswa': a.studentName,
         'NIM': a.studentNim,
         'Universitas': a.university,
@@ -161,11 +216,13 @@ export const LaporanAdminView: React.FC = () => {
             <select
               value={selectedStudent}
               onChange={e => setSelectedStudent(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs outline-none focus:border-[#2F80ED] focus:bg-white transition"
             >
-              <option value="Semua">Semua Peserta (128 Mahasiswa)</option>
-              {students.filter(s => s.role === 'user').map(s => (
-                <option key={s.id} value={s.name}>{s.name} ({s.nim})</option>
+              <option value="Semua">Semua Peserta ({userStudents.length} Mahasiswa)</option>
+              {userStudents.map(s => (
+                <option key={s.id} value={s.id}>
+                  {s.name} {s.nim ? `(${s.nim})` : ''}
+                </option>
               ))}
             </select>
           </div>
@@ -175,12 +232,12 @@ export const LaporanAdminView: React.FC = () => {
             <select
               value={selectedMonth}
               onChange={e => setSelectedMonth(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs outline-none focus:border-[#2F80ED] focus:bg-white transition"
             >
-              <option value="Mei 2025">Mei 2025</option>
-              <option value="Juni 2025">Juni 2025</option>
-              <option value="Juli 2025">Juli 2025</option>
-              <option value="Agustus 2025">Agustus 2025</option>
+              <option value="Semua">Semua Periode</option>
+              {monthOptions.filter(m => m !== 'Semua').map(m => (
+                <option key={m} value={m}>{m}</option>
+              ))}
             </select>
           </div>
         </div>
@@ -188,9 +245,19 @@ export const LaporanAdminView: React.FC = () => {
 
       {/* Preview Table Card */}
       <div className="rounded-[16px] border border-slate-100 bg-white p-6 shadow-sm">
-        <h3 className="text-sm font-bold text-[#183B66] border-b border-slate-100 pb-3 mb-4">
-          Pratinjau Data Laporan ({reportType.toUpperCase()})
-        </h3>
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+          <h3 className="text-sm font-bold text-[#183B66]">
+            Pratinjau Data Laporan ({reportType.toUpperCase()})
+          </h3>
+          <span className="text-xs text-slate-400 font-medium">
+            {reportType === 'izin' 
+              ? `${filteredLeaveRequests.length} data` 
+              : reportType === 'aktivitas'
+              ? `${filteredActivities.length} data`
+              : `${filteredAttendances.length} data`
+            }
+          </span>
+        </div>
 
         <div className="overflow-x-auto">
           {reportType === 'izin' ? (
@@ -205,36 +272,52 @@ export const LaporanAdminView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {leaveRequests.map(l => (
-                  <tr key={l.id} className="hover:bg-slate-50">
-                    <td className="py-3 pr-3 font-semibold">{l.studentName}</td>
-                    <td className="py-3 px-3">{l.requestDate}</td>
-                    <td className="py-3 px-3">{l.startDate} - {l.endDate}</td>
-                    <td className="py-3 px-3 font-medium">{l.leaveType}</td>
-                    <td className="py-3 px-3 font-semibold">{l.status}</td>
+                {filteredLeaveRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-slate-400">
+                      Tidak ada data izin sesuai filter
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredLeaveRequests.map(l => (
+                    <tr key={l.id} className="hover:bg-slate-50">
+                      <td className="py-3 pr-3 font-semibold">{l.studentName}</td>
+                      <td className="py-3 px-3">{l.requestDate}</td>
+                      <td className="py-3 px-3">{l.startDate} - {l.endDate}</td>
+                      <td className="py-3 px-3 font-medium">{l.leaveType}</td>
+                      <td className="py-3 px-3 font-semibold">{l.status}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           ) : reportType === 'aktivitas' ? (
             <table className="w-full text-left text-xs">
               <thead>
                 <tr className="border-b border-slate-100 text-slate-600 font-bold">
-                  <th className="pb-3 pr-3">Hari</th>
+                  <th className="pb-3 pr-3">Mahasiswa</th>
                   <th className="pb-3 px-3">Tanggal</th>
                   <th className="pb-3 px-3">Judul Aktivitas</th>
                   <th className="pb-3 px-3">Waktu</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {activities.map(a => (
-                  <tr key={a.id} className="hover:bg-slate-50">
-                    <td className="py-3 pr-3 font-semibold">{a.day}</td>
-                    <td className="py-3 px-3">{a.date}</td>
-                    <td className="py-3 px-3">{a.title}</td>
-                    <td className="py-3 px-3">{a.time}</td>
+                {filteredActivities.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-slate-400">
+                      Tidak ada data aktivitas sesuai filter
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredActivities.map(a => (
+                    <tr key={a.id} className="hover:bg-slate-50">
+                      <td className="py-3 pr-3 font-semibold">{a.studentName || '-'}</td>
+                      <td className="py-3 px-3">{a.date || a.activityDate}</td>
+                      <td className="py-3 px-3">{a.title}</td>
+                      <td className="py-3 px-3">{a.time || '-'}</td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           ) : (
@@ -250,16 +333,37 @@ export const LaporanAdminView: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-slate-700">
-                {attendances.map(a => (
-                  <tr key={a.id} className="hover:bg-slate-50">
-                    <td className="py-3 pr-3 font-semibold">{a.studentName} ({a.studentNim})</td>
-                    <td className="py-3 px-3">{a.dayName}, {a.date}</td>
-                    <td className="py-3 px-3">{a.checkInTime || '-'}</td>
-                    <td className="py-3 px-3">{a.checkOutTime || '-'}</td>
-                    <td className="py-3 px-3">{a.totalHours || '-'}</td>
-                    <td className="py-3 px-3 font-semibold">{a.status}</td>
+                {filteredAttendances.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-8 text-center text-slate-400">
+                      Tidak ada data absensi sesuai filter
+                    </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredAttendances.map(a => (
+                    <tr key={a.id} className="hover:bg-slate-50">
+                      <td className="py-3 pr-3 font-semibold">{a.studentName} ({a.studentNim})</td>
+                      <td className="py-3 px-3">{a.dayName}, {a.date}</td>
+                      <td className="py-3 px-3">{a.checkInTime || '-'}</td>
+                      <td className="py-3 px-3">{a.checkOutTime || '-'}</td>
+                      <td className="py-3 px-3">{a.totalHours || '-'}</td>
+                      <td className="py-3 px-3 font-semibold">
+                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+                          a.status === 'Hadir' ? 'bg-emerald-100 text-emerald-700' :
+                          a.status === 'Terlambat' ? 'bg-rose-100 text-rose-700' :
+                          a.status === 'Izin' ? 'bg-amber-100 text-amber-700' :
+                          a.status === 'Sakit' ? 'bg-orange-100 text-orange-700' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>
+                          {a.status}
+                        </span>
+                        {a.correctedByAdmin && (
+                          <span className="block text-[9px] text-[#2F80ED] font-semibold mt-0.5">Dikoreksi Admin</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           )}
