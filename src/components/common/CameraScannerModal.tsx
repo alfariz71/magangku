@@ -12,7 +12,6 @@ import {
   ShieldAlert,
   Video
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
 import jsQR from 'jsqr';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -32,7 +31,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
   const { currentUser } = useAuth();
   
   const [isScanning, setIsScanning] = useState(true);
-  const [scanResult, setScanResult] = useState<string | null>(null);
+  const [isScanSuccess, setIsScanSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraPermissionError, setCameraPermissionError] = useState<string | null>(null);
@@ -110,25 +109,16 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
 
     if (res.success) {
       playBeep();
-      setScanResult(res.message);
-      setErrorMessage(null);
       setIsScanning(false);
+      setIsScanSuccess(true);
+      setErrorMessage(null);
       stopCamera();
 
-      try {
-        confetti({
-          particleCount: 70,
-          spread: 70,
-          origin: { y: 0.65 }
-        });
-      } catch (e) {
-        console.error(e);
-      }
-
+      // Transisi kilat 200ms agar user mendapat feedback visual, lalu langsung tutup modal dan proses absensi
       setTimeout(() => {
         if (onSuccessScan) onSuccessScan(photoToSave, cleanToken);
         onClose();
-      }, 1500);
+      }, 200);
     } else {
       setErrorMessage(`${res.message} (Isi QR: ${cleanToken.substring(0, 30)}...)`);
     }
@@ -296,7 +286,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setScanResult(null);
+      setIsScanSuccess(false);
       setErrorMessage(null);
       setIsScanning(true);
       startCamera(selectedDeviceId);
@@ -394,24 +384,24 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
             {/* Corner Brackets */}
             {cameraActive && (
               <>
-                <div className="absolute top-3 left-3 h-8 w-8 border-t-4 border-l-4 border-[#2F80ED] rounded-tl-lg shadow-sm" />
-                <div className="absolute top-3 right-3 h-8 w-8 border-t-4 border-r-4 border-[#2F80ED] rounded-tr-lg shadow-sm" />
-                <div className="absolute bottom-3 left-3 h-8 w-8 border-b-4 border-l-4 border-[#2F80ED] rounded-bl-lg shadow-sm" />
-                <div className="absolute bottom-3 right-3 h-8 w-8 border-b-4 border-r-4 border-[#2F80ED] rounded-br-lg shadow-sm" />
+                <div className={`absolute top-3 left-3 h-8 w-8 border-t-4 border-l-4 ${isScanSuccess ? 'border-emerald-400' : 'border-[#2F80ED]'} rounded-tl-lg shadow-sm transition-colors duration-150`} />
+                <div className={`absolute top-3 right-3 h-8 w-8 border-t-4 border-r-4 ${isScanSuccess ? 'border-emerald-400' : 'border-[#2F80ED]'} rounded-tr-lg shadow-sm transition-colors duration-150`} />
+                <div className={`absolute bottom-3 left-3 h-8 w-8 border-b-4 border-l-4 ${isScanSuccess ? 'border-emerald-400' : 'border-[#2F80ED]'} rounded-bl-lg shadow-sm transition-colors duration-150`} />
+                <div className={`absolute bottom-3 right-3 h-8 w-8 border-b-4 border-r-4 ${isScanSuccess ? 'border-emerald-400' : 'border-[#2F80ED]'} rounded-br-lg shadow-sm transition-colors duration-150`} />
 
                 {/* Real-time Laser Scanning Beam */}
-                {isScanning && (
+                {isScanning && !isScanSuccess && (
                   <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-[#2F80ED] to-transparent shadow-[0_0_20px_#2F80ED] animate-bounce duration-1000" />
                 )}
               </>
             )}
 
-            {/* Success Feedback Overlay */}
-            {scanResult && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center bg-emerald-950/95 p-6 text-center z-20 animate-in fade-in">
-                <CheckCircle2 className="h-14 w-14 text-[#27AE60] animate-bounce" />
-                <p className="mt-3 text-sm font-bold text-white">QR Code Berhasil Terpindai!</p>
-                <p className="mt-1 text-xs text-emerald-200">{scanResult}</p>
+            {/* Quick Success Flash Indicator (subtle, closes in 200ms) */}
+            {isScanSuccess && (
+              <div className="absolute inset-0 flex items-center justify-center bg-emerald-950/40 backdrop-blur-xs animate-in zoom-in-75 duration-150 z-20">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/30 ring-4 ring-emerald-400/50">
+                  <CheckCircle2 className="h-10 w-10 text-emerald-400 animate-in zoom-in duration-150" />
+                </div>
               </div>
             )}
           </div>

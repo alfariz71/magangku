@@ -45,6 +45,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
   } = useData();
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [isProcessingCheckIn, setIsProcessingCheckIn] = useState(false);
   const [feedbackToast, setFeedbackToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('Semua');
@@ -289,15 +290,31 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           <button
             type="button"
             onClick={handleCheckInClick}
-            disabled={todayAttendance.isCheckedIn}
+            disabled={todayAttendance.isCheckedIn || isProcessingCheckIn}
             className={`flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold shadow-md transition-all ${
               todayAttendance.isCheckedIn
                 ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
+                : isProcessingCheckIn
+                ? 'bg-blue-400 text-white shadow-none cursor-wait'
                 : 'bg-[#2F80ED] text-white shadow-blue-500/25 hover:bg-blue-600 active:scale-[0.98]'
             }`}
           >
-            <LogIn className="h-4 w-4" />
-            {todayAttendance.isCheckedIn ? 'Sudah Absen Masuk ✓' : 'Absen Masuk (Scan QR)'}
+            {isProcessingCheckIn ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                <span>Menyimpan Absensi...</span>
+              </>
+            ) : todayAttendance.isCheckedIn ? (
+              <>
+                <LogIn className="h-4 w-4" />
+                <span>Sudah Absen Masuk ✓</span>
+              </>
+            ) : (
+              <>
+                <LogIn className="h-4 w-4" />
+                <span>Absen Masuk (Scan QR)</span>
+              </>
+            )}
           </button>
 
           {/* Absen Pulang */}
@@ -434,15 +451,22 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           setIsScannerOpen(false);
           // Langsung otomatis catat Absen Masuk saat scan QR berhasil (1x scan langsung masuk)
           if (!todayAttendance.isCheckedIn) {
-            const res = await performCheckIn(scannedToken);
-            if (res.success) {
-              showToast('success', res.message);
-              try { confetti({ particleCount: 60, spread: 70, origin: { y: 0.6 } }); } catch { /* ignore */ }
-            } else {
-              showToast('error', res.message);
+            setIsProcessingCheckIn(true);
+            try {
+              const res = await performCheckIn(scannedToken);
+              if (res.success) {
+                showToast('success', res.message);
+                try { confetti({ particleCount: 70, spread: 80, origin: { y: 0.55 } }); } catch { /* ignore */ }
+              } else {
+                showToast('error', res.message);
+              }
+            } catch (err: any) {
+              showToast('error', err?.message || 'Terjadi kesalahan saat menyimpan absensi.');
+            } finally {
+              setIsProcessingCheckIn(false);
             }
           } else {
-            showToast('success', 'QR Code berhasil dipindai! Silakan klik Absen Pulang jika jam kerja selesai.');
+            showToast('success', 'Anda sudah melakukan absen masuk hari ini.');
           }
         }}
       />
