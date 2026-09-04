@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Users, 
   UserCheck, 
@@ -33,16 +33,91 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
   const todayActivities = activities.filter(a => (a.activityDate === todayStr || a.date === todayStr)).length;
   const belumPulangCount = todayAttendances.filter(a => a.checkInTime && !a.checkOutTime).length;
 
-  // Chart data matching screenshot
-  const weeklyData = [
-    { day: 'Senin', date: '19/05', hadir: 92, terlambat: 5, izin: 3 },
-    { day: 'Selasa', date: '20/05', hadir: 95, terlambat: 3, izin: 2 },
-    { day: 'Rabu', date: '21/05', hadir: 90, terlambat: 6, izin: 4 },
-    { day: 'Kamis', date: '22/05', hadir: 88, terlambat: 7, izin: 5 },
-    { day: 'Jumat', date: '23/05', hadir: 93, terlambat: 5, izin: 2 },
-    { day: 'Sabtu', date: '24/05', hadir: 70, terlambat: 10, izin: 20 },
-    { day: 'Minggu', date: '25/05', hadir: 65, terlambat: 12, izin: 23 },
-  ];
+  // Dynamic chart data calculated from real attendances and students
+  const dayNamesIndo = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+
+  const weeklyData = useMemo(() => {
+    const now = new Date();
+
+    if (selectedPeriod === 'Bulan Ini') {
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth();
+      const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+      return [1, 2, 3, 4, 5, 6, 0].map(targetDayOfWeek => {
+        const dayName = dayNamesIndo[targetDayOfWeek];
+        const datesForDay: string[] = [];
+
+        for (let d = 1; d <= daysInMonth; d++) {
+          const testDate = new Date(currentYear, currentMonth, d);
+          if (testDate.getDay() === targetDayOfWeek) {
+            datesForDay.push(testDate.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }));
+          }
+        }
+
+        const matchingAtts = attendances.filter(a => datesForDay.includes(a.date));
+        const hadirCount = matchingAtts.filter(a => a.status === 'Hadir').length;
+        const terlambatCount = matchingAtts.filter(a => a.status === 'Terlambat').length;
+        const izinCount = matchingAtts.filter(a => a.status === 'Izin' || a.status === 'Sakit').length;
+
+        const divisor = totalPeserta > 0 && datesForDay.length > 0 ? (totalPeserta * datesForDay.length) : 1;
+        const hadir = totalPeserta > 0 ? Math.min(100, Math.round((hadirCount / divisor) * 100)) : 0;
+        const terlambat = totalPeserta > 0 ? Math.min(100, Math.round((terlambatCount / divisor) * 100)) : 0;
+        const izin = totalPeserta > 0 ? Math.min(100, Math.round((izinCount / divisor) * 100)) : 0;
+
+        return {
+          day: dayName,
+          date: 'Bulan Ini',
+          hadir,
+          terlambat,
+          izin,
+          hadirCount,
+          terlambatCount,
+          izinCount,
+          fullDate: ''
+        };
+      });
+    }
+
+    // Default: 'Minggu Ini' or 'Minggu Lalu' (Monday to Sunday)
+    const monday = new Date(now);
+    const dayOfWeek = (now.getDay() + 6) % 7; // 0 for Mon, 6 for Sun
+    monday.setDate(now.getDate() - dayOfWeek);
+    monday.setHours(0, 0, 0, 0);
+
+    if (selectedPeriod === 'Minggu Lalu') {
+      monday.setDate(monday.getDate() - 7);
+    }
+
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(monday);
+      d.setDate(monday.getDate() + i);
+      const dateStr = d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+      const dayName = dayNamesIndo[d.getDay()];
+      const dateLabel = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+      const dayAtts = attendances.filter(a => a.date === dateStr);
+      const hadirCount = dayAtts.filter(a => a.status === 'Hadir').length;
+      const terlambatCount = dayAtts.filter(a => a.status === 'Terlambat').length;
+      const izinCount = dayAtts.filter(a => a.status === 'Izin' || a.status === 'Sakit').length;
+
+      const hadir = totalPeserta > 0 ? Math.min(100, Math.round((hadirCount / totalPeserta) * 100)) : 0;
+      const terlambat = totalPeserta > 0 ? Math.min(100, Math.round((terlambatCount / totalPeserta) * 100)) : 0;
+      const izin = totalPeserta > 0 ? Math.min(100, Math.round((izinCount / totalPeserta) * 100)) : 0;
+
+      return {
+        day: dayName,
+        date: dateLabel,
+        hadir,
+        terlambat,
+        izin,
+        hadirCount,
+        terlambatCount,
+        izinCount,
+        fullDate: dateStr
+      };
+    });
+  }, [selectedPeriod, attendances, totalPeserta]);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -163,51 +238,62 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
 
               {/* Bars Columns */}
               <div className="absolute inset-0 pl-9 flex items-end justify-between pr-2">
-                {weeklyData.map((item, idx) => (
-                  <div key={idx} className="flex flex-col items-center group relative h-full justify-end w-12">
-                    {/* Bar Cluster */}
-                    <div className="flex items-end gap-1 mb-2">
-                      {/* Hadir Bar */}
-                      <div className="flex flex-col items-center">
-                        <span className="text-[10px] font-bold text-[#2F80ED] opacity-0 group-hover:opacity-100 transition-opacity mb-1">
-                          {item.hadir}%
-                        </span>
-                        <div
-                          style={{ height: `${(item.hadir / 100) * 190}px` }}
-                          className="w-3 rounded-t-sm bg-[#2F80ED] shadow-sm transition-all group-hover:brightness-110"
-                        />
+                {weeklyData.map((item, idx) => {
+                  const isToday = item.fullDate === todayStr;
+                  return (
+                    <div
+                      key={idx}
+                      className="flex flex-col items-center group relative h-full justify-end w-12"
+                      title={`${item.day} (${item.date})\n• Hadir: ${item.hadirCount} org (${item.hadir}%)\n• Terlambat: ${item.terlambatCount} org (${item.terlambat}%)\n• Izin: ${item.izinCount} org (${item.izin}%)`}
+                    >
+                      {/* Bar Cluster */}
+                      <div className="flex items-end gap-1 mb-2">
+                        {/* Hadir Bar */}
+                        <div className="flex flex-col items-center">
+                          <span className="text-[10px] font-bold text-[#2F80ED] opacity-0 group-hover:opacity-100 transition-opacity mb-1">
+                            {item.hadir}%
+                          </span>
+                          <div
+                            style={{ height: `${item.hadir > 0 ? Math.max(4, (item.hadir / 100) * 190) : 0}px` }}
+                            className="w-3 rounded-t-sm bg-[#2F80ED] shadow-sm transition-all group-hover:brightness-110"
+                          />
+                        </div>
+
+                        {/* Terlambat Bar */}
+                        <div className="flex flex-col items-center">
+                          <span className="text-[9px] font-bold text-[#EB5757] opacity-0 group-hover:opacity-100 transition-opacity mb-1">
+                            {item.terlambat}%
+                          </span>
+                          <div
+                            style={{ height: `${item.terlambat > 0 ? Math.max(4, (item.terlambat / 100) * 190) : 0}px` }}
+                            className="w-2.5 rounded-t-sm bg-[#EB5757] shadow-sm transition-all group-hover:brightness-110"
+                          />
+                        </div>
+
+                        {/* Izin Bar */}
+                        <div className="flex flex-col items-center">
+                          <span className="text-[9px] font-bold text-[#F2994A] opacity-0 group-hover:opacity-100 transition-opacity mb-1">
+                            {item.izin}%
+                          </span>
+                          <div
+                            style={{ height: `${item.izin > 0 ? Math.max(4, (item.izin / 100) * 190) : 0}px` }}
+                            className="w-2.5 rounded-t-sm bg-[#F2C94C] shadow-sm transition-all group-hover:brightness-110"
+                          />
+                        </div>
                       </div>
 
-                      {/* Terlambat Bar */}
-                      <div className="flex flex-col items-center">
-                        <span className="text-[9px] font-bold text-[#EB5757] opacity-0 group-hover:opacity-100 transition-opacity mb-1">
-                          {item.terlambat}%
-                        </span>
-                        <div
-                          style={{ height: `${(item.terlambat / 100) * 190}px` }}
-                          className="w-2.5 rounded-t-sm bg-[#EB5757] shadow-sm transition-all group-hover:brightness-110"
-                        />
-                      </div>
-
-                      {/* Izin Bar */}
-                      <div className="flex flex-col items-center">
-                        <span className="text-[9px] font-bold text-[#F2994A] opacity-0 group-hover:opacity-100 transition-opacity mb-1">
-                          {item.izin}%
-                        </span>
-                        <div
-                          style={{ height: `${(item.izin / 100) * 190}px` }}
-                          className="w-2.5 rounded-t-sm bg-[#F2C94C] shadow-sm transition-all group-hover:brightness-110"
-                        />
+                      {/* Day & Date Labels */}
+                      <div className="text-center">
+                        <p className={`text-[11px] ${isToday ? 'text-[#2F80ED] font-bold' : 'font-semibold text-slate-700'}`}>
+                          {item.day}
+                        </p>
+                        <p className={`text-[10px] ${isToday ? 'text-[#2F80ED] font-semibold' : 'text-slate-400'}`}>
+                          {item.date}
+                        </p>
                       </div>
                     </div>
-
-                    {/* Day & Date Labels */}
-                    <div className="text-center">
-                      <p className="text-[11px] font-semibold text-slate-700">{item.day}</p>
-                      <p className="text-[10px] text-slate-400">{item.date}</p>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
