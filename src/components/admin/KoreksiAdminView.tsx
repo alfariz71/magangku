@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ClipboardCheck, Search, Filter, Check, X, Eye, AlertCircle, Clock, RefreshCw, Image as ImageIcon, ExternalLink } from 'lucide-react';
+import { ClipboardCheck, Search, Filter, Check, X, Eye, AlertCircle, Clock, RefreshCw, Image as ImageIcon, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { AttendanceCorrectionRequest } from '../../types';
 
@@ -14,6 +14,11 @@ export default function KoreksiAdminView() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [toast, setToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [selectedEvidenceModal, setSelectedEvidenceModal] = useState<{ url: string; studentName: string; date: string } | null>(null);
+  const [expandedReasons, setExpandedReasons] = useState<Record<string, boolean>>({});
+
+  const toggleReason = (id: string) => {
+    setExpandedReasons(prev => ({ ...prev, [id]: !prev[id] }));
+  };
 
   const showToast = (type: 'success' | 'error', message: string) => {
     setToast({ type, message });
@@ -139,7 +144,7 @@ export default function KoreksiAdminView() {
                 <tr className="bg-white border-b border-gray-100">
                   <th className="p-4 font-semibold text-gray-600 text-sm">Peserta</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Tanggal & Jenis</th>
-                  <th className="p-4 font-semibold text-gray-600 text-sm">Alasan Koreksi</th>
+                  <th className="p-4 font-semibold text-gray-600 text-sm w-[340px] max-w-[340px]">Alasan Koreksi</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Bukti Foto</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Status</th>
                   <th className="p-4 font-semibold text-gray-600 text-sm">Aksi</th>
@@ -148,20 +153,51 @@ export default function KoreksiAdminView() {
               <tbody className="divide-y divide-gray-50">
                 {filteredRequests.map(req => (
                   <tr key={req.id} className="hover:bg-blue-50/30 transition">
-                    <td className="p-4">
+                    <td className="p-4 align-top">
                       <p className="font-bold text-[#183B66]">{req.studentName || 'Peserta'}</p>
                       <p className="text-xs text-gray-500 font-mono mt-1">{req.studentNim || '-'}</p>
                     </td>
-                    <td className="p-4">
+                    <td className="p-4 align-top">
                       <p className="font-medium text-gray-800">{formatDateShort(req.attendanceDate)}</p>
                       <p className="text-xs font-semibold text-[#2F80ED] mt-1">{req.correctionType}</p>
                     </td>
-                    <td className="p-4 max-w-xs" title={req.reason}>
-                      <p className="text-sm text-gray-600 truncate">{req.reason}</p>
-                      <p className="text-[10px] text-gray-400 mt-1">Diajukan: {formatDateShort(req.createdAt)}</p>
+                    <td className="p-4 w-[340px] max-w-[340px] break-words align-top">
+                      {expandedReasons[req.id] ? (
+                        <div className="space-y-1.5 animate-in fade-in duration-150">
+                          <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
+                            {req.reason}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => toggleReason(req.id)}
+                            className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#2F80ED] hover:text-blue-700 transition"
+                          >
+                            <ChevronUp size={13} />
+                            <span>Sembunyikan</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-xs text-slate-700 leading-relaxed" title={req.reason}>
+                            {req.reason && req.reason.length > 48
+                              ? `${req.reason.slice(0, 45).trim()}...`
+                              : (req.reason || '-')}
+                          </p>
+                          {req.reason && req.reason.length > 48 && (
+                            <button
+                              type="button"
+                              onClick={() => toggleReason(req.id)}
+                              className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#2F80ED] hover:text-blue-700 transition"
+                            >
+                              <ChevronDown size={13} />
+                              <span>Lihat Selengkapnya</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                     {/* Kolom Bukti Foto */}
-                    <td className="p-4 whitespace-nowrap">
+                    <td className="p-4 whitespace-nowrap align-top">
                       {req.evidenceUrl ? (
                         <button
                           type="button"
@@ -179,8 +215,8 @@ export default function KoreksiAdminView() {
                         <span className="text-xs text-gray-300 italic">Tanpa Bukti</span>
                       )}
                     </td>
-                    <td className="p-4">{getStatusBadge(req.status)}</td>
-                    <td className="p-4">
+                    <td className="p-4 align-top">{getStatusBadge(req.status)}</td>
+                    <td className="p-4 align-top">
                       {req.status === 'Menunggu' ? (
                         <button onClick={() => { setSelectedReq(req); setAdminNotes(''); }}
                           className="flex items-center gap-1.5 bg-[#2F80ED] text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-blue-600 transition shadow-sm active:scale-95">
