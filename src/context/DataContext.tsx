@@ -94,8 +94,9 @@ interface DataContextType {
   // Leave requests
   leaveRequests: LeaveRequest[];
   isLeaveLoading: boolean;
-  submitLeaveRequest: (startDate: string, endDate: string, leaveType: any, reason: string, docName?: string) => Promise<{ success: boolean; message: string }>;
+  submitLeaveRequest: (startDate: string, endDate: string, leaveType: any, reason: string, docName?: string, docUrl?: string) => Promise<{ success: boolean; message: string }>;
   reviewLeaveRequest: (id: string, status: LeaveStatus, adminNotes: string) => Promise<void>;
+  deleteLeaveRequest: (id: string) => Promise<{ success: boolean; message: string }>;
   refreshLeaveRequests: () => Promise<void>;
 
   // Correction requests
@@ -1016,7 +1017,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const submitLeaveRequest = async (startDate: string, endDate: string, leaveType: any, reason: string, docName?: string): Promise<{ success: boolean; message: string }> => {
+  const submitLeaveRequest = async (
+    startDate: string,
+    endDate: string,
+    leaveType: any,
+    reason: string,
+    docName?: string,
+    docUrl?: string
+  ): Promise<{ success: boolean; message: string }> => {
     if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
     const { error } = await supabase.from('leave_requests').insert({
       user_id: currentUser.id,
@@ -1025,6 +1033,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       leave_type: leaveType,
       reason,
       document_name: docName || null,
+      document_url: docUrl || null,
       status: 'Menunggu'
     });
     if (error) return { success: false, message: 'Gagal mengajukan izin. Coba lagi.' };
@@ -1058,6 +1067,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await addAuditLog(`Izin ${status}`, 'Pengajuan Izin', `Pengajuan ID ${id} → ${status}`);
     await refreshLeaveRequests();
     await refreshAttendances();
+  };
+
+  const deleteLeaveRequest = async (id: string): Promise<{ success: boolean; message: string }> => {
+    const target = leaveRequests.find(r => r.id === id);
+    const { error } = await supabase.from('leave_requests').delete().eq('id', id);
+    if (error) {
+      console.error('Delete leave request error:', error);
+      return { success: false, message: 'Gagal menghapus pengajuan izin: ' + error.message };
+    }
+
+    if (target?.documentUrl) {
+      try {
+        const parts = target.documentUrl.split('/');
+        const fileName = parts[parts.length - 1];
+        if (fileName) {
+          await supabase.storage.from('activity-photos').remove([fileName]);
+        }
+      } catch (e) {
+        // ignore storage removal error
+      }
+    }
+
+    await addAuditLog('Hapus Pengajuan Izin', 'Pengajuan Izin', `Pengajuan izin ${target?.studentName || id} dihapus`);
+    await refreshLeaveRequests();
+    return { success: true, message: 'Pengajuan izin berhasil dihapus.' };
   };
 
   // ---- CORRECTION REQUESTS ----
@@ -1503,7 +1537,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         qrConfig, activeLocation, locations, locationQrMap, updateQrConfig, regenerateQrToken, generateQrForLocationId, isQrScannedToday, scanQrToken, resetQrScan, refreshLocations, addLocation, updateLocation, toggleLocationStatus, deleteLocation,
         gpsState, startGpsWatch, stopGpsWatch, retryGps,
         activities, isActivitiesLoading, addActivity, updateActivity, deleteActivity, refreshActivities,
-        leaveRequests, isLeaveLoading, submitLeaveRequest, reviewLeaveRequest, refreshLeaveRequests,
+        leaveRequests, isLeaveLoading, submitLeaveRequest, reviewLeaveRequest, deleteLeaveRequest, refreshLeaveRequests,
         correctionRequests, submitCorrectionRequest, reviewCorrectionRequest, refreshCorrectionRequests,
         students, isStudentsLoading, refreshStudents, addStudent, updateStudent, toggleStudentStatus,
         auditLogs, notifications, markNotificationAsRead, markAllNotificationsAsRead, refreshNotifications

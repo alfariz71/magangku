@@ -10,29 +10,88 @@ import {
   ChevronRight, 
   FileText, 
   AlertCircle,
-  X
+  X,
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useData } from '../../context/DataContext';
+import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../lib/supabase';
 import { LeaveType } from '../../types';
 
 export const PengajuanIzinView: React.FC = () => {
-  const { leaveRequests, submitLeaveRequest } = useData();
+  const { leaveRequests, submitLeaveRequest, deleteLeaveRequest } = useData();
+  const { currentUser } = useAuth();
+
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 
   // Form states
-  const [startDate, setStartDate] = useState('2025-05-22');
-  const [endDate, setEndDate] = useState('2025-05-22');
+  const [startDate, setStartDate] = useState(todayStr);
+  const [endDate, setEndDate] = useState(todayStr);
   const [leaveType, setLeaveType] = useState<LeaveType>('Izin Sakit');
   const [reason, setReason] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [successToast, setSuccessToast] = useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const compressImage = (file: File, maxSizeMB = 1): Promise<Blob | File> => {
+    return new Promise((resolve) => {
+      if (!file.type.startsWith('image/')) {
+        resolve(file);
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          let { width, height } = img;
+          const maxDim = 1280;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height / width) * maxDim);
+              width = maxDim;
+            } else {
+              width = Math.round((width / height) * maxDim);
+              height = maxDim;
+            }
+          }
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { resolve(file); return; }
+          ctx.drawImage(img, 0, 0, width, height);
+
+          let quality = 0.8;
+          const tryExport = () => {
+            canvas.toBlob((blob) => {
+              if (!blob) { resolve(file); return; }
+              if (blob.size <= maxSizeMB * 1024 * 1024 || quality <= 0.4) {
+                resolve(blob);
+              } else {
+                quality -= 0.15;
+                tryExport();
+              }
+            }, 'image/jpeg', quality);
+          };
+          tryExport();
+        };
+        img.onerror = () => resolve(file);
+        img.src = ev.target?.result as string;
+      };
+      reader.onerror = () => resolve(file);
+      reader.readAsDataURL(file);
+    });
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFileError(null);
@@ -53,14 +112,20 @@ export const PengajuanIzinView: React.FC = () => {
       return;
     }
 
+    setSelectedFile(file);
     setFileName(file.name);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!startDate || !endDate) {
       setErrorMessage('Tanggal mulai dan selesai izin wajib diisi.');
+      return;
+    }
+
+    if (new Date(startDate) > new Date(endDate)) {
+      setErrorMessage('Tanggal mulai tidak boleh lebih dari tanggal selesai.');
       return;
     }
 
@@ -69,36 +134,95 @@ export const PengajuanIzinView: React.FC = () => {
       return;
     }
 
-    submitLeaveRequest(
-      startDate,
-      endDate,
-      leaveType,
-      reason,
-      fileName || (leaveType.includes('Sakit') ? 'Surat_Keterangan_Dokter.pdf' : 'Surat_Permohonan.pdf')
-    );
-
-    // Reset Form
-    setReason('');
-    setFileName(null);
+    setIsSubmitting(true);
     setErrorMessage(null);
-    setSuccessToast(true);
 
     try {
-      confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
-    } catch (e) {
-      console.error(e);
-    }
+      let uploadedUrl: string | undefined = undefined;
+      let finalDocName: string | undefined = undefined;
 
-    setTimeout(() => {
-      setSuccessToast(false);
-    }, 4000);
+      if (selectedFile && currentUser?.id) {
+        finalDocName = selectedFile.name;
+        const cleanName = selectedFile.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+        const storageFileName = `leave-${currentUser.id}-${Date.now()}-${cleanName}`;
+
+        let fileToUpload: Blob | File = selectedFile;
+        if (selectedFile.type.startsWith('image/')) {
+          try {
+            fileToUpload = await compressImage(selectedFile);
+          } catch (compErr) {
+            console.error('Image compression failed, uploading original:', compErr);
+            fileToUpload = selectedFile;
+          }
+        }
+
+        const { data: uploadData, error: uploadErr } = await supabase.storage
+          .from('activity-photos')
+          .upload(storageFileName, fileToUpload, {
+            upsert: true,
+            contentType: selectedFile.type || (selectedFile.name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
+          });
+
+        if (uploadErr) {
+          console.error('Storage upload error:', uploadErr);
+        } else if (uploadData) {
+          const { data: urlData } = supabase.storage.from('activity-photos').getPublicUrl(storageFileName);
+          uploadedUrl = urlData.publicUrl;
+        }
+      }
+
+      const res = await submitLeaveRequest(
+        startDate,
+        endDate,
+        leaveType,
+        reason,
+        finalDocName,
+        uploadedUrl
+      );
+
+      if (!res.success) {
+        setErrorMessage(res.message || 'Gagal mengirim pengajuan izin.');
+        return;
+      }
+
+      // Reset Form
+      setReason('');
+      setSelectedFile(null);
+      setFileName(null);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setErrorMessage(null);
+      setFileError(null);
+      setSuccessToast(true);
+
+      try {
+        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+      } catch (e) {
+        console.error(e);
+      }
+
+      setTimeout(() => {
+        setSuccessToast(false);
+      }, 4000);
+    } catch (err: any) {
+      console.error(err);
+      setErrorMessage('Terjadi kesalahan saat memproses pengajuan izin.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const handleResetForm = () => {
     setReason('');
+    setSelectedFile(null);
     setFileName(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setErrorMessage(null);
     setFileError(null);
+  };
+
+  const handleDeleteRequest = async (id: string) => {
+    if (!window.confirm('Apakah Anda yakin ingin membatalkan pengajuan izin ini?')) return;
+    await deleteLeaveRequest(id);
   };
 
   // Pagination calculations
@@ -184,15 +308,42 @@ export const PengajuanIzinView: React.FC = () => {
                         <td className="py-3.5 px-3 text-slate-800 whitespace-nowrap">
                           {item.leaveType}
                         </td>
-                        <td className="py-3.5 px-3 text-slate-600 max-w-[180px] truncate" title={item.reason}>
-                          {item.reason}
+                        <td className="py-3.5 px-3 text-slate-600 max-w-[200px]">
+                          <p className="truncate" title={item.reason}>{item.reason}</p>
+                          {item.documentUrl ? (
+                            <a
+                              href={item.documentUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-[#2F80ED] hover:underline"
+                              title={item.documentName || 'Lihat Dokumen'}
+                            >
+                              <FileText className="h-3 w-3 shrink-0" />
+                              <span className="truncate max-w-[130px]">{item.documentName || 'Dokumen Lampiran'}</span>
+                            </a>
+                          ) : item.documentName ? (
+                            <span className="mt-1 inline-flex items-center gap-1 text-[10px] text-slate-400">
+                              <FileText className="h-3 w-3 shrink-0" />
+                              <span className="truncate max-w-[130px]">{item.documentName}</span>
+                            </span>
+                          ) : null}
                         </td>
                         <td className="py-3.5 pl-3 whitespace-nowrap">
                           {item.status === 'Menunggu' && (
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FEF8E8] px-2.5 py-1 text-xs font-semibold text-[#F2994A] border border-[#F2994A]/20">
-                              <span className="h-1.5 w-1.5 rounded-full bg-[#F2994A]" />
-                              Menunggu
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FEF8E8] px-2.5 py-1 text-xs font-semibold text-[#F2994A] border border-[#F2994A]/20">
+                                <span className="h-1.5 w-1.5 rounded-full bg-[#F2994A]" />
+                                Menunggu
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteRequest(item.id)}
+                                className="rounded-lg p-1 text-slate-300 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                                title="Batalkan pengajuan izin"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           )}
                           {item.status === 'Disetujui' && (
                             <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8F8EE] px-2.5 py-1 text-xs font-semibold text-[#27AE60] border border-[#27AE60]/20">
@@ -370,9 +521,22 @@ export const PengajuanIzinView: React.FC = () => {
                   </p>
 
                   {fileName && (
-                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1 text-xs font-medium text-[#2F80ED]">
-                      <FileText className="h-3.5 w-3.5" />
-                      <span>{fileName}</span>
+                    <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-[#2F80ED] border border-blue-100">
+                      <FileText className="h-3.5 w-3.5 shrink-0" />
+                      <span className="max-w-[200px] truncate">{fileName}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedFile(null);
+                          setFileName(null);
+                          if (fileInputRef.current) fileInputRef.current.value = '';
+                        }}
+                        className="rounded-full p-0.5 text-slate-400 hover:bg-blue-100 hover:text-slate-600 transition-colors"
+                        title="Hapus file"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
                     </div>
                   )}
                 </div>
@@ -386,16 +550,25 @@ export const PengajuanIzinView: React.FC = () => {
               <div className="mt-6 flex items-center justify-end gap-3 pt-2">
                 <button
                   type="button"
+                  disabled={isSubmitting}
                   onClick={handleResetForm}
-                  className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  className="rounded-xl border border-slate-300 bg-white px-5 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-[#2F80ED] px-6 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98]"
+                  disabled={isSubmitting}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2F80ED] px-6 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Kirim Pengajuan
+                  {isSubmitting ? (
+                    <>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      <span>Mengirim Pengajuan...</span>
+                    </>
+                  ) : (
+                    'Kirim Pengajuan'
+                  )}
                 </button>
               </div>
             </form>
