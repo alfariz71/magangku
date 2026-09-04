@@ -37,6 +37,8 @@ export const AbsensiAdminView: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteToast, setDeleteToast] = useState(false);
 
+  const [isSavingCorr, setIsSavingCorr] = useState(false);
+
   const openCorrectionModal = (record: AttendanceRecord) => {
     setEditingRecord(record);
     setCorrCheckIn(record.checkInTime || '08:00 WIB');
@@ -46,7 +48,7 @@ export const AbsensiAdminView: React.FC = () => {
     setCorrError(null);
   };
 
-  const handleSaveCorrection = (e: React.FormEvent) => {
+  const handleSaveCorrection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRecord) return;
     if (!corrReason.trim()) {
@@ -54,17 +56,25 @@ export const AbsensiAdminView: React.FC = () => {
       return;
     }
 
-    adminCorrectAttendance(
-      editingRecord.id,
-      corrCheckIn,
-      corrCheckOut,
-      corrStatus,
-      corrReason
-    );
+    setIsSavingCorr(true);
+    setCorrError(null);
+    try {
+      await adminCorrectAttendance(
+        editingRecord.id,
+        corrCheckIn,
+        corrCheckOut,
+        corrStatus,
+        corrReason
+      );
 
-    setEditingRecord(null);
-    setSuccessToast(true);
-    setTimeout(() => setSuccessToast(false), 3500);
+      setEditingRecord(null);
+      setSuccessToast(true);
+      setTimeout(() => setSuccessToast(false), 3500);
+    } catch (err: any) {
+      setCorrError(err?.message || 'Gagal menyimpan koreksi absensi.');
+    } finally {
+      setIsSavingCorr(false);
+    }
   };
 
   // Filter attendance records
@@ -441,9 +451,10 @@ export const AbsensiAdminView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-[#2F80ED] px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-blue-600"
+                  disabled={isSavingCorr}
+                  className="rounded-xl bg-[#2F80ED] px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-blue-600 disabled:opacity-50"
                 >
-                  Simpan Koreksi
+                  {isSavingCorr ? 'Menyimpan...' : 'Simpan Koreksi'}
                 </button>
               </div>
             </form>

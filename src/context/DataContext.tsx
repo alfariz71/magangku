@@ -771,10 +771,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const adminCorrectAttendance = async (id: string, checkIn: string, checkOut: string, status: AttendanceStatus, reason: string) => {
+    // 1. Dapatkan tanggal record absensi dari state atau database
+    const att = attendances.find(a => a.id === id);
+    let dateStr = att?.date;
+    if (!dateStr) {
+      const { data: rec } = await supabase.from('attendance_records').select('date').eq('id', id).maybeSingle();
+      dateStr = rec?.date || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    }
+
+    // 2. Parser jam yang aman dari format '08:00 WIB', '08.00', '08:00', ISO, dll
+    const parseTime = (timeStr: string | null | undefined): string | null => {
+      if (!timeStr || timeStr.trim() === '' || timeStr.trim() === '—' || timeStr.trim() === '-') return null;
+      if (timeStr.includes('T') && !isNaN(Date.parse(timeStr))) {
+        return new Date(timeStr).toISOString();
+      }
+      const match = timeStr.match(/(\d{1,2})[:.](\d{2})/);
+      if (!match) return null;
+      const hh = match[1].padStart(2, '0');
+      const mm = match[2];
+      const d = new Date(`${dateStr}T${hh}:${mm}:00+07:00`);
+      return isNaN(d.getTime()) ? null : d.toISOString();
+    };
+
+    const finalCheckIn = parseTime(checkIn);
+    const finalCheckOut = parseTime(checkOut);
+
     let totalHoursStr: string | null = null;
-    if (checkIn && checkOut) {
-      const inTime = new Date(checkIn).getTime();
-      const outTime = new Date(checkOut).getTime();
+    if (finalCheckIn && finalCheckOut) {
+      const inTime = new Date(finalCheckIn).getTime();
+      const outTime = new Date(finalCheckOut).getTime();
       if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
         const diffMinutes = Math.round((outTime - inTime) / 60000);
         const hours = Math.floor(diffMinutes / 60);
@@ -783,15 +808,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     }
 
-    await supabase.from('attendance_records').update({
-      check_in_time: checkIn ? new Date(checkIn).toISOString() : null,
-      check_out_time: checkOut ? new Date(checkOut).toISOString() : null,
+    const { error: updateErr } = await supabase.from('attendance_records').update({
+      check_in_time: finalCheckIn,
+      check_out_time: finalCheckOut,
       total_hours: totalHoursStr,
       status,
       corrected_by: currentUser?.id,
       correction_reason: reason,
       corrected_at: new Date().toISOString()
     }).eq('id', id);
+
+    if (updateErr) {
+      console.error('adminCorrectAttendance error:', updateErr);
+      throw new Error(`Gagal menyimpan koreksi absensi: ${updateErr.message}`);
+    }
+
     await addAuditLog('Koreksi Absensi', 'Koreksi', `Koreksi ID ${id}: Status=${status}, Alasan: ${reason}`);
     await refreshAttendances();
   };
