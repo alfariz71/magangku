@@ -112,6 +112,7 @@ export const AktivitasMagangView: React.FC = () => {
         description: docDesc,
         activityDate: new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }),
         attachmentUrl: photoUrl,
+        time: '08:00 - 17:00 WIB',
         createdAt: new Date().toISOString()
       });
       setShowDocModal(false);
@@ -203,8 +204,8 @@ export const AktivitasMagangView: React.FC = () => {
                         />
                       )}
                     </td>
-                    <td className="py-4 pl-4 text-slate-600">
-                      {act.createdAt ? new Date(act.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : '-'}
+                    <td className="py-4 pl-4 text-slate-600 font-medium">
+                      {act.time || (act.createdAt ? new Date(act.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : '08:00 - 17:00 WIB')}
                     </td>
                   </tr>
                 ))

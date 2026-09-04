@@ -806,7 +806,19 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             description: a.description as string | undefined,
             startTime: a.start_time as string | undefined,
             endTime: a.end_time as string | undefined,
-            time: a.start_time ? `${a.start_time} - ${a.end_time}` : undefined,
+            time: (() => {
+              const fmt = (t: any) => typeof t === 'string' ? t.slice(0, 5) : '';
+              if (a.start_time && a.end_time) {
+                return `${fmt(a.start_time)} - ${fmt(a.end_time)} WIB`;
+              }
+              if (a.start_time) {
+                return `${fmt(a.start_time)} WIB`;
+              }
+              if (typeof a.description === 'string' && a.description.startsWith('Waktu: ')) {
+                return a.description.replace('Waktu: ', '');
+              }
+              return '08:00 - 17:00 WIB';
+            })(),
             category: a.category as string | undefined,
             attachmentUrl: a.attachment_url as string | undefined,
             createdAt: a.created_at as string,
@@ -820,13 +832,24 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const addActivity = async (data: Partial<ActivityRecord>) => {
     if (!currentUser?.id) return;
+
+    let startTime = data.startTime || null;
+    let endTime = data.endTime || null;
+    if (!startTime && data.time) {
+      const match = data.time.match(/(\d{1,2})[:.](\d{2})\s*[-–]\s*(\d{1,2})[:.](\d{2})/);
+      if (match) {
+        startTime = `${match[1].padStart(2, '0')}:${match[2]}:00`;
+        endTime = `${match[3].padStart(2, '0')}:${match[4]}:00`;
+      }
+    }
+
     await supabase.from('activities').insert({
       user_id: currentUser.id,
       activity_date: data.activityDate || getTodayJakarta(),
       title: data.title,
-      description: data.description || null,
-      start_time: data.startTime || null,
-      end_time: data.endTime || null,
+      description: data.description || (data.time ? `Waktu: ${data.time}` : null),
+      start_time: startTime,
+      end_time: endTime,
       category: data.category || null,
       attachment_url: data.attachmentUrl || null,
     });
