@@ -315,7 +315,10 @@ export default function LokasiAdminView() {
                     {/* QR Display */}
                     <div className="shrink-0 flex flex-col items-center">
                       {token ? (
-                        <div key={`qr-${loc.id}-${token}`} className="p-3 bg-white border-2 border-[#2F80ED] rounded-2xl shadow-sm">
+                        <div
+                          key={`qr-${loc.id}-${token}`}
+                          className="p-3.5 bg-white admin-qr-frame border-2 border-[#2F80ED] dark:border-[#38BDF8] rounded-2xl shadow-sm transition-all"
+                        >
                           <QRCodeSVG id={`qr-${loc.id}`} value={token} size={150} level="H" />
                         </div>
                       ) : (

@@ -391,5 +391,16 @@ html.dark ::-webkit-scrollbar-thumb:hover {
   background: #475569;
 }
 
+/* ==========================================================================
+   Khusus QR Code Admin (LokasiAdminView): Pinggiran & Frame Biru Muda di Dark Mode
+   Memastikan margin/quiet zone QR kontras terang agar kamera HP dapat memindai instan
+   ========================================================================== */
+html.dark .admin-qr-frame,
+html.dark div.admin-qr-frame {
+  background-color: #E0F2FE !important; /* Biru muda cerah (sky-100) sebagai quiet zone berkontras tinggi */
+  border-color: #38BDF8 !important;     /* Border pinggiran biru muda (sky-400) */
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.35) !important;
+}
+
 
 
