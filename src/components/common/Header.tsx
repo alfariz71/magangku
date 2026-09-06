@@ -9,7 +9,9 @@ import {
   Camera,
   RefreshCw,
   Check,
-  X
+  X,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -30,6 +32,33 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
   const [showLargeAvatar, setShowLargeAvatar] = useState(false);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return document.documentElement.classList.contains('dark') || localStorage.getItem('magangku_dark_mode') === 'true';
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    const handleThemeChange = () => {
+      setIsDarkMode(document.documentElement.classList.contains('dark'));
+    };
+    window.addEventListener('theme-change', handleThemeChange);
+    return () => window.removeEventListener('theme-change', handleThemeChange);
+  }, []);
+
+  const toggleDarkMode = () => {
+    const nextDark = !isDarkMode;
+    setIsDarkMode(nextDark);
+    localStorage.setItem('magangku_dark_mode', String(nextDark));
+    if (nextDark) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    window.dispatchEvent(new Event('theme-change'));
+  };
 
   const profileRef = useRef<HTMLDivElement>(null);
   const notifRef = useRef<HTMLDivElement>(null);
@@ -147,7 +176,22 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
       </div>
 
       {/* Right: Notifications & Profile Dropdown */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 sm:gap-3">
+        {/* Dark Mode Quick Toggle */}
+        <button
+          type="button"
+          onClick={toggleDarkMode}
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/80 bg-white text-slate-600 transition-smooth hover:border-slate-300 hover:bg-slate-50 cursor-pointer shadow-2xs"
+          title={isDarkMode ? 'Beralih ke Mode Terang' : 'Beralih ke Mode Gelap'}
+          aria-label="Toggle Dark Mode"
+        >
+          {isDarkMode ? (
+            <Sun className="w-4 h-4 text-amber-400" />
+          ) : (
+            <Moon className="w-4 h-4 text-slate-600" />
+          )}
+        </button>
+
         {/* Notification Bell */}
         <div className="relative" ref={notifRef}>
           <button

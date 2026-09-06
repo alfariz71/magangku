@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ChevronDown, Check, AlertCircle, Camera } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ChevronDown, Check, AlertCircle, Camera, Moon, Sun } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
 import { uploadToCloudinary } from '../../lib/cloudinary';
@@ -33,8 +33,21 @@ export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   // State untuk pengaturan tampilan
-  const [darkMode, setDarkMode] = useState<boolean>(() => localStorage.getItem('magangku_dark_mode') === 'true');
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      return document.documentElement.classList.contains('dark') || localStorage.getItem('magangku_dark_mode') === 'true';
+    }
+    return false;
+  });
   const [fontSize, setFontSize] = useState<string>(() => localStorage.getItem('magangku_font_size') || 'normal');
+
+  useEffect(() => {
+    const handleThemeChange = () => {
+      setDarkMode(document.documentElement.classList.contains('dark'));
+    };
+    window.addEventListener('theme-change', handleThemeChange);
+    return () => window.removeEventListener('theme-change', handleThemeChange);
+  }, []);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -174,6 +187,7 @@ export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
     } else {
       document.documentElement.classList.remove('dark');
     }
+    window.dispatchEvent(new Event('theme-change'));
   };
 
   const handleFontSizeChange = (size: string) => {
@@ -462,16 +476,24 @@ export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
           <div className="space-y-4">
             {/* Dark Mode */}
             <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-slate-700">Mode Gelap</p>
-                <p className="text-xs text-slate-400 mt-0.5">Tampilan gelap lebih nyaman di malam hari</p>
+              <div className="flex items-center gap-3">
+                <div className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
+                  darkMode ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-100 text-slate-600'
+                }`}>
+                  {darkMode ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-700">Mode Gelap</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Tampilan gelap lebih nyaman di mata saat malam hari</p>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => handleDarkModeToggle(!darkMode)}
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  darkMode ? 'bg-[#2F80ED]' : 'bg-slate-200'
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                  darkMode ? 'bg-[#2F80ED]' : 'bg-slate-300'
                 }`}
+                aria-label="Toggle Mode Gelap"
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
                   darkMode ? 'translate-x-6' : 'translate-x-1'
