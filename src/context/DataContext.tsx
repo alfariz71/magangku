@@ -249,7 +249,64 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         refreshAuditLogs();
       }
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.role]);
+
+  // Periodic polling fallback & window focus listener for fresh notifications
+  useEffect(() => {
+    if (!currentUser?.id) return;
+    const onFocus = () => {
+      refreshNotifications();
+    };
+    window.addEventListener('focus', onFocus);
+    const intervalId = setInterval(() => {
+      refreshNotifications();
+    }, 45000);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      clearInterval(intervalId);
+    };
+  }, [currentUser?.id, currentUser?.role]);
+
+  // Realtime subscription: Otomatis perbarui data & notifikasi saat ada user absen, izin, atau koreksi
+  useEffect(() => {
+    if (!currentUser?.id) return;
+
+    const channel = supabase
+      .channel('data_context_realtime_changes')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'attendance_records' },
+        async () => {
+          await refreshAttendances();
+          await refreshNotifications();
+          if (currentUser.role === 'admin') {
+            refreshAuditLogs();
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'leave_requests' },
+        async () => {
+          await refreshLeaveRequests();
+          await refreshNotifications();
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'attendance_correction_requests' },
+        async () => {
+          await refreshCorrectionRequests();
+          await refreshNotifications();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser?.id, currentUser?.role]);
 
   // Helper to calculate numeric timestamp score for sorting attendances (newest check-in first)
   const getAttendanceTimeScore = (record: { date: string; rawCheckInTime?: string; checkInTime?: string | null }): number => {
@@ -1518,7 +1575,84 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
 
-      // 3. Mahasiswa yang absen masuk hari ini tapi belum pulang
+      // 3. Notifikasi Absensi Realtime per Peserta (Check-in & Check-out Hari Ini)
+      const { data: todayAtts } = await supabase
+        .from('attendance_records')
+        .select('id, user_id, date, check_in_time, check_out_time, status, total_hours')
+        .eq('date', todayStr);
+
+      if (todayAtts && todayAtts.length > 0) {
+        const userIds = Array.from(new Set(todayAtts.map((r: any) => r.user_id).filter(Boolean)));
+        const profileNameMap = new Map<string, string>();
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('user_profiles')
+            .select('id, full_name')
+            .in('id', userIds);
+          if (profiles) {
+            profiles.forEach((p: any) => {
+              profileNameMap.set(p.id, p.full_name || 'Peserta');
+            });
+          }
+        }
+
+        const attendanceEvents: Array<NotificationItem & { timestamp: number }> = [];
+
+        todayAtts.forEach((att: any) => {
+          const studentName = profileNameMap.get(att.user_id) || 'Peserta';
+
+          // A. Event Absen Pulang (jika sudah checkout)
+          if (att.check_out_time) {
+            const outDate = new Date(att.check_out_time);
+            const formattedOut = !isNaN(outDate.getTime())
+              ? outDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB'
+              : 'Hari ini';
+
+            attendanceEvents.push({
+              id: `notif-att-out-${att.id}`,
+              title: `👋 ${studentName} baru saja absen pulang`,
+              message: `${studentName} telah selesai bertugas & absen pulang pukul ${formattedOut}${att.total_hours ? ` (Total: ${att.total_hours})` : ''}.`,
+              time: formattedOut,
+              read: false,
+              type: 'info',
+              linkTab: 'absensi',
+              timestamp: !isNaN(outDate.getTime()) ? outDate.getTime() : 0,
+            });
+          }
+
+          // B. Event Absen Masuk (jika sudah checkin)
+          if (att.check_in_time) {
+            const inDate = new Date(att.check_in_time);
+            const formattedIn = !isNaN(inDate.getTime())
+              ? inDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB'
+              : 'Hari ini';
+            const isLate = att.status === 'Terlambat';
+
+            attendanceEvents.push({
+              id: `notif-att-in-${att.id}`,
+              title: isLate ? `⚠️ ${studentName} baru saja absen (Terlambat)` : `📍 ${studentName} baru saja absen masuk`,
+              message: isLate
+                ? `${studentName} melakukan absensi masuk pukul ${formattedIn} (${att.status}).`
+                : `${studentName} telah melakukan absensi masuk pukul ${formattedIn} (Tepat waktu).`,
+              time: formattedIn,
+              read: false,
+              type: isLate ? 'warning' : 'success',
+              linkTab: 'absensi',
+              timestamp: !isNaN(inDate.getTime()) ? inDate.getTime() : 0,
+            });
+          }
+        });
+
+        // Urutkan event absensi dari yang paling baru
+        attendanceEvents.sort((a, b) => b.timestamp - a.timestamp);
+
+        // Masukkan maksimal 20 event absensi terbaru ke notifikasi
+        attendanceEvents.slice(0, 20).forEach(({ timestamp, ...item }) => {
+          notifs.push(item);
+        });
+      }
+
+      // 4. Mahasiswa yang absen masuk hari ini tapi belum pulang
       const { data: checkInOnly } = await supabase
         .from('attendance_records')
         .select('id')
@@ -1537,7 +1671,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
 
-      // 4. Peserta baru yang terdaftar hari ini
+      // 5. Peserta baru yang terdaftar hari ini
       const { data: newStudents } = await supabase
         .from('user_profiles')
         .select('id')
