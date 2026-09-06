@@ -78,17 +78,22 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
 
   // Close dropdowns on outside click
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node;
+      if (profileRef.current && !profileRef.current.contains(target)) {
         setShowProfileMenu(false);
       }
-      if (notifRef.current && !notifRef.current.contains(event.target as Node)) {
+      if (notifRef.current && !notifRef.current.contains(target)) {
         setShowNotifications(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
 
   const compressImage = (file: File, maxSizeMB = 1.5): Promise<Blob> => {
@@ -209,60 +214,79 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
 
           {/* Notification Dropdown Menu */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-slate-100 dark:border-slate-700/80 bg-white dark:bg-slate-900 p-3 shadow-xl shadow-slate-900/10 z-50 animate-in fade-in zoom-in-95 duration-150">
-              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5 px-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Notifikasi</h3>
-                  {unreadCount > 0 && (
-                    <span className="rounded-full bg-blue-50 dark:bg-blue-500/20 px-2 py-0.5 text-xs font-semibold text-[#2F80ED] dark:text-blue-400">
-                      {unreadCount} baru
-                    </span>
+            <>
+              {/* Mobile Backdrop Overlay */}
+              <div
+                className="fixed inset-0 bg-slate-900/30 backdrop-blur-2xs z-40 sm:hidden animate-in fade-in duration-150"
+                onClick={() => setShowNotifications(false)}
+                aria-hidden="true"
+              />
+
+              <div className="fixed left-3 right-3 top-[80px] max-w-sm mx-auto sm:max-w-none sm:mx-0 sm:absolute sm:inset-auto sm:left-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96 rounded-2xl border border-slate-100 dark:border-slate-700/80 bg-white dark:bg-slate-900 p-3 shadow-2xl shadow-slate-900/20 z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5 px-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Notifikasi</h3>
+                    {unreadCount > 0 && (
+                      <span className="rounded-full bg-blue-50 dark:bg-blue-500/20 px-2 py-0.5 text-xs font-semibold text-[#2F80ED] dark:text-blue-400">
+                        {unreadCount} baru
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {unreadCount > 0 && (
+                      <button
+                        onClick={markAllNotificationsAsRead}
+                        className="text-xs text-[#2F80ED] dark:text-blue-400 hover:underline font-medium"
+                      >
+                        Tandai dibaca
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowNotifications(false)}
+                      className="flex h-6 w-6 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                      title="Tutup notifikasi"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-2 max-h-[65vh] sm:max-h-80 overflow-y-auto space-y-1.5 divide-y divide-slate-50 dark:divide-slate-800/60">
+                  {notifications.length === 0 ? (
+                    <div className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">
+                      Tidak ada notifikasi baru
+                    </div>
+                  ) : (
+                    notifications.map((n) => (
+                      <div
+                        key={n.id}
+                        onClick={() => {
+                          markNotificationAsRead(n.id);
+                          if (n.linkTab && onNavigate) onNavigate(n.linkTab);
+                          setShowNotifications(false);
+                        }}
+                        className={`cursor-pointer rounded-xl p-2.5 transition-colors ${
+                          n.read
+                            ? 'bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                            : 'bg-blue-50/60 hover:bg-blue-50 dark:bg-blue-950/40 dark:hover:bg-blue-900/40 border border-blue-100/60 dark:border-blue-800/50'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={`text-xs ${n.read ? 'font-medium text-slate-800 dark:text-slate-200' : 'font-semibold text-blue-900 dark:text-blue-200'}`}>
+                            {n.title}
+                          </p>
+                          <span className="text-[10px] text-slate-400 dark:text-slate-400 whitespace-nowrap">{n.time}</span>
+                        </div>
+                        <p className={`mt-1 text-xs leading-relaxed line-clamp-2 ${n.read ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                          {n.message}
+                        </p>
+                      </div>
+                    ))
                   )}
                 </div>
-                {unreadCount > 0 && (
-                  <button
-                    onClick={markAllNotificationsAsRead}
-                    className="text-xs text-[#2F80ED] dark:text-blue-400 hover:underline font-medium"
-                  >
-                    Tandai dibaca
-                  </button>
-                )}
               </div>
-
-              <div className="mt-2 max-h-80 overflow-y-auto space-y-1.5 divide-y divide-slate-50 dark:divide-slate-800/60">
-                {notifications.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">
-                    Tidak ada notifikasi baru
-                  </div>
-                ) : (
-                  notifications.map((n) => (
-                    <div
-                      key={n.id}
-                      onClick={() => {
-                        markNotificationAsRead(n.id);
-                        if (n.linkTab && onNavigate) onNavigate(n.linkTab);
-                        setShowNotifications(false);
-                      }}
-                      className={`cursor-pointer rounded-xl p-2.5 transition-colors ${
-                        n.read
-                          ? 'bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                          : 'bg-blue-50/60 hover:bg-blue-50 dark:bg-blue-950/40 dark:hover:bg-blue-900/40 border border-blue-100/60 dark:border-blue-800/50'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <p className={`text-xs ${n.read ? 'font-medium text-slate-800 dark:text-slate-200' : 'font-semibold text-blue-900 dark:text-blue-200'}`}>
-                          {n.title}
-                        </p>
-                        <span className="text-[10px] text-slate-400 dark:text-slate-400 whitespace-nowrap">{n.time}</span>
-                      </div>
-                      <p className={`mt-1 text-xs leading-relaxed line-clamp-2 ${n.read ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
-                        {n.message}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+            </>
           )}
         </div>
 
@@ -319,7 +343,15 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
 
           {/* Profile Mini Card Dropdown */}
           {showProfileMenu && (
-            <div className="absolute right-0 mt-2 w-72 rounded-2xl border border-slate-100 bg-white p-4 shadow-xl shadow-slate-900/10 z-50 animate-in fade-in zoom-in-95 duration-150">
+            <>
+              {/* Mobile Backdrop Overlay */}
+              <div
+                className="fixed inset-0 bg-slate-900/20 backdrop-blur-2xs z-40 sm:hidden animate-in fade-in duration-150"
+                onClick={() => setShowProfileMenu(false)}
+                aria-hidden="true"
+              />
+
+              <div className="absolute right-0 mt-2 w-72 max-w-[calc(100vw-24px)] rounded-2xl border border-slate-100 bg-white p-4 shadow-xl shadow-slate-900/10 z-50 animate-in fade-in zoom-in-95 duration-150">
               {/* Avatar & Info */}
               <div className="flex flex-col items-center text-center pb-3.5 border-b border-slate-100">
                 <div className="mb-2.5">
@@ -405,6 +437,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
                 </button>
               </div>
             </div>
+            </>
           )}
         </div>
       </div>
