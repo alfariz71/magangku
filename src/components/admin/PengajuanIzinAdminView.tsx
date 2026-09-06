@@ -124,7 +124,8 @@ export const PengajuanIzinAdminView: React.FC = () => {
 
       {/* Table Card */}
       <div className="rounded-[16px] border border-slate-100 bg-white p-6 shadow-sm">
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-slate-600 font-bold">
@@ -132,7 +133,7 @@ export const PengajuanIzinAdminView: React.FC = () => {
                 <th className="pb-3 px-3">Tgl Pengajuan</th>
                 <th className="pb-3 px-3">Periode Izin</th>
                 <th className="pb-3 px-3">Jenis Izin</th>
-                <th className="pb-3 px-3">Alasan & Dokumen</th>
+                <th className="pb-3 px-3">Alasan &amp; Dokumen</th>
                 <th className="pb-3 px-3">Status</th>
                 <th className="pb-3 pl-3 text-right">Aksi Tindakan</th>
               </tr>
@@ -257,6 +258,115 @@ export const PengajuanIzinAdminView: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card-based View */}
+        <div className="block md:hidden space-y-3">
+          {filteredRequests.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 text-xs">
+              Tidak ditemukan data pengajuan izin
+            </div>
+          ) : (
+            filteredRequests.map((req) => (
+              <div
+                key={`m-leave-${req.id}`}
+                className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-2xs space-y-3"
+              >
+                {/* Header: Student Name & Status */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-slate-900 text-sm">{req.studentName}</p>
+                    <p className="text-xs text-slate-400 font-mono">{req.studentNim} • {req.university}</p>
+                  </div>
+
+                  {req.status === 'Menunggu' && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#FEF8E8] px-2.5 py-0.5 text-[10px] font-semibold text-[#F2994A] shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#F2994A]" />
+                      Menunggu
+                    </span>
+                  )}
+                  {req.status === 'Disetujui' && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#E8F8EE] px-2.5 py-0.5 text-[10px] font-semibold text-[#27AE60] shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#27AE60]" />
+                      Disetujui
+                    </span>
+                  )}
+                  {req.status === 'Ditolak' && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-[#FDEEEE] px-2.5 py-0.5 text-[10px] font-semibold text-[#EB5757] shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#EB5757]" />
+                      Ditolak
+                    </span>
+                  )}
+                </div>
+
+                {/* Details Grid */}
+                <div className="grid grid-cols-2 gap-2 bg-slate-50/80 rounded-lg p-2.5 text-xs">
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Jenis Izin</span>
+                    <span className="font-semibold text-slate-800">{req.leaveType}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Tgl Pengajuan</span>
+                    <span className="font-semibold text-slate-800">{req.requestDate}</span>
+                  </div>
+                  <div className="col-span-2 pt-1 border-t border-slate-200/50">
+                    <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Periode Izin</span>
+                    <span className="font-semibold text-blue-600">{req.startDate} s/d {req.endDate}</span>
+                  </div>
+                </div>
+
+                {/* Reason & Document */}
+                <div className="space-y-1.5 text-xs">
+                  <p className="text-slate-600 leading-relaxed text-[11px]"><strong className="text-slate-700">Alasan:</strong> {req.reason}</p>
+                  {req.documentUrl && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenDoc(req.documentUrl!, req.documentName)}
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-2.5 py-1 text-[11px] font-semibold text-[#2F80ED] hover:bg-blue-100 transition-colors border border-blue-200/60"
+                    >
+                      <FileText className="h-3.5 w-3.5" />
+                      <span>{req.documentName || 'Lihat Dokumen / Surat'}</span>
+                      <Eye className="h-3 w-3 text-blue-400" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                  <div className="flex items-center gap-1.5 flex-1">
+                    {req.status === 'Menunggu' ? (
+                      <>
+                        <button
+                          onClick={() => openReviewModal(req, 'Disetujui')}
+                          className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-[#27AE60] py-2 text-xs font-semibold text-white hover:bg-emerald-600 transition shadow-xs"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                          Setujui
+                        </button>
+                        <button
+                          onClick={() => openReviewModal(req, 'Ditolak')}
+                          className="flex-1 inline-flex items-center justify-center gap-1 rounded-lg bg-[#EB5757] py-2 text-xs font-semibold text-white hover:bg-rose-600 transition shadow-xs"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                          Tolak
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-xs text-slate-400 italic">Sudah diverifikasi</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDeletingRequest(req)}
+                    className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                    title="Hapus riwayat izin"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

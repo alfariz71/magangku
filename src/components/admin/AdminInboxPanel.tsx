@@ -67,7 +67,7 @@ export const AdminInboxPanel: React.FC = () => {
     <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
       {/* Panel */}
       {isOpen && (
-        <div className="w-72 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+        <div className="w-[calc(100vw-32px)] max-w-[320px] sm:w-80 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2.5">
             <span className="text-xs font-semibold text-slate-700">Pesan Bantuan</span>
@@ -101,7 +101,7 @@ export const AdminInboxPanel: React.FC = () => {
                       <button
                         onClick={(e) => deleteMessage(e, msg.id)}
                         title="Hapus pesan"
-                        className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition"
+                        className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 p-1 rounded hover:bg-rose-50 text-slate-400 hover:text-rose-500 transition"
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>

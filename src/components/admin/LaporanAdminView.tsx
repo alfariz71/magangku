@@ -899,17 +899,17 @@ export const LaporanAdminView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
           <button
             onClick={handleExportExcel}
-            className="flex items-center gap-2 rounded-xl border border-emerald-600 bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-all shadow-xs"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl border border-emerald-600 bg-emerald-50 px-4 py-2.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 transition-all shadow-xs whitespace-nowrap"
           >
             <FileSpreadsheet className="h-4 w-4" />
-            Ekspor Excel (.xlsx)
+            Ekspor Excel
           </button>
           <button
             onClick={handleExportPDF}
-            className="flex items-center gap-2 rounded-xl bg-[#2F80ED] px-4 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 shadow-md shadow-blue-500/20 transition-all"
+            className="flex-1 sm:flex-initial flex items-center justify-center gap-2 rounded-xl bg-[#2F80ED] px-4 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 shadow-md shadow-blue-500/20 transition-all whitespace-nowrap"
           >
             <Download className="h-4 w-4" />
             Unduh PDF

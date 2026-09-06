@@ -66,10 +66,10 @@ export const PengaturanQRAdminView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 w-full sm:w-auto">
           <button
             onClick={() => setShowPrintModal(true)}
-            className="flex items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-all"
+            className="flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50 transition-all w-full sm:w-auto"
           >
             <Printer className="h-4 w-4 text-[#2F80ED]" />
             Cetak QR Code
@@ -203,7 +203,7 @@ export const PengaturanQRAdminView: React.FC = () => {
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Radius Jangkauan Absensi Maksimal (Meter)
                 </label>
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[100, 200, 500, 1000].map((r) => (
                     <button
                       key={r}
@@ -229,7 +229,7 @@ export const PengaturanQRAdminView: React.FC = () => {
               <div className="flex justify-end pt-2">
                 <button
                   type="submit"
-                  className="rounded-xl bg-[#2F80ED] px-6 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98]"
+                  className="w-full sm:w-auto rounded-xl bg-[#2F80ED] px-6 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98]"
                 >
                   Simpan Pengaturan Geofence
                 </button>

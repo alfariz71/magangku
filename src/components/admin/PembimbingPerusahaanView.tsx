@@ -26,10 +26,10 @@ export const PembimbingPerusahaanView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
           <button
             onClick={() => setActiveSubTab('pembimbing')}
-            className={`rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
+            className={`flex-1 sm:flex-initial text-center rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
               activeSubTab === 'pembimbing' ? 'bg-[#2F80ED] text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >
@@ -37,7 +37,7 @@ export const PembimbingPerusahaanView: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveSubTab('perusahaan')}
-            className={`rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
+            className={`flex-1 sm:flex-initial text-center rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
               activeSubTab === 'perusahaan' ? 'bg-[#2F80ED] text-white shadow-sm' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
             }`}
           >

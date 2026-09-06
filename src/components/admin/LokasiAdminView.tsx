@@ -269,14 +269,14 @@ export default function LokasiAdminView() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3 sm:gap-0">
         <div>
           <h1 className="text-2xl font-bold text-[#183B66]">Lokasi & QR Code Absensi</h1>
           <p className="text-gray-500 text-sm mt-1">Setiap lokasi memiliki QR Code permanen masing-masing</p>
         </div>
         <button
           onClick={() => { setFormData({ name: '', address: '', latitude: 0, longitude: 0, radiusMeters: 50, minGpsAccuracy: 300, isActive: true }); setEditId(null); setShowForm(true); }}
-          className="flex items-center gap-2 bg-[#2F80ED] text-white px-4 py-2.5 rounded-xl hover:bg-blue-600 transition font-semibold text-sm"
+          className="flex items-center justify-center gap-2 bg-[#2F80ED] text-white px-4 py-2.5 rounded-xl hover:bg-blue-600 transition font-semibold text-sm w-full sm:w-auto"
         >
           <Plus size={18} /> Tambah Lokasi
         </button>
@@ -369,7 +369,7 @@ export default function LokasiAdminView() {
 
                 {/* QR Code Section */}
                 <div className="p-5">
-                  <div className="flex gap-5 items-center">
+                  <div className="flex flex-col sm:flex-row gap-5 items-center sm:items-start">
                     {/* QR Display */}
                     <div className="shrink-0 flex flex-col items-center">
                       {token ? (
@@ -385,7 +385,7 @@ export default function LokasiAdminView() {
                     </div>
 
                     {/* Info & Actions */}
-                    <div className="flex-1 space-y-3">
+                    <div className="w-full sm:w-auto flex-1 space-y-3">
                       <div className="space-y-1.5">
                         <div className="flex items-center gap-2 text-xs text-slate-500">
                           <span className="font-semibold w-16">Radius</span>

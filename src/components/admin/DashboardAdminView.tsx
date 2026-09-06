@@ -225,75 +225,77 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
           {/* Bar Chart Visualization */}
           <div className="mt-6">
             {/* Grid & Bars Container */}
-            <div className="relative h-64 w-full">
-              {/* Horizontal Grid lines */}
-              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
-                {[100, 75, 50, 25, 0].map((val) => (
-                  <div key={val} className="flex items-center w-full">
-                    <span className="w-8 text-[10px] text-slate-400">{val}%</span>
-                    <div className="h-px w-full border-b border-dashed border-slate-100" />
-                  </div>
-                ))}
-              </div>
-
-              {/* Bars Columns */}
-              <div className="absolute inset-0 pl-9 flex items-end justify-between pr-2">
-                {weeklyData.map((item, idx) => {
-                  const isToday = item.fullDate === todayStr;
-                  return (
-                    <div
-                      key={idx}
-                      className="flex flex-col items-center group relative h-full justify-end w-12"
-                      title={`${item.day} (${item.date})\n• Hadir: ${item.hadirCount} org (${item.hadir}%)\n• Terlambat: ${item.terlambatCount} org (${item.terlambat}%)\n• Izin: ${item.izinCount} org (${item.izin}%)`}
-                    >
-                      {/* Bar Cluster */}
-                      <div className="flex items-end gap-1 mb-2">
-                        {/* Hadir Bar */}
-                        <div className="flex flex-col items-center">
-                          <span className="text-[10px] font-bold text-[#2F80ED] opacity-0 group-hover:opacity-100 transition-opacity mb-1">
-                            {item.hadir}%
-                          </span>
-                          <div
-                            style={{ height: `${item.hadir > 0 ? Math.max(4, (item.hadir / 100) * 190) : 0}px` }}
-                            className="w-3 rounded-t-sm bg-[#2F80ED] shadow-sm transition-all group-hover:brightness-110"
-                          />
-                        </div>
-
-                        {/* Terlambat Bar */}
-                        <div className="flex flex-col items-center">
-                          <span className="text-[9px] font-bold text-[#EB5757] opacity-0 group-hover:opacity-100 transition-opacity mb-1">
-                            {item.terlambat}%
-                          </span>
-                          <div
-                            style={{ height: `${item.terlambat > 0 ? Math.max(4, (item.terlambat / 100) * 190) : 0}px` }}
-                            className="w-2.5 rounded-t-sm bg-[#EB5757] shadow-sm transition-all group-hover:brightness-110"
-                          />
-                        </div>
-
-                        {/* Izin Bar */}
-                        <div className="flex flex-col items-center">
-                          <span className="text-[9px] font-bold text-[#F2994A] opacity-0 group-hover:opacity-100 transition-opacity mb-1">
-                            {item.izin}%
-                          </span>
-                          <div
-                            style={{ height: `${item.izin > 0 ? Math.max(4, (item.izin / 100) * 190) : 0}px` }}
-                            className="w-2.5 rounded-t-sm bg-[#F2C94C] shadow-sm transition-all group-hover:brightness-110"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Day & Date Labels */}
-                      <div className="text-center">
-                        <p className={`text-[11px] ${isToday ? 'text-[#2F80ED] font-bold' : 'font-semibold text-slate-700'}`}>
-                          {item.day}
-                        </p>
-                        <p className={`text-[10px] ${isToday ? 'text-[#2F80ED] font-semibold' : 'text-slate-400'}`}>
-                          {item.date}
-                        </p>
-                      </div>
+            <div className="overflow-x-auto pb-2 -mx-2 px-2 sm:mx-0 sm:px-0">
+              <div className="relative h-64 min-w-[480px] w-full">
+                {/* Horizontal Grid lines */}
+                <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
+                  {[100, 75, 50, 25, 0].map((val) => (
+                    <div key={val} className="flex items-center w-full">
+                      <span className="w-8 text-[10px] text-slate-400">{val}%</span>
+                      <div className="h-px w-full border-b border-dashed border-slate-100" />
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+
+                {/* Bars Columns */}
+                <div className="absolute inset-0 pl-9 flex items-end justify-between pr-2">
+                  {weeklyData.map((item, idx) => {
+                    const isToday = item.fullDate === todayStr;
+                    return (
+                      <div
+                        key={idx}
+                        className="flex flex-col items-center group relative h-full justify-end w-12"
+                        title={`${item.day} (${item.date})\n• Hadir: ${item.hadirCount} org (${item.hadir}%)\n• Terlambat: ${item.terlambatCount} org (${item.terlambat}%)\n• Izin: ${item.izinCount} org (${item.izin}%)`}
+                      >
+                        {/* Bar Cluster */}
+                        <div className="flex items-end gap-1 mb-2">
+                          {/* Hadir Bar */}
+                          <div className="flex flex-col items-center">
+                            <span className="text-[10px] font-bold text-[#2F80ED] opacity-0 group-hover:opacity-100 transition-opacity mb-1">
+                              {item.hadir}%
+                            </span>
+                            <div
+                              style={{ height: `${item.hadir > 0 ? Math.max(4, (item.hadir / 100) * 190) : 0}px` }}
+                              className="w-3 rounded-t-sm bg-[#2F80ED] shadow-sm transition-all group-hover:brightness-110"
+                            />
+                          </div>
+
+                          {/* Terlambat Bar */}
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] font-bold text-[#EB5757] opacity-0 group-hover:opacity-100 transition-opacity mb-1">
+                              {item.terlambat}%
+                            </span>
+                            <div
+                              style={{ height: `${item.terlambat > 0 ? Math.max(4, (item.terlambat / 100) * 190) : 0}px` }}
+                              className="w-2.5 rounded-t-sm bg-[#EB5757] shadow-sm transition-all group-hover:brightness-110"
+                            />
+                          </div>
+
+                          {/* Izin Bar */}
+                          <div className="flex flex-col items-center">
+                            <span className="text-[9px] font-bold text-[#F2994A] opacity-0 group-hover:opacity-100 transition-opacity mb-1">
+                              {item.izin}%
+                            </span>
+                            <div
+                              style={{ height: `${item.izin > 0 ? Math.max(4, (item.izin / 100) * 190) : 0}px` }}
+                              className="w-2.5 rounded-t-sm bg-[#F2C94C] shadow-sm transition-all group-hover:brightness-110"
+                            />
+                          </div>
+                        </div>
+
+                        {/* Day & Date Labels */}
+                        <div className="text-center">
+                          <p className={`text-[11px] ${isToday ? 'text-[#2F80ED] font-bold' : 'font-semibold text-slate-700'}`}>
+                            {item.day}
+                          </p>
+                          <p className={`text-[10px] ${isToday ? 'text-[#2F80ED] font-semibold' : 'text-slate-400'}`}>
+                            {item.date}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
 
@@ -406,8 +408,8 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
           </button>
         </div>
 
-        {/* Table */}
-        <div className="mt-4 overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block mt-4 overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-slate-600 font-bold">
@@ -468,6 +470,54 @@ export const DashboardAdminView: React.FC<DashboardAdminViewProps> = ({ onNaviga
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card List View */}
+        <div className="block md:hidden mt-4 space-y-3">
+          {auditLogs.slice(0, 5).map((log) => (
+            <div key={log.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5 space-y-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                {log.action === 'Pengajuan Izin' && (
+                  <span className="rounded-full bg-[#FEF8E8] px-2.5 py-0.5 text-[11px] font-semibold text-[#F2994A] border border-[#F2994A]/25">
+                    Pengajuan Izin
+                  </span>
+                )}
+                {log.action === 'Jurnal Diperbarui' && (
+                  <span className="rounded-full bg-[#E8F8EE] px-2.5 py-0.5 text-[11px] font-semibold text-[#27AE60] border border-[#27AE60]/25">
+                    Jurnal Diperbarui
+                  </span>
+                )}
+                {log.action === 'Peserta Baru' && (
+                  <span className="rounded-full bg-[#EBF3FE] px-2.5 py-0.5 text-[11px] font-semibold text-[#2F80ED] border border-[#2F80ED]/25">
+                    Peserta Baru
+                  </span>
+                )}
+                {log.action === 'Perusahaan Diperbarui' && (
+                  <span className="rounded-full bg-[#F3E8FF] px-2.5 py-0.5 text-[11px] font-semibold text-[#9333EA] border border-[#9333EA]/25">
+                    Perusahaan Diperbarui
+                  </span>
+                )}
+                {log.action.includes('Absensi') && (
+                  <span className="rounded-full bg-[#E0F2FE] px-2.5 py-0.5 text-[11px] font-semibold text-[#0284C7] border border-[#0284C7]/25">
+                    Absensi Diperbarui
+                  </span>
+                )}
+                {!['Pengajuan Izin', 'Jurnal Diperbarui', 'Peserta Baru', 'Perusahaan Diperbarui'].some(k => log.action.includes(k)) && !log.action.includes('Absensi') && (
+                  <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold text-slate-700">
+                    {log.action}
+                  </span>
+                )}
+                <span className="text-[11px] text-slate-400 flex items-center gap-1">
+                  <Calendar className="h-3 w-3" />
+                  {log.timestamp}
+                </span>
+              </div>
+              <p className="text-xs text-slate-800 font-medium leading-relaxed">{log.details}</p>
+              <div className="text-[11px] text-slate-500 pt-1 border-t border-slate-200/60 flex items-center justify-between">
+                <span>Oleh: <strong className="text-slate-700 font-semibold">{log.performedBy}</strong></span>
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     </div>

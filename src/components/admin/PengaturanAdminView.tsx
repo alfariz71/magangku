@@ -190,19 +190,20 @@ export const PengaturanAdminView: React.FC = () => {
             <h3 className="text-base font-bold text-[#183B66]">Audit Log Sistem & Jejak Keamanan</h3>
           </div>
 
-          <div className="relative">
+          <div className="relative w-full sm:w-auto">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
             <input
               type="text"
               value={searchLog}
               onChange={e => setSearchLog(e.target.value)}
               placeholder="Cari jejak audit..."
-              className="rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs focus:border-[#2F80ED] focus:bg-white focus:outline-none"
+              className="w-full sm:w-64 rounded-xl border border-slate-200 bg-slate-50 py-2 sm:py-1.5 pl-8 pr-3 text-xs focus:border-[#2F80ED] focus:bg-white focus:outline-none"
             />
           </div>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block mt-4 overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-slate-600 font-bold">
@@ -229,6 +230,31 @@ export const PengaturanAdminView: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card List View */}
+        <div className="block md:hidden mt-4 space-y-3">
+          {filteredLogs.length === 0 ? (
+            <p className="text-center py-8 text-xs text-slate-400">Tidak ada log audit sesuai pencarian</p>
+          ) : (
+            filteredLogs.map(log => (
+              <div key={log.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-3.5 space-y-2">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                      {log.category}
+                    </span>
+                    <span className="font-bold text-xs text-slate-900">{log.action}</span>
+                  </div>
+                  <span className="text-[11px] text-slate-400 font-mono">{log.timestamp}</span>
+                </div>
+                <p className="text-xs text-slate-700 leading-relaxed">{log.details}</p>
+                <div className="text-[11px] text-slate-500 pt-1.5 border-t border-slate-200/60 flex items-center justify-between">
+                  <span>Oleh: <strong className="text-slate-800 font-semibold">{log.performedBy}</strong></span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

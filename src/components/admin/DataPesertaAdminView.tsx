@@ -132,7 +132,8 @@ export const DataPesertaAdminView: React.FC = () => {
 
       {/* Table Card */}
       <div className="rounded-[16px] border border-slate-100 bg-white p-6 shadow-sm">
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-slate-600 font-bold">
@@ -158,7 +159,7 @@ export const DataPesertaAdminView: React.FC = () => {
                     {/* Mahasiswa Name & Avatar */}
                     <td className="py-3.5 pr-3">
                       <div className="flex items-center gap-3">
-                        <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full ring-2 ring-slate-100 shadow-sm">
+                        <div className="relative h-9 w-9 overflow-hidden rounded-full ring-2 ring-slate-100 shrink-0">
                           <img
                             src={student.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'}
                             alt={student.name}
@@ -167,34 +168,33 @@ export const DataPesertaAdminView: React.FC = () => {
                         </div>
                         <div>
                           <p className="font-bold text-slate-900">{student.name}</p>
-                          <p className="text-[11px] text-slate-400">{student.email}</p>
+                          <p className="text-xs text-slate-500">{student.email}</p>
                         </div>
                       </div>
                     </td>
 
-                    {/* NIM & Phone */}
+                    {/* NIM & Kontak */}
                     <td className="py-3.5 px-3">
-                      <p className="font-semibold text-slate-800">{student.nim || '-'}</p>
-                      <p className="text-[11px] text-slate-400">{student.phone || '-'}</p>
+                      <p className="font-mono text-xs text-slate-800">{student.nim || '-'}</p>
+                      <p className="text-[11px] text-slate-500">{student.phone || '-'}</p>
                     </td>
 
-                    {/* University & Major */}
+                    {/* Universitas & Jurusan */}
                     <td className="py-3.5 px-3">
-                      <p className="font-medium text-slate-800">{student.university || '-'}</p>
+                      <p className="font-semibold text-slate-800">{student.university || '-'}</p>
                       <p className="text-[11px] text-slate-500">{student.major || '-'}</p>
                     </td>
 
-                    {/* Concentration */}
-                    <td className="py-3.5 px-3 text-slate-700">
-                      {student.concentration || '-'}
+                    {/* Konsentrasi Magang */}
+                    <td className="py-3.5 px-3">
+                      <span className="inline-flex rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[#2F80ED]">
+                        {student.concentration || student.position || 'Peserta Magang'}
+                      </span>
                     </td>
 
                     {/* Periode */}
-                    <td className="py-3.5 px-3 text-slate-600 whitespace-nowrap">
-                      <div className="text-[11px]">
-                        <span>{student.startDate || '20 Mei 2025'}</span>
-                        <div className="text-slate-400">s/d {student.endDate || '20 Agu 2025'}</div>
-                      </div>
+                    <td className="py-3.5 px-3 whitespace-nowrap text-xs text-slate-600">
+                      {student.startDate ? `${student.startDate} s/d ${student.endDate || '-'}` : '-'}
                     </td>
 
                     {/* Status */}
@@ -249,6 +249,111 @@ export const DataPesertaAdminView: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Card-based View */}
+        <div className="block md:hidden space-y-3">
+          {filteredStudents.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 text-xs">
+              Tidak ditemukan data peserta magang yang sesuai
+            </div>
+          ) : (
+            filteredStudents.map((student) => (
+              <div
+                key={`m-student-${student.id}`}
+                className="rounded-xl border border-slate-200/70 bg-white p-4 shadow-2xs space-y-3"
+              >
+                {/* Header: Avatar, Name, Status */}
+                <div className="flex items-start justify-between gap-2.5">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="relative h-10 w-10 overflow-hidden rounded-full ring-2 ring-slate-100 shrink-0">
+                      <img
+                        src={student.avatar || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150'}
+                        alt={student.name}
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                    <div className="truncate">
+                      <p className="font-bold text-slate-900 text-sm truncate">{student.name}</p>
+                      <p className="text-xs text-slate-500 font-mono">{student.nim || '-'}</p>
+                    </div>
+                  </div>
+
+                  {student.status === 'Aktif' ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-[#27AE60] border border-emerald-200 shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#27AE60]" />
+                      Aktif
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500 border border-slate-200 shrink-0">
+                      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                      Nonaktif
+                    </span>
+                  )}
+                </div>
+
+                {/* Details Grid */}
+                <div className="grid grid-cols-2 gap-2 bg-slate-50/80 rounded-lg p-2.5 text-xs">
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Universitas</span>
+                    <span className="font-semibold text-slate-800 line-clamp-1">{student.university || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Jurusan</span>
+                    <span className="font-semibold text-slate-800 line-clamp-1">{student.major || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-medium mb-0.5">No. HP</span>
+                    <span className="font-semibold text-slate-800 line-clamp-1">{student.phone || '-'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Konsentrasi</span>
+                    <span className="font-semibold text-[#2F80ED] line-clamp-1">{student.concentration || student.position || 'Magang'}</span>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="grid grid-cols-3 gap-2 pt-1 border-t border-slate-100">
+                  <button
+                    onClick={() => setViewDetailStudent(student)}
+                    className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                  >
+                    <GraduationCap className="h-3.5 w-3.5 text-[#2F80ED]" />
+                    <span>Detail</span>
+                  </button>
+
+                  <button
+                    onClick={() => setEditingStudent(student)}
+                    className="flex items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition"
+                  >
+                    <Edit className="h-3.5 w-3.5 text-slate-500" />
+                    <span>Edit</span>
+                  </button>
+
+                  <button
+                    onClick={() => toggleStudentStatus(student.id)}
+                    className={`flex items-center justify-center gap-1 rounded-lg border py-2 text-xs font-medium transition ${
+                      student.status === 'Aktif'
+                        ? 'border-rose-200 text-rose-600 bg-rose-50/50 hover:bg-rose-100'
+                        : 'border-emerald-200 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-100'
+                    }`}
+                  >
+                    {student.status === 'Aktif' ? (
+                      <>
+                        <UserX className="h-3.5 w-3.5" />
+                        <span>Nonaktif</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserCheck className="h-3.5 w-3.5" />
+                        <span>Aktifkan</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

@@ -88,7 +88,8 @@ export const AktivitasAdminView: React.FC = () => {
 
       {/* Activities Table Card */}
       <div className="rounded-[16px] border border-slate-100 bg-white p-6 shadow-sm">
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-slate-600 font-bold">
@@ -220,6 +221,104 @@ export const AktivitasAdminView: React.FC = () => {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile View: Cards Grouped by Date */}
+        <div className="block md:hidden space-y-4">
+          {filteredActivities.length === 0 ? (
+            <div className="py-12 text-center text-slate-400">
+              <Calendar className="mx-auto mb-2 h-8 w-8 opacity-30" />
+              <p>Tidak ada aktivitas yang sesuai dengan pencarian</p>
+            </div>
+          ) : (
+            groupedByDate.map(({ date, dateActivities }) => {
+              const label = getDateLabel(date);
+              const isToday = date === todayStr;
+
+              return (
+                <div key={date} className="space-y-2.5">
+                  {/* Date Badge / Separator */}
+                  <div className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold ${
+                    isToday ? 'bg-blue-50 text-[#2F80ED] border border-blue-100' : 'bg-slate-100/80 text-slate-600'
+                  }`}>
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />
+                      <span>{formatDateHeader(date)}</span>
+                      {label && (
+                        <span className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                          isToday ? 'bg-[#2F80ED] text-white' : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {label}
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-semibold opacity-70">
+                      {dateActivities.length} aktivitas
+                    </span>
+                  </div>
+
+                  {/* Activity Cards */}
+                  <div className="space-y-2.5">
+                    {dateActivities.map(act => (
+                      <div key={act.id} className="rounded-xl border border-slate-100 bg-slate-50/60 p-4 space-y-2.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <p className="font-bold text-slate-900 text-xs">{act.studentName || 'Peserta'}</p>
+                            <p className="text-[10px] text-slate-400 font-mono">{act.studentNim || '-'}</p>
+                          </div>
+                          <div className="inline-flex items-center gap-1 rounded-md bg-white border border-slate-200/70 px-2 py-0.5 text-[10px] font-semibold text-slate-600 shrink-0">
+                            <Clock className="h-3 w-3 text-slate-400" />
+                            <span>{act.time || '08:00 - 17:00'}</span>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-semibold text-slate-900">{act.title}</p>
+                          {act.description && !act.description.startsWith('Waktu: ') && (
+                            <p className="text-[11px] text-slate-600 mt-1 leading-relaxed whitespace-pre-line">
+                              {act.description}
+                            </p>
+                          )}
+                        </div>
+
+                        {act.attachmentUrl && (
+                          <div className="pt-2 border-t border-slate-200/60">
+                            {isVideoUrl(act.attachmentUrl) ? (
+                              <button
+                                onClick={() => setSelectedPhoto({
+                                  url: act.attachmentUrl!,
+                                  title: act.title,
+                                  student: act.studentName || 'Peserta',
+                                  date: formatDateHeader(act.activityDate || date)
+                                })}
+                                className="w-full justify-center inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/80 px-2.5 py-1.5 text-xs font-semibold text-purple-600 hover:bg-purple-100 transition shadow-2xs cursor-pointer"
+                              >
+                                <Video className="h-3.5 w-3.5" />
+                                <span>Lihat Video Kegiatan</span>
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => setSelectedPhoto({
+                                  url: act.attachmentUrl!,
+                                  title: act.title,
+                                  student: act.studentName || 'Peserta',
+                                  date: formatDateHeader(act.activityDate || date)
+                                })}
+                                className="w-full justify-center inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-1.5 text-xs font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                              >
+                                <ImageIcon className="h-3.5 w-3.5" />
+                                <span>Lihat Foto Kegiatan</span>
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 

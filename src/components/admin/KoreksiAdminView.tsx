@@ -153,20 +153,22 @@ export default function KoreksiAdminView() {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           {filteredRequests.length > 0 ? (
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-white border-b border-gray-100">
-                  <th className="p-4 font-semibold text-gray-600 text-sm">Peserta</th>
-                  <th className="p-4 font-semibold text-gray-600 text-sm">Tanggal & Jenis</th>
-                  <th className="p-4 font-semibold text-gray-600 text-sm w-[340px] max-w-[340px]">Alasan Koreksi</th>
-                  <th className="p-4 font-semibold text-gray-600 text-sm">Bukti Foto</th>
-                  <th className="p-4 font-semibold text-gray-600 text-sm">Status</th>
-                  <th className="p-4 font-semibold text-gray-600 text-sm">Aksi</th>
+                  <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Peserta</th>
+                  <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tanggal Absensi</th>
+                  <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Koreksi Waktu</th>
+                  <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Alasan &amp; Catatan</th>
+                  <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Bukti</th>
+                  <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="p-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50 dark:divide-slate-700/60">
+              <tbody className="divide-y divide-gray-100 text-sm">
                 {filteredRequests.map(req => (
                   <tr key={req.id} className="hover:bg-blue-50/30 dark:hover:bg-slate-800/40 transition">
                     <td className="p-4 align-top">
@@ -255,6 +257,100 @@ export default function KoreksiAdminView() {
               <p className="text-lg font-bold text-gray-600 mb-1">Tidak ada permintaan koreksi</p>
               <p className="text-sm">Belum ada data atau filter pencarian terlalu spesifik.</p>
             </div>
+          )}
+        </div>
+
+        {/* Mobile Card-based View */}
+        <div className="block md:hidden p-4 space-y-3">
+          {filteredRequests.length === 0 ? (
+            <div className="py-8 text-center text-gray-400 text-xs">
+              <ClipboardCheck size={40} className="mx-auto mb-2 opacity-30" />
+              <p>Tidak ada permintaan koreksi</p>
+            </div>
+          ) : (
+            filteredRequests.map((req) => (
+              <div
+                key={`m-koreksi-${req.id}`}
+                className="rounded-xl border border-gray-100 bg-white p-4 shadow-2xs space-y-3"
+              >
+                {/* Header: Name & Status */}
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="font-bold text-[#183B66] text-sm">{req.studentName || 'Peserta'}</p>
+                    <p className="text-xs text-gray-400 font-mono">{req.studentNim || '-'}</p>
+                  </div>
+                  <div>{getStatusBadge(req.status)}</div>
+                </div>
+
+                {/* Date & Type */}
+                <div className="bg-gray-50 rounded-xl p-3 space-y-2 text-xs">
+                  <div className="flex items-center justify-between border-b border-gray-200/60 pb-1.5">
+                    <span className="text-gray-400">Tanggal Absensi</span>
+                    <span className="font-semibold text-gray-800">{formatDateShort(req.attendanceDate)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-400">Jenis Kendala</span>
+                    <span className="font-semibold text-[#2F80ED]">{req.correctionType}</span>
+                  </div>
+                  {(req.requestedCheckIn || req.requestedCheckOut) && (
+                    <div className="pt-1.5 border-t border-gray-200/60 flex items-center justify-between">
+                      <span className="text-gray-400">Jam Diajukan</span>
+                      <span className="font-bold text-emerald-600">
+                        {req.requestedCheckIn || '--:--'} s/d {req.requestedCheckOut || '--:--'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Reason & Proof */}
+                <div className="text-xs space-y-2">
+                  <p className="text-gray-600 leading-relaxed text-[11px]">
+                    <strong className="text-gray-700">Alasan:</strong> {req.reason}
+                  </p>
+                  {req.evidenceUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedEvidenceModal({
+                        url: req.evidenceUrl!,
+                        studentName: req.studentName || 'Peserta',
+                        date: formatDateShort(req.attendanceDate)
+                      })}
+                      className="inline-flex items-center gap-1.5 text-xs text-[#2F80ED] font-semibold hover:underline"
+                    >
+                      <ImageIcon size={14} />
+                      <span>Lihat Foto Bukti Kehadiran</span>
+                    </button>
+                  )}
+                  {req.adminNotes && (
+                    <div className="text-xs bg-amber-50 border border-amber-200 rounded-lg p-2 text-amber-800">
+                      <span className="font-semibold block text-[10px] text-amber-600 uppercase">Catatan Admin:</span>
+                      {req.adminNotes}
+                    </div>
+                  )}
+                </div>
+
+                {/* Action Button */}
+                <div className="pt-2 border-t border-gray-100">
+                  {req.status === 'Menunggu' ? (
+                    <button
+                      onClick={() => { setSelectedReq(req); setAdminNotes(''); }}
+                      className="w-full flex items-center justify-center gap-2 bg-[#2F80ED] text-white py-2.5 rounded-xl text-xs font-semibold hover:bg-blue-600 transition shadow-xs"
+                    >
+                      <Eye size={15} />
+                      <span>Tinjau &amp; Proses Permintaan</span>
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => { setSelectedReq(req); setAdminNotes(''); }}
+                      className="w-full flex items-center justify-center gap-1.5 border border-gray-200 text-gray-600 py-2 rounded-xl text-xs font-medium hover:bg-gray-50 transition"
+                    >
+                      <Eye size={14} />
+                      <span>Lihat Detail Koreksi</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
           )}
         </div>
       </div>
