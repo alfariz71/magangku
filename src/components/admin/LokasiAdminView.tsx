@@ -124,21 +124,21 @@ export default function LokasiAdminView() {
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, 1414, 2000);
 
-      // 2. Bagian Atas: Judul QR Presensi Kehadiran
+      // 2. Bagian Atas: Judul QR Presensi Kehadiran (28 pt Word = 66 px)
       ctx.textAlign = 'center';
-      ctx.font = 'bold 54px Inter, system-ui, -apple-system, sans-serif';
+      ctx.font = 'bold 66px Inter, system-ui, -apple-system, sans-serif';
       ctx.fillStyle = '#0F172A';
       ctx.fillText('QR PRESENSI KEHADIRAN', 707, 180);
 
       // Aksen garis biru minimalis di bawah judul
       ctx.fillStyle = '#2F80ED';
-      drawRoundRect(ctx, 707 - 70, 215, 140, 6, 3);
+      drawRoundRect(ctx, 707 - 80, 218, 160, 7, 4);
       ctx.fill();
 
       // 3. Bagian Tengah: QR Code Jumbo (~70% lebar halaman A4)
       const qrBoxSize = 1040;
       const qrBoxX = (1414 - qrBoxSize) / 2; // 187 px
-      const qrBoxY = 280;
+      const qrBoxY = 285;
       const qrPadding = 40;
       const qrInnerSize = qrBoxSize - (qrPadding * 2); // 960 px (~68-70% lebar A4)
 
@@ -191,13 +191,13 @@ export default function LokasiAdminView() {
         return currentY + lineHeight;
       };
 
-      // 4. Bagian Bawah: Nama Lokasi Kantor
-      let currentY = qrBoxY + qrBoxSize + 90; // ~1410 px
-      currentY = printWrappedText(loc.name, currentY, 48, 'bold', '#0F172A', 1150, 64);
+      // 4. Bagian Bawah: Nama Lokasi Kantor (24 pt Word = 57 px)
+      let currentY = qrBoxY + qrBoxSize + 95; // ~1420 px
+      currentY = printWrappedText(loc.name, currentY, 57, 'bold', '#0F172A', 1150, 74);
 
-      // 5. Teks Kecil: Radius & Alamat Jalan Kantor
+      // 5. Teks Kecil: Radius & Alamat Jalan Kantor (15 pt Word = 36 px)
       const radiusAndAddress = `Radius Presensi: ${loc.radiusMeters} Meter • ${loc.address || 'Alamat kantor terdaftar'}`;
-      printWrappedText(radiusAndAddress, currentY + 15, 26, 'normal', '#64748B', 1150, 40);
+      printWrappedText(radiusAndAddress, currentY + 18, 36, 'normal', '#64748B', 1150, 50);
 
       // Trigger Download Gambar HD
       const a = document.createElement('a');
