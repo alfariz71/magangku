@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { Plus, X, Check, Calendar, Clock, AlertCircle, Camera, Image as ImageIcon, Video, Upload, ExternalLink } from 'lucide-react';
+import { Plus, X, Check, Calendar, Clock, AlertCircle, Camera, Image as ImageIcon, Video, Upload, ExternalLink, Edit2, Trash2 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { uploadToCloudinary, isVideoUrl } from '../../lib/cloudinary';
+import { ActivityRecord } from '../../types';
 
 export const AktivitasMagangView: React.FC = () => {
-  const { activities, addActivity } = useData();
+  const { activities, addActivity, updateActivity, deleteActivity } = useData();
   const { currentUser } = useAuth();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -25,8 +26,120 @@ export const AktivitasMagangView: React.FC = () => {
   const [docDesc, setDocDesc] = useState('');
   const [isUploading, setIsUploading] = useState(false);
 
-  // State untuk modal preview foto (lightbox)
+  // State untuk modal preview foto & video (lightbox)
   const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; title: string; date: string } | null>(null);
+
+  // States untuk Edit Aktivitas
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editingActivity, setEditingActivity] = useState<ActivityRecord | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editTime, setEditTime] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editAttachmentUrl, setEditAttachmentUrl] = useState<string | undefined>('');
+  const [editNewMedia, setEditNewMedia] = useState<File | null>(null);
+  const [editNewMediaPreview, setEditNewMediaPreview] = useState<string>('');
+  const [editNewMediaType, setEditNewMediaType] = useState<'image' | 'video'>('image');
+  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+
+  const handleOpenEdit = (act: ActivityRecord) => {
+    setEditingActivity(act);
+    setEditTitle(act.title);
+    setEditDate(act.activityDate);
+    setEditTime(act.time || '08:00 - 17:00 WIB');
+    setEditDesc(act.description && !act.description.startsWith('Waktu: ') ? act.description : '');
+    setEditAttachmentUrl(act.attachmentUrl || '');
+    setEditNewMedia(null);
+    setEditNewMediaPreview('');
+    setEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingActivity || !editTitle.trim()) return;
+    setIsSubmittingEdit(true);
+    try {
+      let finalUrl = editAttachmentUrl;
+      if (editNewMedia) {
+        if (editNewMediaType === 'image') {
+          const compressed = await compressImage(editNewMedia);
+          finalUrl = await uploadToCloudinary(compressed, 'magangku/aktivitas');
+        } else {
+          finalUrl = await uploadToCloudinary(editNewMedia, 'magangku/aktivitas');
+        }
+      }
+
+      await updateActivity(editingActivity.id, {
+        title: editTitle,
+        activityDate: editDate,
+        time: editTime,
+        description: editDesc,
+        attachmentUrl: finalUrl || undefined,
+      });
+
+      setEditModalOpen(false);
+      setEditingActivity(null);
+    } catch (err) {
+      console.error('Error updating activity:', err);
+      alert('Gagal memperbarui aktivitas: ' + (err instanceof Error ? err.message : 'Terjadi kesalahan'));
+    } finally {
+      setIsSubmittingEdit(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Apakah Anda yakin ingin menghapus aktivitas kegiatan ini?')) return;
+    try {
+      await deleteActivity(id);
+    } catch (err) {
+      console.error('Error deleting activity:', err);
+      alert('Gagal menghapus aktivitas: ' + (err instanceof Error ? err.message : 'Terjadi kesalahan'));
+    }
+  };
+
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+
+  const getDateLabel = (dateStr: string) => {
+    if (dateStr === todayStr) return 'Hari Ini';
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayStr = yesterday.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    if (dateStr === yesterdayStr) return 'Kemarin';
+    return null;
+  };
+
+  const formatDateHeader = (dateStr: string) => {
+    try {
+      const d = new Date(dateStr + (dateStr.includes('T') ? '' : 'T00:00:00'));
+      const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      const day = dayNames[d.getDay()];
+      const dateNum = d.getDate();
+      const month = monthNames[d.getMonth()];
+      const year = d.getFullYear();
+      return `${day}, ${dateNum} ${month} ${year}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Group activities by date
+  const groupedByDate: { date: string; dateActivities: typeof activities }[] = [];
+  const sortedActivities = [...activities].sort((a, b) => {
+    const dateA = a.activityDate || '';
+    const dateB = b.activityDate || '';
+    return dateB.localeCompare(dateA);
+  });
+
+  sortedActivities.forEach(act => {
+    const actDate = act.activityDate || todayStr;
+    const existing = groupedByDate.find(g => g.date === actDate);
+    if (existing) {
+      existing.dateActivities.push(act);
+    } else {
+      groupedByDate.push({ date: actDate, dateActivities: [act] });
+    }
+  });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -188,84 +301,147 @@ export const AktivitasMagangView: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-slate-600 font-bold">
-                <th className="pb-3 pr-4 w-28">Hari</th>
-                <th className="pb-3 px-4 w-36">Tanggal</th>
-                <th className="pb-3 px-4">Judul & Deskripsi</th>
-                <th className="pb-3 px-4 w-36">Foto Dokumentasi</th>
-                <th className="pb-3 pl-4 w-44">Waktu</th>
+                <th className="py-3 px-4 w-44">Waktu</th>
+                <th className="py-3 px-4">Judul & Deskripsi Kegiatan</th>
+                <th className="py-3 px-4 w-36">Dokumentasi</th>
+                <th className="py-3 pl-4 pr-3 w-20 text-right">Aksi</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+            <tbody className="text-slate-700 font-medium">
               {activities.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-slate-400">
-                    Belum ada aktivitas yang dicatat. Klik '+ Tambah Aktivitas' di atas.
+                  <td colSpan={4} className="py-12 text-center text-slate-400">
+                    <Calendar className="mx-auto mb-2 h-8 w-8 opacity-30" />
+                    <p>Belum ada aktivitas yang dicatat. Klik '+ Tambah Aktivitas' di atas.</p>
                   </td>
                 </tr>
               ) : (
-                activities.map((act) => (
-                  <tr key={act.id} className="hover:bg-slate-50/80 transition-colors">
-                    {/* Hari */}
-                    <td className="py-4 pr-4 font-semibold text-slate-900 whitespace-nowrap">
-                      {new Date(act.activityDate + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long' })}
-                    </td>
+                groupedByDate.map(({ date, dateActivities }) => {
+                  const label = getDateLabel(date);
+                  const isToday = date === todayStr;
 
-                    {/* Tanggal */}
-                    <td className="py-4 px-4 text-slate-600 whitespace-nowrap">
-                      {new Date(act.activityDate + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}
-                    </td>
+                  return (
+                    <React.Fragment key={date}>
+                      {/* Date Separator Row (Pembatas Hari) */}
+                      <tr>
+                        <td colSpan={4} className="px-0 py-0">
+                          <div className={`flex items-center gap-3 px-4 py-2.5 ${
+                            isToday
+                              ? 'bg-blue-50/80 border-y border-blue-100'
+                              : 'bg-slate-50/70 border-y border-slate-100'
+                          }`}>
+                            <div className={`flex items-center gap-2 text-xs font-bold ${
+                              isToday ? 'text-[#2F80ED]' : 'text-slate-600'
+                            }`}>
+                              <Calendar className="h-3.5 w-3.5 text-[#2F80ED]" />
+                              <span>{formatDateHeader(date)}</span>
+                            </div>
+                            {label && (
+                              <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                                isToday
+                                  ? 'bg-[#2F80ED] text-white'
+                                  : 'bg-slate-200 text-slate-600'
+                              }`}>
+                                {label}
+                              </span>
+                            )}
+                            <div className="flex-1 h-px bg-current opacity-10" />
+                            <span className={`text-[10px] font-semibold ${
+                              isToday ? 'text-blue-500' : 'text-slate-400'
+                            }`}>
+                              {dateActivities.length} aktivitas
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
 
-                    {/* Judul & Deskripsi */}
-                    <td className="py-4 px-4 text-slate-800 font-medium max-w-md">
-                      <p className="font-semibold text-slate-900">{act.title}</p>
-                      {act.description && !act.description.startsWith('Waktu: ') && (
-                        <p className="text-xs text-slate-500 mt-1 leading-relaxed whitespace-pre-line">
-                          {act.description}
-                        </p>
-                      )}
-                    </td>
+                      {/* Activities for this Date */}
+                      {dateActivities.map((act, idx) => (
+                        <tr
+                          key={act.id}
+                          className={`hover:bg-slate-50/80 transition-colors ${
+                            idx < dateActivities.length - 1 ? 'border-b border-slate-100/60' : ''
+                          }`}
+                        >
+                          {/* Waktu Pelaksanaan */}
+                          <td className="py-3.5 px-4 whitespace-nowrap text-slate-700">
+                            <div className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 border border-slate-200/70 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                              <Clock className="h-3.5 w-3.5 text-slate-400" />
+                              <span>{act.time || (act.createdAt ? new Date(act.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : '08:00 - 17:00 WIB')}</span>
+                            </div>
+                          </td>
 
-                    {/* Kolom Khusus Media Dokumentasi (Foto / Video) */}
-                    <td className="py-4 px-4 whitespace-nowrap">
-                      {act.attachmentUrl ? (
-                        isVideoUrl(act.attachmentUrl) ? (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedPhoto({
-                              url: act.attachmentUrl!,
-                              title: act.title,
-                              date: new Date(act.activityDate + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
-                            })}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/80 px-2.5 py-1 text-[11px] font-semibold text-purple-600 hover:bg-purple-100 transition shadow-2xs cursor-pointer"
-                          >
-                            <Video className="h-3.5 w-3.5" />
-                            <span>Lihat Video</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setSelectedPhoto({
-                              url: act.attachmentUrl!,
-                              title: act.title,
-                              date: new Date(act.activityDate + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
-                            })}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-[11px] font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs cursor-pointer"
-                          >
-                            <ImageIcon className="h-3.5 w-3.5" />
-                            <span>Lihat Foto</span>
-                          </button>
-                        )
-                      ) : (
-                        <span className="text-slate-300 text-xs">—</span>
-                      )}
-                    </td>
+                          {/* Judul & Deskripsi */}
+                          <td className="py-3.5 px-4 text-slate-800 font-medium max-w-md">
+                            <p className="font-semibold text-slate-900">{act.title}</p>
+                            {act.description && !act.description.startsWith('Waktu: ') && (
+                              <p className="text-xs text-slate-500 mt-1 leading-relaxed whitespace-pre-line">
+                                {act.description}
+                              </p>
+                            )}
+                          </td>
 
-                    {/* Waktu */}
-                    <td className="py-4 pl-4 text-slate-600 font-medium whitespace-nowrap">
-                      {act.time || (act.createdAt ? new Date(act.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : '08:00 - 17:00 WIB')}
-                    </td>
-                  </tr>
-                ))
+                          {/* Dokumentasi (Foto / Video) */}
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {act.attachmentUrl ? (
+                              isVideoUrl(act.attachmentUrl) ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPhoto({
+                                    url: act.attachmentUrl!,
+                                    title: act.title,
+                                    date: formatDateHeader(act.activityDate || date)
+                                  })}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/80 px-2.5 py-1 text-[11px] font-semibold text-purple-600 hover:bg-purple-100 transition shadow-2xs cursor-pointer"
+                                >
+                                  <Video className="h-3.5 w-3.5" />
+                                  <span>Lihat Video</span>
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedPhoto({
+                                    url: act.attachmentUrl!,
+                                    title: act.title,
+                                    date: formatDateHeader(act.activityDate || date)
+                                  })}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-[11px] font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                                >
+                                  <ImageIcon className="h-3.5 w-3.5" />
+                                  <span>Lihat Foto</span>
+                                </button>
+                              )
+                            ) : (
+                              <span className="text-slate-300 text-xs">—</span>
+                            )}
+                          </td>
+
+                          {/* Aksi (Edit & Hapus) */}
+                          <td className="py-3.5 pl-4 pr-3 whitespace-nowrap text-right">
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleOpenEdit(act)}
+                                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-[#2F80ED] hover:border-blue-200 hover:bg-blue-50 transition shadow-2xs cursor-pointer"
+                                title="Edit Aktivitas"
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(act.id)}
+                                className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition shadow-2xs cursor-pointer"
+                                title="Hapus Aktivitas"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </React.Fragment>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -516,6 +692,176 @@ export const AktivitasMagangView: React.FC = () => {
                 Tutup
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Edit Aktivitas */}
+      {editModalOpen && editingActivity && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onClick={() => setEditModalOpen(false)} />
+          <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3.5">
+              <h3 className="text-base font-bold text-[#183B66]">Edit Aktivitas Magang</h3>
+              <button
+                type="button"
+                onClick={() => setEditModalOpen(false)}
+                className="rounded-lg p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="mt-4 space-y-4">
+              {/* Tanggal & Waktu */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal</label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Waktu Pelaksanaan</label>
+                  <input
+                    type="text"
+                    value={editTime}
+                    onChange={(e) => setEditTime(e.target.value)}
+                    placeholder="08:00 - 17:00 WIB"
+                    className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Judul Kegiatan */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Judul Kegiatan *</label>
+                <input
+                  type="text"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                  placeholder="Judul kegiatan magang..."
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                  required
+                />
+              </div>
+
+              {/* Deskripsi */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Deskripsi Kegiatan</label>
+                <textarea
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                  placeholder="Jelaskan detail kegiatan yang dilakukan..."
+                  rows={3}
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                />
+              </div>
+
+              {/* Lampiran Media (Foto / Video) */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Lampiran Media (Foto / Video)</label>
+
+                {/* Kalau ada media baru yang dipilih */}
+                {editNewMediaPreview ? (
+                  <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-50 p-2">
+                    {editNewMediaType === 'video' ? (
+                      <video src={editNewMediaPreview} controls className="w-full max-h-44 rounded-lg object-contain bg-black" />
+                    ) : (
+                      <img src={editNewMediaPreview} alt="Preview baru" className="w-full max-h-44 object-contain rounded-lg" />
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => { setEditNewMedia(null); setEditNewMediaPreview(''); }}
+                      className="absolute top-3 right-3 rounded-full bg-slate-900/70 p-1.5 text-white hover:bg-slate-900"
+                      title="Batal ganti file"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : editAttachmentUrl ? (
+                  /* Kalau ada media lama yang tersimpan */
+                  <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-50 p-2">
+                    {isVideoUrl(editAttachmentUrl) ? (
+                      <video src={editAttachmentUrl} controls className="w-full max-h-44 rounded-lg object-contain bg-black" />
+                    ) : (
+                      <img src={editAttachmentUrl} alt="Media lampiran" className="w-full max-h-44 object-contain rounded-lg" />
+                    )}
+                    <div className="mt-2.5 flex items-center justify-between px-1">
+                      <button
+                        type="button"
+                        onClick={() => document.getElementById('edit-media-input')?.click()}
+                        className="text-xs font-semibold text-[#2F80ED] hover:underline cursor-pointer"
+                      >
+                        Ganti Media
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditAttachmentUrl('')}
+                        className="text-xs font-semibold text-red-500 hover:underline cursor-pointer"
+                      >
+                        Hapus Lampiran
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  /* Belum ada media sama sekali */
+                  <div
+                    className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 cursor-pointer hover:border-[#2F80ED] hover:bg-blue-50/30 transition"
+                    onClick={() => document.getElementById('edit-media-input')?.click()}
+                  >
+                    <Upload className="h-5 w-5 text-[#2F80ED] mb-1" />
+                    <p className="text-xs font-semibold text-slate-700">Unggah foto atau video baru</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Foto (JPG, PNG, WebP) atau Video (MP4, WebM maks. 30MB)</p>
+                  </div>
+                )}
+
+                <input
+                  id="edit-media-input"
+                  type="file"
+                  accept="image/*,video/mp4,video/quicktime,video/webm"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.type.startsWith('video/')) {
+                      if (file.size > 30 * 1024 * 1024) {
+                        alert('Ukuran video melebihi batas maksimal 30 MB!');
+                        return;
+                      }
+                      setEditNewMediaType('video');
+                    } else {
+                      setEditNewMediaType('image');
+                    }
+                    setEditNewMedia(file);
+                    setEditNewMediaPreview(URL.createObjectURL(file));
+                  }}
+                />
+              </div>
+
+              {/* Tombol Aksi */}
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setEditModalOpen(false)}
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingEdit || !editTitle.trim()}
+                  className="rounded-xl bg-[#2F80ED] px-5 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-600 disabled:opacity-50"
+                >
+                  {isSubmittingEdit ? 'Menyimpan Perubahan...' : 'Simpan Perubahan'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
