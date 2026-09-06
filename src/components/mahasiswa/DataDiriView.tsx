@@ -168,7 +168,7 @@ export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
     try {
       const compressed = await compressImage(file);
       const newAvatarUrl = await uploadToCloudinary(compressed, 'magangku/avatars');
-      await supabase.from('user_profiles').update({ avatar_url: newAvatarUrl }).eq('id', currentUser.id);
+      await supabase.from('user_profiles').update({ photo_url: newAvatarUrl }).eq('id', currentUser.id);
       updateCurrentUser({ avatar: newAvatarUrl });
       setFormData(prev => ({ ...prev, avatar: newAvatarUrl }));
     } catch (err) {

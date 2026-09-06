@@ -27,6 +27,7 @@ export const PengajuanIzinAdminView: React.FC = () => {
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null);
   const [deletingRequest, setDeletingRequest] = useState<LeaveRequest | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isReviewing, setIsReviewing] = useState(false);
 
   const handleOpenDoc = (url: string, name?: string) => {
     const isPdf = url.toLowerCase().includes('.pdf') || (name && name.toLowerCase().endsWith('.pdf'));
@@ -43,18 +44,25 @@ export const PengajuanIzinAdminView: React.FC = () => {
     setAdminNotes(type === 'Disetujui' ? 'Pengajuan izin disetujui oleh Administrator.' : 'Pengajuan ditolak karena alasan operasional.');
   };
 
-  const handleConfirmReview = (e: React.FormEvent) => {
+  const handleConfirmReview = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedRequest) return;
+    if (!selectedRequest || isReviewing) return;
 
-    reviewLeaveRequest(selectedRequest.id, actionType, adminNotes);
-    const msg = actionType === 'Disetujui'
-      ? `Pengajuan izin ${selectedRequest.studentName} berhasil disetujui dan status absensi otomatis disinkronkan!`
-      : `Pengajuan izin ${selectedRequest.studentName} ditolak.`;
-    
-    setSelectedRequest(null);
-    setFeedbackToast(msg);
-    setTimeout(() => setFeedbackToast(null), 4000);
+    setIsReviewing(true);
+    try {
+      await reviewLeaveRequest(selectedRequest.id, actionType, adminNotes);
+      const msg = actionType === 'Disetujui'
+        ? `Pengajuan izin ${selectedRequest.studentName} berhasil disetujui dan status absensi otomatis disinkronkan!`
+        : `Pengajuan izin ${selectedRequest.studentName} ditolak.`;
+      
+      setSelectedRequest(null);
+      setFeedbackToast(msg);
+      setTimeout(() => setFeedbackToast(null), 4000);
+    } catch (err: any) {
+      alert('Gagal memproses persetujuan izin: ' + (err?.message || 'Terjadi kesalahan'));
+    } finally {
+      setIsReviewing(false);
+    }
   };
 
   const filteredRequests = leaveRequests.filter(r => {
@@ -321,11 +329,12 @@ export const PengajuanIzinAdminView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className={`rounded-xl px-5 py-2 text-xs font-semibold text-white shadow-md ${
+                  disabled={isReviewing}
+                  className={`rounded-xl px-5 py-2 text-xs font-semibold text-white shadow-md disabled:opacity-50 ${
                     actionType === 'Disetujui' ? 'bg-[#27AE60] hover:bg-emerald-600' : 'bg-[#EB5757] hover:bg-rose-600'
                   }`}
                 >
-                  Konfirmasi {actionType}
+                  {isReviewing ? 'Memproses...' : `Konfirmasi ${actionType}`}
                 </button>
               </div>
             </form>

@@ -12,14 +12,16 @@ export const LaporanMahasiswaView: React.FC = () => {
 
   const userAttendances = attendances.filter(a => a.userId === currentUser?.id);
 
+  // Build sorted rows (ascending by date)
+  const sortedAttendances = [...userAttendances].sort((a, b) => a.date.localeCompare(b.date));
+
   // Helper: get week number (Minggu ke-N) from date string YYYY-MM-DD
   const getWeekNumber = (dateStr: string) => {
+    if (sortedAttendances.length === 0) return 1;
     const date = new Date(dateStr + 'T00:00:00');
-    const startDate = userAttendances.length > 0
-      ? new Date(userAttendances[userAttendances.length - 1].date + 'T00:00:00')
-      : date;
-    const diffDays = Math.floor((date.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-    return Math.floor(diffDays / 7) + 1;
+    const firstDate = new Date(sortedAttendances[0].date + 'T00:00:00');
+    const diffDays = Math.floor((date.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24));
+    return Math.max(1, Math.floor(diffDays / 7) + 1);
   };
 
   // Helper: get uraian kegiatan from activities for a given date
@@ -37,9 +39,6 @@ export const LaporanMahasiswaView: React.FC = () => {
     return 'FFFFFFFF'; // putih
   };
 
-  // Build sorted rows (ascending by date)
-  const sortedAttendances = [...userAttendances].sort((a, b) => a.date.localeCompare(b.date));
-
   // Export to PDF — format referensi: NO | Minggu | Hari | Tanggal | Uraian Kegiatan
   const exportPDF = () => {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
@@ -55,9 +54,9 @@ export const LaporanMahasiswaView: React.FC = () => {
     doc.setTextColor(80, 80, 80);
     doc.text(`Nama   : ${currentUser?.name || '-'}`, 14, 24);
     doc.text(`NIM    : ${currentUser?.nim || '-'}`, 14, 29);
-    doc.text(`Instansi : ${currentUser?.university || '-'}`, 14, 34);
-    doc.text(`Posisi   : ${currentUser?.position || '-'}`, 14, 39);
-    doc.text(`Periode  : ${sortedAttendances[0]?.date || '-'} s/d ${sortedAttendances[sortedAttendances.length - 1]?.date || '-'}`, 14, 44);
+    doc.text(`Instansi    : ${currentUser?.university || '-'}`, 14, 34);
+    doc.text(`Konsentrasi : ${currentUser?.concentration || currentUser?.position || '-'}`, 14, 39);
+    doc.text(`Periode     : ${sortedAttendances[0]?.date || '-'} s/d ${sortedAttendances[sortedAttendances.length - 1]?.date || '-'}`, 14, 44);
 
     const tableRows = sortedAttendances.map((item, idx) => [
       String(idx + 1),
@@ -130,7 +129,7 @@ export const LaporanMahasiswaView: React.FC = () => {
     ws1Data.push(['Nama', currentUser?.name || '-']);
     ws1Data.push(['NIM', currentUser?.nim || '-']);
     ws1Data.push(['Instansi/Universitas', currentUser?.university || '-']);
-    ws1Data.push(['Posisi Magang', currentUser?.position || '-']);
+    ws1Data.push(['Konsentrasi Magang', currentUser?.concentration || currentUser?.position || '-']);
     ws1Data.push(['Periode', `${sortedAttendances[0]?.date || '-'} s/d ${sortedAttendances[sortedAttendances.length - 1]?.date || '-'}`]);
     ws1Data.push([]);
 

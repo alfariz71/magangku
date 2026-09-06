@@ -129,6 +129,18 @@ export const PengajuanIzinView: React.FC = () => {
       return;
     }
 
+    // Check overlapping leave dates for the current user
+    const hasOverlap = leaveRequests.some((r) => {
+      if (r.userId !== currentUser?.id) return false;
+      if (r.status === 'Ditolak') return false;
+      return startDate <= r.endDate && endDate >= r.startDate;
+    });
+
+    if (hasOverlap) {
+      setErrorMessage('Anda sudah memiliki pengajuan izin aktif (Menunggu/Disetujui) pada rentang tanggal tersebut.');
+      return;
+    }
+
     if (!reason.trim()) {
       setErrorMessage('Alasan pengajuan izin wajib diisi.');
       return;

@@ -8,7 +8,6 @@ import {
   Upload, 
   AlertCircle,
   SwitchCamera,
-  QrCode,
   ShieldAlert,
   Video
 } from 'lucide-react';
@@ -433,7 +432,7 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
               Arahkan kamera ke QR Code resmi di lokasi magang
             </p>
             <p className="text-[11px] text-slate-500 mt-0.5">
-              Username login: <strong className="text-blue-400">{currentUser?.username || 'andi.pratama'}</strong>
+              Peserta: <strong className="text-blue-400">{currentUser?.name || currentUser?.username || 'Peserta'}</strong>
             </p>
           </div>
 
@@ -445,29 +444,20 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
             </div>
           )}
 
-          {/* Actions: Direct Scan Token & Upload Image */}
+          {/* Actions: Upload Image Option */}
           <div className="mt-5 w-full space-y-2.5">
-            {/* Quick Instant Verification Button */}
-            <button
-              onClick={() => handleDecodedData('QR-TESTING-PERMANEN')}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#2F80ED] py-3 text-xs font-bold text-white shadow-lg shadow-blue-500/25 transition-all hover:bg-blue-600 active:scale-[0.98]"
-            >
-              <QrCode className="h-4 w-4" />
-              Simulasi Pindai Token Resmi MagangKu
-            </button>
-
             {/* Upload QR Image Button */}
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-700 hover:text-white"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 py-3 text-xs font-semibold text-slate-200 hover:bg-slate-700 hover:text-white transition-all shadow-sm active:scale-[0.98]"
             >
-              <Upload className="h-4 w-4" />
+              <Upload className="h-4 w-4 text-[#2F80ED]" />
               Unggah Gambar / Screenshot QR Code
             </button>
 
             <div className="rounded-xl bg-slate-800/60 p-2.5 text-center text-[10px] text-slate-400">
-              💡 <strong>Tips Kamera:</strong> Jika muncul popup browser, pilih <em>"Allow / Izinkan Kamera"</em>. Jika laptop Anda tidak memiliki kamera, gunakan tombol <em>"Simulasi Pindai Token"</em> atau <em>"Unggah Gambar QR"</em> di atas.
+              💡 <strong>Tips:</strong> Pastikan QR Code berada di dalam kotak pemindai dan pencahayaan cukup terang. Jika kamera tidak terbuka, periksa izin kamera di pengaturan browser Anda.
             </div>
           </div>
         </div>

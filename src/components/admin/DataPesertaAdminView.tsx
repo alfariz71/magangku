@@ -20,86 +20,16 @@ import { useData } from '../../context/DataContext';
 import { User } from '../../types';
 
 export const DataPesertaAdminView: React.FC = () => {
-  const { students, addStudent, updateStudent, toggleStudentStatus } = useData();
+  const { students, updateStudent, toggleStudentStatus } = useData();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterUniversity, setFilterUniversity] = useState('Semua');
   const [filterStatus, setFilterStatus] = useState('Semua');
 
   // Modal states
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingStudent, setEditingStudent] = useState<User | null>(null);
   const [viewDetailStudent, setViewDetailStudent] = useState<User | null>(null);
-
-  // New Student Form State
-  const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    nim: '',
-    phone: '',
-    university: 'Universitas Indonesia',
-    major: 'Sistem Informasi',
-    concentration: 'Pengembangan Sistem Informasi',
-    gender: 'Laki-laki' as 'Laki-laki' | 'Perempuan',
-    birthPlace: 'Jakarta',
-    birthDate: '2003-05-15',
-    startDate: '2025-05-20',
-    endDate: '2025-08-20',
-    status: 'Aktif' as 'Aktif' | 'Nonaktif'
-  });
-
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  const resetForm = () => {
-    setFormData({
-      name: '',
-      email: '',
-      nim: '',
-      phone: '',
-      university: 'Universitas Indonesia',
-      major: 'Sistem Informasi',
-      concentration: 'Pengembangan Sistem Informasi',
-      gender: 'Laki-laki',
-      birthPlace: 'Jakarta',
-      birthDate: '2003-05-15',
-      startDate: '2025-05-20',
-      endDate: '2025-08-20',
-      status: 'Aktif'
-    });
-  };
-
-  const handleCreateStudent = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.name || !formData.email || !formData.nim) {
-      alert('Nama, Email, dan NIM wajib diisi!');
-      return;
-    }
-
-    const username = formData.name.toLowerCase().replace(/\s+/g, '.');
-    addStudent({
-      name: formData.name,
-      email: formData.email,
-      role: 'user',
-      username: username,
-      avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=250',
-      nim: formData.nim,
-      phone: formData.phone,
-      university: formData.university,
-      major: formData.major,
-      concentration: formData.concentration,
-      gender: formData.gender,
-      birthPlace: formData.birthPlace,
-      birthDate: formData.birthDate,
-      startDate: formData.startDate,
-      endDate: formData.endDate,
-      status: formData.status
-    });
-
-    setIsAddModalOpen(false);
-    resetForm();
-    setToastMessage('Peserta magang baru berhasil didaftarkan ke sistem!');
-    setTimeout(() => setToastMessage(null), 3500);
-  };
 
   const handleUpdateStudent = (e: React.FormEvent) => {
     e.preventDefault();
@@ -148,17 +78,6 @@ export const DataPesertaAdminView: React.FC = () => {
             Kelola data registrasi, status, penempatan, dan masa aktif seluruh mahasiswa magang
           </p>
         </div>
-
-        <button
-          onClick={() => {
-            resetForm();
-            setIsAddModalOpen(true);
-          }}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#2F80ED] px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-600 active:scale-[0.98]"
-        >
-          <Plus className="h-4 w-4" />
-          Tambah Peserta
-        </button>
       </div>
 
       {toastMessage && (
@@ -332,150 +251,6 @@ export const DataPesertaAdminView: React.FC = () => {
           </table>
         </div>
       </div>
-
-      {/* Modal Tambah Peserta Baru */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onClick={() => setIsAddModalOpen(false)} />
-          <div className="relative z-10 w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-[#183B66]">Tambah Peserta Magang Baru</h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="rounded-lg p-1 text-slate-400 hover:text-slate-600">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateStudent} className="mt-4 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Lengkap *</label>
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="Contoh: Rian Anggara"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Email Mahasiswa *</label>
-                  <input
-                    type="email"
-                    value={formData.email}
-                    onChange={e => setFormData({ ...formData, email: e.target.value })}
-                    placeholder="rian.anggara@email.com"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">NIM *</label>
-                  <input
-                    type="text"
-                    value={formData.nim}
-                    onChange={e => setFormData({ ...formData, nim: e.target.value })}
-                    placeholder="2201998877"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Nomor Telepon</label>
-                  <input
-                    type="text"
-                    value={formData.phone}
-                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="0812-9876-5432"
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Asal Universitas</label>
-                  <input
-                    type="text"
-                    value={formData.university}
-                    onChange={e => setFormData({ ...formData, university: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Jurusan</label>
-                  <input
-                    type="text"
-                    value={formData.major}
-                    onChange={e => setFormData({ ...formData, major: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Konsentrasi Magang</label>
-                  <input
-                    type="text"
-                    value={formData.concentration}
-                    onChange={e => setFormData({ ...formData, concentration: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Jenis Kelamin</label>
-                  <select
-                    value={formData.gender}
-                    onChange={e => setFormData({ ...formData, gender: e.target.value as any })}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
-                  >
-                    <option value="Laki-laki">Laki-laki</option>
-                    <option value="Perempuan">Perempuan</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Mulai Magang</label>
-                  <input
-                    type="date"
-                    value={formData.startDate}
-                    onChange={e => setFormData({ ...formData, startDate: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Selesai Magang</label>
-                  <input
-                    type="date"
-                    value={formData.endDate}
-                    onChange={e => setFormData({ ...formData, endDate: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700"
-                >
-                  Batal
-                </button>
-                <button
-                  type="submit"
-                  className="rounded-xl bg-[#2F80ED] px-5 py-2 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-600"
-                >
-                  Simpan Peserta
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Modal Edit Peserta */}
       {editingStudent && (

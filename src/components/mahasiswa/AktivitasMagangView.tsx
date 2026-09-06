@@ -19,6 +19,7 @@ export const AktivitasMagangView: React.FC = () => {
 
   // States untuk modal dokumentasi foto & video
   const [showDocModal, setShowDocModal] = useState(false);
+  const [docDate, setDocDate] = useState(new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }));
   const [docMedia, setDocMedia] = useState<File | null>(null);
   const [docMediaPreview, setDocMediaPreview] = useState<string>('');
   const [docMediaType, setDocMediaType] = useState<'image' | 'video'>('image');
@@ -240,7 +241,7 @@ export const AktivitasMagangView: React.FC = () => {
       await addActivity({
         title: docTitle,
         description: docDesc,
-        activityDate: new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }),
+        activityDate: docDate || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }),
         attachmentUrl: mediaUrl,
         time: '08:00 - 17:00 WIB',
         createdAt: new Date().toISOString()
@@ -744,6 +745,17 @@ export const AktivitasMagangView: React.FC = () => {
 
             {/* Form Fields */}
             <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Tanggal Kegiatan *</label>
+                <input
+                  type="date"
+                  value={docDate}
+                  onChange={(e) => setDocDate(e.target.value)}
+                  className="w-full rounded-xl border border-slate-200 px-3.5 py-2.5 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                  required
+                />
+              </div>
+
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">Judul Kegiatan *</label>
                 <input

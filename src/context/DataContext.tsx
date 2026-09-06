@@ -119,7 +119,27 @@ interface DataContextType {
   markNotificationAsRead: (id: string) => void;
   markAllNotificationsAsRead: () => void;
   refreshNotifications: () => Promise<void>;
+
+  // System Settings
+  systemSettings: SystemSettings;
+  updateSystemSettings: (settings: Partial<SystemSettings>) => void;
 }
+
+export interface SystemSettings {
+  workStartTime: string;
+  workEndTime: string;
+  lateToleranceMins: number;
+  allowOvertime: boolean;
+  requireSignatureOnReport: boolean;
+}
+
+const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
+  workStartTime: '08:00',
+  workEndTime: '17:00',
+  lateToleranceMins: 15,
+  allowOvertime: true,
+  requireSignatureOnReport: true,
+};
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
 
@@ -190,6 +210,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     status: 'idle', latitude: null, longitude: null, accuracy: null, distanceMeters: null, lastUpdated: null
   });
   const watchIdRef = useRef<number | null>(null);
+
+  // ---- System Settings ----
+  const [systemSettings, setSystemSettings] = useState<SystemSettings>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('magangku_system_settings');
+        if (saved) return { ...DEFAULT_SYSTEM_SETTINGS, ...JSON.parse(saved) };
+      } catch (e) {
+        console.error('Error loading system settings:', e);
+      }
+    }
+    return DEFAULT_SYSTEM_SETTINGS;
+  });
+
+  const updateSystemSettings = (newSettings: Partial<SystemSettings>) => {
+    setSystemSettings(prev => {
+      const updated = { ...prev, ...newSettings };
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('magangku_system_settings', JSON.stringify(updated));
+      }
+      return updated;
+    });
+  };
 
   // ---- Load data when user changes ----
   useEffect(() => {
@@ -307,6 +350,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const checkOutFormatted = r.check_out_time ? new Date(r.check_out_time as string).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : null;
 
     let computedTotalHours = r.total_hours as string | null;
+    let finalCheckOutFormatted = checkOutFormatted;
+
     if (r.check_in_time && r.check_out_time) {
       const inTime = new Date(r.check_in_time as string).getTime();
       const outTime = new Date(r.check_out_time as string).getTime();
@@ -315,6 +360,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const hours = Math.floor(diffMinutes / 60);
         const mins = diffMinutes % 60;
         computedTotalHours = `${hours} jam ${mins} menit`;
+      }
+    } else if (r.check_in_time && !r.check_out_time) {
+      // OPSI 2: Jika lupa absen pulang dan HARI SUDAH LEWAT (bukan hari ini),
+      // otomatis asumsikan jam pulang adalah jam tutup kantor standar dari pengaturan (default 17:00 WIB)
+      const today = getTodayJakarta();
+      const isPastDay = dateStr < today;
+
+      if (isPastDay) {
+        const defaultCloseTime = systemSettings.workEndTime || '17:00';
+        finalCheckOutFormatted = `${defaultCloseTime} WIB (Otomatis)`;
+        const inDate = new Date(r.check_in_time as string);
+        const defaultOutDate = new Date(`${dateStr}T${defaultCloseTime}:00+07:00`);
+        const inTime = inDate.getTime();
+        const outTime = defaultOutDate.getTime();
+        if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
+          const diffMinutes = Math.round((outTime - inTime) / 60000);
+          const hours = Math.floor(diffMinutes / 60);
+          const mins = diffMinutes % 60;
+          computedTotalHours = `${hours} jam ${mins} menit`;
+        } else {
+          computedTotalHours = '8 jam 0 menit';
+        }
       }
     }
 
@@ -327,7 +394,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       date: dateStr,
       dayName,
       checkInTime: checkInFormatted,
-      checkOutTime: checkOutFormatted,
+      checkOutTime: finalCheckOutFormatted,
       totalHours: computedTotalHours,
       status: r.status as AttendanceStatus,
       notes: r.notes as string | undefined,
@@ -711,7 +778,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const now = new Date();
     const jakartaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
-    const isLate = jakartaTime.getHours() > 8 || (jakartaTime.getHours() === 8 && jakartaTime.getMinutes() > 0);
+    
+    // Hitung toleransi keterlambatan dinamis dari pengaturan admin
+    const [startH, startM] = (systemSettings.workStartTime || '08:00').split(':').map(Number);
+    const cutoffMinutes = (startH * 60 + (startM || 0)) + (systemSettings.lateToleranceMins || 0);
+    const currentMinutes = jakartaTime.getHours() * 60 + jakartaTime.getMinutes();
+    const isLate = currentMinutes > cutoffMinutes;
     const status: AttendanceStatus = isLate ? 'Terlambat' : 'Hadir';
 
     // Check for existing QR session
@@ -1053,6 +1125,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const start = new Date(target.startDate + 'T00:00:00');
       const end = new Date(target.endDate + 'T00:00:00');
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        // Lewati hari libur operasional: Sabtu (6) dan Minggu (0)
+        if (d.getDay() === 0 || d.getDay() === 6) continue;
+
         const dateStr = d.toLocaleDateString('sv-SE');
         await supabase.from('attendance_records').upsert({
           user_id: target.userId,
@@ -1077,6 +1152,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: 'Gagal menghapus pengajuan izin: ' + error.message };
     }
 
+    // Jika izin yang dihapus berstatus 'Disetujui', bersihkan baris absensi Izin/Sakit yang terkait
+    if (target && target.status === 'Disetujui') {
+      try {
+        const start = new Date(target.startDate + 'T00:00:00');
+        const end = new Date(target.endDate + 'T00:00:00');
+        const dateList: string[] = [];
+        for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+          dateList.push(d.toLocaleDateString('sv-SE'));
+        }
+        if (dateList.length > 0) {
+          await supabase
+            .from('attendance_records')
+            .delete()
+            .eq('user_id', target.userId)
+            .in('date', dateList)
+            .in('status', ['Izin', 'Sakit']);
+        }
+      } catch (cleanErr) {
+        console.error('Gagal membersihkan data absensi dari izin yang dihapus:', cleanErr);
+      }
+    }
+
     if (target?.documentUrl) {
       try {
         const parts = target.documentUrl.split('/');
@@ -1091,6 +1188,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     await addAuditLog('Hapus Pengajuan Izin', 'Pengajuan Izin', `Pengajuan izin ${target?.studentName || id} dihapus`);
     await refreshLeaveRequests();
+    await refreshAttendances();
     return { success: true, message: 'Pengajuan izin berhasil dihapus.' };
   };
 
@@ -1389,7 +1487,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // 2. Koreksi absensi yang pending
       const { data: pendingCorr } = await supabase
-        .from('attendance_corrections')
+        .from('attendance_correction_requests')
         .select('id, created_at')
         .eq('status', 'Menunggu')
         .order('created_at', { ascending: false });
@@ -1474,10 +1572,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('date', todayStr)
         .maybeSingle();
       if (todayAbs?.check_in_time && !todayAbs?.check_out_time) {
+        const formattedCheckIn = new Date(todayAbs.check_in_time).toLocaleTimeString('id-ID', {
+          hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta'
+        }) + ' WIB';
         notifs.push({
           id: 'notif-belum-pulang-user',
           title: '⏰ Jangan Lupa Absen Pulang',
-          message: `Anda sudah absen masuk pukul ${todayAbs.check_in_time}. Jangan lupa absen pulang sebelum meninggalkan kantor.`,
+          message: `Anda sudah absen masuk pukul ${formattedCheckIn}. Jangan lupa absen pulang sebelum meninggalkan kantor.`,
           time: 'Hari ini',
           read: false,
           type: 'reminder',
@@ -1540,7 +1641,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         leaveRequests, isLeaveLoading, submitLeaveRequest, reviewLeaveRequest, deleteLeaveRequest, refreshLeaveRequests,
         correctionRequests, submitCorrectionRequest, reviewCorrectionRequest, refreshCorrectionRequests,
         students, isStudentsLoading, refreshStudents, addStudent, updateStudent, toggleStudentStatus,
-        auditLogs, notifications, markNotificationAsRead, markAllNotificationsAsRead, refreshNotifications
+        auditLogs, notifications, markNotificationAsRead, markAllNotificationsAsRead, refreshNotifications,
+        systemSettings, updateSystemSettings
       }}
     >
       {children}

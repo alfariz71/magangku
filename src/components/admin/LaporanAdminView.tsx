@@ -66,6 +66,491 @@ export const LaporanAdminView: React.FC = () => {
     ? 'Semua Peserta' 
     : (userStudents.find(s => s.id === selectedStudent)?.name || selectedStudent);
 
+  // Helper format hari dan tanggal Indonesia
+  const getDayName = (dateStr: string) => {
+    if (!dateStr) return '-';
+    try {
+      const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+      return isNaN(d.getTime()) ? '-' : d.toLocaleDateString('id-ID', { weekday: 'long' });
+    } catch {
+      return '-';
+    }
+  };
+
+  const formatDateIndo = (dateStr: string) => {
+    if (!dateStr) return '-';
+    try {
+      const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+      return isNaN(d.getTime()) ? dateStr : d.toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // Grouping Aktivitas: Tanggal (Terbaru -> Terlama) -> Mahasiswa (A -> Z) -> Aktivitas
+  const groupedActivitiesByDay = React.useMemo(() => {
+    const dateMap = new Map<string, {
+      date: string;
+      dayName: string;
+      formattedDate: string;
+      fullDateLabel: string;
+      studentMap: Map<string, {
+        userId: string;
+        studentName: string;
+        studentNim: string;
+        items: { id: string; title: string; time: string }[];
+      }>;
+    }>();
+
+    filteredActivities.forEach(a => {
+      const dateKey = a.activityDate || a.date || '';
+      const userKey = a.userId || a.studentName || 'unknown';
+
+      if (!dateMap.has(dateKey)) {
+        const day = getDayName(dateKey);
+        const fDate = formatDateIndo(dateKey);
+        dateMap.set(dateKey, {
+          date: dateKey,
+          dayName: day,
+          formattedDate: fDate,
+          fullDateLabel: `${day}, ${fDate}`,
+          studentMap: new Map()
+        });
+      }
+
+      const dayGroup = dateMap.get(dateKey)!;
+      if (!dayGroup.studentMap.has(userKey)) {
+        dayGroup.studentMap.set(userKey, {
+          userId: a.userId,
+          studentName: a.studentName || 'Peserta',
+          studentNim: a.studentNim || '-',
+          items: []
+        });
+      }
+
+      dayGroup.studentMap.get(userKey)!.items.push({
+        id: a.id,
+        title: a.title,
+        time: a.time || '-'
+      });
+    });
+
+    // Urutkan tanggal dari terbaru ke terlama
+    const sortedDates = Array.from(dateMap.values()).sort((a, b) => {
+      return b.date.localeCompare(a.date);
+    });
+
+    // Di dalam setiap tanggal, urutkan mahasiswa berdasarkan nama A - Z
+    return sortedDates.map(day => ({
+      date: day.date,
+      dayName: day.dayName,
+      formattedDate: day.formattedDate,
+      fullDateLabel: day.fullDateLabel,
+      students: Array.from(day.studentMap.values()).sort((a, b) => 
+        a.studentName.localeCompare(b.studentName, 'id')
+      )
+    }));
+  }, [filteredActivities]);
+
+  // Helper: parse hours safely (handles "9 jam 36 menit" properly, checks checkout)
+  const parseHours = (th?: string | null, checkOutTime?: string | null): number => {
+    if (!th || !checkOutTime || checkOutTime === '-') return 0;
+    
+    // Format "9 jam 36 menit" atau "9 jam" atau "30 menit"
+    const jamMatch = th.match(/(\d+(?:\.\d+)?)\s*jam/i);
+    const menitMatch = th.match(/(\d+)\s*menit/i);
+
+    if (jamMatch || menitMatch) {
+      const jam = jamMatch ? parseFloat(jamMatch[1]) : 0;
+      const menit = menitMatch ? parseFloat(menitMatch[1]) : 0;
+      const total = jam + (menit / 60);
+      return total > 16 ? 0 : total; // Sanity check max 16 jam kerja/hari
+    }
+
+    // Format angka biasa misal "8.5"
+    const clean = th.replace(/[^\d.]/g, '');
+    const num = parseFloat(clean);
+    return isNaN(num) || num > 16 ? 0 : num;
+  };
+
+  const formatHours = (hours: number): string => {
+    if (!hours || hours <= 0) return '-';
+    const totalMinutes = Math.round(hours * 60);
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    if (m === 0) return `${h} jam`;
+    return `${h} jam ${m} mnt`;
+  };
+
+  // Grouping Harian: Tanggal (Terbaru -> Terlama) -> Mahasiswa (A -> Z)
+  const groupedDailyAttendances = React.useMemo(() => {
+    const dateMap = new Map<string, {
+      date: string;
+      dayName: string;
+      formattedDate: string;
+      fullDateLabel: string;
+      records: {
+        id: string;
+        userId: string;
+        studentName: string;
+        studentNim: string;
+        checkInTime: string;
+        checkOutTime: string;
+        totalHours: string;
+        status: string;
+        correctedByAdmin?: boolean;
+      }[];
+    }>();
+
+    filteredAttendances.forEach(a => {
+      const dateKey = a.date || '';
+      if (!dateKey) return;
+
+      if (!dateMap.has(dateKey)) {
+        const day = getDayName(dateKey);
+        const fDate = formatDateIndo(dateKey);
+        dateMap.set(dateKey, {
+          date: dateKey,
+          dayName: day,
+          formattedDate: fDate,
+          fullDateLabel: `${day}, ${fDate}`,
+          records: []
+        });
+      }
+
+      // Validasi jam kerja: jika belum absen pulang, total jam adalah '-'
+      const isCheckedOut = !!a.checkOutTime && a.checkOutTime !== '-';
+      let displayTotalHours = '-';
+      if (isCheckedOut && a.totalHours) {
+        const hNum = parseHours(a.totalHours, a.checkOutTime);
+        displayTotalHours = hNum > 0 ? formatHours(hNum) : (a.totalHours.includes('jam') ? a.totalHours : `${a.totalHours} jam`);
+      }
+
+      dateMap.get(dateKey)!.records.push({
+        id: a.id,
+        userId: a.userId,
+        studentName: a.studentName || 'Peserta',
+        studentNim: a.studentNim || '-',
+        checkInTime: a.checkInTime ? (a.checkInTime.includes('WIB') ? a.checkInTime : `${a.checkInTime} WIB`) : '-',
+        checkOutTime: a.checkOutTime ? (a.checkOutTime.includes('WIB') ? a.checkOutTime : `${a.checkOutTime} WIB`) : '-',
+        totalHours: displayTotalHours,
+        status: a.status,
+        correctedByAdmin: a.correctedByAdmin
+      });
+    });
+
+    const sortedDates = Array.from(dateMap.values()).sort((a, b) => b.date.localeCompare(a.date));
+
+    return sortedDates.map(day => ({
+      ...day,
+      records: day.records.sort((a, b) => a.studentName.localeCompare(b.studentName, 'id'))
+    }));
+  }, [filteredAttendances]);
+
+  // Grouping Mingguan: Blok Minggu (Terbaru -> Terlama) -> Mahasiswa (A -> Z) -> Matriks Sen-Jum
+  const groupedWeeklyAttendances = React.useMemo(() => {
+    const todayJakarta = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+
+    const getWeekRange = (dateStr: string) => {
+      const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
+      const dayOfWeek = d.getDay();
+      const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      const monday = new Date(d);
+      monday.setDate(d.getDate() + diffToMonday);
+
+      const friday = new Date(monday);
+      friday.setDate(monday.getDate() + 4);
+
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const toKey = (dt: Date) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+
+      const mondayKey = toKey(monday);
+      const fMon = monday.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+      const fFri = friday.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+
+      const daysKeys: { [dayIdx: number]: string } = {};
+      for (let i = 0; i < 5; i++) {
+        const dt = new Date(monday);
+        dt.setDate(monday.getDate() + i);
+        daysKeys[i] = toKey(dt);
+      }
+
+      return {
+        weekKey: mondayKey,
+        label: `Minggu (${fMon} – ${fFri} — 5 Hari Kerja)`,
+        daysKeys
+      };
+    };
+
+    const weekMap = new Map<string, {
+      weekKey: string;
+      label: string;
+      daysKeys: { [dayIdx: number]: string };
+      records: typeof filteredAttendances;
+    }>();
+
+    filteredAttendances.forEach(a => {
+      if (!a.date) return;
+      const { weekKey, label, daysKeys } = getWeekRange(a.date);
+
+      if (!weekMap.has(weekKey)) {
+        weekMap.set(weekKey, {
+          weekKey,
+          label,
+          daysKeys,
+          records: []
+        });
+      }
+      weekMap.get(weekKey)!.records.push(a);
+    });
+
+    const sortedWeeks = Array.from(weekMap.values()).sort((a, b) => b.weekKey.localeCompare(a.weekKey));
+
+    return sortedWeeks.map(week => {
+      const studentMap = new Map<string, {
+        userId: string;
+        studentName: string;
+        studentNim: string;
+        dayRecords: { [dateKey: string]: (typeof filteredAttendances)[0] };
+        totalHoursNum: number;
+      }>();
+
+      week.records.forEach(r => {
+        const sKey = r.userId || r.studentName;
+        if (!studentMap.has(sKey)) {
+          studentMap.set(sKey, {
+            userId: r.userId,
+            studentName: r.studentName,
+            studentNim: r.studentNim,
+            dayRecords: {},
+            totalHoursNum: 0
+          });
+        }
+        const sData = studentMap.get(sKey)!;
+        sData.dayRecords[r.date] = r;
+        sData.totalHoursNum += parseHours(r.totalHours, r.checkOutTime);
+      });
+
+      const students = Array.from(studentMap.values()).map(s => {
+        const getStatusCode = (dateKey: string, rec?: (typeof filteredAttendances)[0]) => {
+          if (rec) {
+            switch (rec.status) {
+              case 'Hadir': return { code: 'H', color: 'text-emerald-700 font-bold', full: 'Hadir' };
+              case 'Terlambat': return { code: 'T', color: 'text-rose-700 font-bold', full: 'Terlambat' };
+              case 'Izin': return { code: 'I', color: 'text-amber-700 font-bold', full: 'Izin' };
+              case 'Sakit': return { code: 'S', color: 'text-orange-700 font-bold', full: 'Sakit' };
+              case 'Alpha': return { code: 'A', color: 'text-red-700 font-bold', full: 'Alpha' };
+              default: return { code: '-', color: 'text-slate-400 font-normal', full: '-' };
+            }
+          }
+
+          // Jika tidak ada catatan absensi:
+          // Jika tanggal hari kerja sudah berlalu / hari ini:
+          if (dateKey <= todayJakarta) {
+            // Cek apakah ada pengajuan izin/sakit yang disetujui
+            const leave = leaveRequests.find(l => 
+              l.userId === s.userId && 
+              l.status === 'Disetujui' &&
+              l.startDate <= dateKey && dateKey <= l.endDate
+            );
+            if (leave) {
+              if (leave.leaveType?.toLowerCase().includes('sakit')) {
+                return { code: 'S', color: 'text-orange-700 font-bold', full: 'Sakit' };
+              }
+              return { code: 'I', color: 'text-amber-700 font-bold', full: 'Izin' };
+            }
+            return { code: 'A', color: 'text-red-700 font-bold', full: 'Alpha' };
+          }
+
+          return { code: '-', color: 'text-slate-400 font-normal', full: 'Belum berlangsung' };
+        };
+
+        const sen = getStatusCode(week.daysKeys[0], s.dayRecords[week.daysKeys[0]]);
+        const sel = getStatusCode(week.daysKeys[1], s.dayRecords[week.daysKeys[1]]);
+        const rab = getStatusCode(week.daysKeys[2], s.dayRecords[week.daysKeys[2]]);
+        const kam = getStatusCode(week.daysKeys[3], s.dayRecords[week.daysKeys[3]]);
+        const jum = getStatusCode(week.daysKeys[4], s.dayRecords[week.daysKeys[4]]);
+
+        const daysPresent = [sen, sel, rab, kam, jum].filter(d => d.code === 'H' || d.code === 'T').length;
+
+        return {
+          userId: s.userId,
+          studentName: s.studentName,
+          studentNim: s.studentNim,
+          sen,
+          sel,
+          rab,
+          kam,
+          jum,
+          totalHoursFormatted: formatHours(s.totalHoursNum),
+          kehadiran: `${daysPresent} / 5 Hari`
+        };
+      }).sort((a, b) => a.studentName.localeCompare(b.studentName, 'id'));
+
+      return {
+        weekKey: week.weekKey,
+        label: week.label,
+        students
+      };
+    });
+  }, [filteredAttendances, leaveRequests]);
+
+  // Grouping Bulanan: Bulan (Terbaru -> Terlama) -> Mahasiswa (A -> Z) -> Akumulasi Hari Kerja (Sen-Jum)
+  const groupedMonthlyAttendances = React.useMemo(() => {
+    const now = new Date();
+
+    const monthMap = new Map<string, {
+      monthKey: string;
+      label: string;
+      workingDays: string[];
+      totalWorkingDaysInMonth: number;
+      isCurrentMonth: boolean;
+      records: typeof filteredAttendances;
+    }>();
+
+    filteredAttendances.forEach(a => {
+      if (!a.date) return;
+      const d = new Date(a.date.includes('T') ? a.date : a.date + 'T00:00:00');
+      const year = d.getFullYear();
+      const monthIndex = d.getMonth();
+      const mKey = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+
+      if (!monthMap.has(mKey)) {
+        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+        const isCurrentMonth = now.getFullYear() === year && now.getMonth() === monthIndex;
+        const maxDay = isCurrentMonth ? Math.min(daysInMonth, now.getDate()) : daysInMonth;
+
+        // Kumpulkan hari kerja (Senin - Jumat) di bulan ini (Sabtu & Minggu libur)
+        const workingDays: string[] = [];
+        for (let day = 1; day <= maxDay; day++) {
+          const dt = new Date(year, monthIndex, day);
+          const dayOfWeek = dt.getDay(); // 0 is Sun, 6 is Sat -> Libur!
+          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            const pad = (n: number) => String(n).padStart(2, '0');
+            workingDays.push(`${year}-${pad(monthIndex + 1)}-${pad(day)}`);
+          }
+        }
+
+        let totalWorkingDaysInMonth = 0;
+        for (let day = 1; day <= daysInMonth; day++) {
+          const dt = new Date(year, monthIndex, day);
+          if (dt.getDay() !== 0 && dt.getDay() !== 6) totalWorkingDaysInMonth++;
+        }
+
+        const mLabel = isCurrentMonth
+          ? `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (${workingDays.length} Hari Kerja Berjalan — Sabtu & Minggu Libur)`
+          : `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (${totalWorkingDaysInMonth} Hari Kerja — Sabtu & Minggu Libur)`;
+
+        monthMap.set(mKey, {
+          monthKey: mKey,
+          label: mLabel,
+          workingDays,
+          totalWorkingDaysInMonth,
+          isCurrentMonth,
+          records: []
+        });
+      }
+      monthMap.get(mKey)!.records.push(a);
+    });
+
+    const sortedMonths = Array.from(monthMap.values()).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
+
+    return sortedMonths.map(m => {
+      const studentMap = new Map<string, {
+        userId: string;
+        studentName: string;
+        studentNim: string;
+        dayRecords: { [dateKey: string]: (typeof filteredAttendances)[0] };
+        totalHoursNum: number;
+      }>();
+
+      m.records.forEach(r => {
+        const sKey = r.userId || r.studentName;
+        if (!studentMap.has(sKey)) {
+          studentMap.set(sKey, {
+            userId: r.userId,
+            studentName: r.studentName,
+            studentNim: r.studentNim,
+            dayRecords: {},
+            totalHoursNum: 0
+          });
+        }
+        const s = studentMap.get(sKey)!;
+        s.dayRecords[r.date] = r;
+        s.totalHoursNum += parseHours(r.totalHours, r.checkOutTime);
+      });
+
+      const students = Array.from(studentMap.values()).map(s => {
+        let hadir = 0;
+        let terlambat = 0;
+        let izin = 0;
+        let sakit = 0;
+        let alpha = 0;
+
+        // Evaluasi kehadiran berdasarkan Hari Kerja (Senin s/d Jumat, Sabtu & Minggu Libur)
+        m.workingDays.forEach(wDate => {
+          const rec = s.dayRecords[wDate];
+          if (rec) {
+            if (rec.status === 'Hadir') hadir++;
+            else if (rec.status === 'Terlambat') terlambat++;
+            else if (rec.status === 'Izin') izin++;
+            else if (rec.status === 'Sakit') sakit++;
+            else if (rec.status === 'Alpha') alpha++;
+          } else {
+            // Cek apakah ada pengajuan izin/sakit yang disetujui di tanggal ini
+            const leave = leaveRequests.find(l => 
+              l.userId === s.userId && 
+              l.status === 'Disetujui' &&
+              l.startDate <= wDate && wDate <= l.endDate
+            );
+            if (leave) {
+              if (leave.leaveType?.toLowerCase().includes('sakit')) {
+                sakit++;
+              } else {
+                izin++;
+              }
+            } else {
+              // Tidak hadir di hari kerja tanpa keterangan = Alpha!
+              alpha++;
+            }
+          }
+        });
+
+        // Hitung juga jika ada kehadiran lembur di akhir pekan
+        Object.entries(s.dayRecords).forEach(([dateStr, rec]) => {
+          if (!m.workingDays.includes(dateStr)) {
+            if (rec.status === 'Hadir') hadir++;
+            else if (rec.status === 'Terlambat') terlambat++;
+          }
+        });
+
+        // Persentase kehadiran dihitung dari total Hari Kerja yang telah dievaluasi
+        const totalEvaluated = Math.max(m.workingDays.length, hadir + terlambat + izin + sakit + alpha);
+        const presence = hadir + terlambat;
+        const percentage = totalEvaluated > 0 ? Math.min(100, Math.round((presence / totalEvaluated) * 100)) : 0;
+
+        return {
+          userId: s.userId,
+          studentName: s.studentName,
+          studentNim: s.studentNim,
+          hadir,
+          terlambat,
+          izin,
+          sakit,
+          alpha,
+          totalHoursFormatted: formatHours(s.totalHoursNum),
+          percentage
+        };
+      }).sort((a, b) => a.studentName.localeCompare(b.studentName, 'id'));
+
+      return {
+        monthKey: m.monthKey,
+        label: m.label,
+        students
+      };
+    });
+  }, [filteredAttendances, leaveRequests]);
+
   // Export to PDF
   const handleExportPDF = () => {
     const doc = new jsPDF();
@@ -79,26 +564,180 @@ export const LaporanAdminView: React.FC = () => {
     doc.text(`Dicetak oleh Administrator pada: ${new Date().toLocaleDateString('id-ID')}`, 14, 32);
 
     let head: string[][] = [];
-    let rows: string[][] = [];
+    let rows: any[] = [];
+    let columnStyles: any = {};
 
     if (reportType === 'izin') {
       head = [['Nama Mahasiswa', 'NIM', 'Tgl Pengajuan', 'Periode Izin', 'Jenis Izin', 'Status']];
       rows = filteredLeaveRequests.map(r => [r.studentName, r.studentNim, r.requestDate, `${r.startDate} - ${r.endDate}`, r.leaveType, r.status]);
     } else if (reportType === 'aktivitas') {
-      head = [['Mahasiswa', 'Hari', 'Tanggal', 'Judul Aktivitas', 'Waktu']];
-      rows = filteredActivities.map(a => [a.studentName || '-', a.day || '-', a.date || a.activityDate || '-', a.title || '-', a.time || '-']);
+      head = [['No', 'Mahasiswa', 'Judul Aktivitas', 'Waktu Pelaksanaan']];
+      groupedActivitiesByDay.forEach(day => {
+        // Baris pembatas tanggal full-width
+        rows.push([
+          { 
+            content: day.fullDateLabel, 
+            colSpan: 4, 
+            styles: { 
+              fillColor: [241, 245, 249], 
+              textColor: [51, 65, 85], 
+              fontStyle: 'bold', 
+              halign: 'center',
+              fontSize: 9
+            } 
+          }
+        ]);
+
+        day.students.forEach((student, sIdx) => {
+          student.items.forEach((item, iIdx) => {
+            if (iIdx === 0) {
+              rows.push([
+                { 
+                  content: String(sIdx + 1), 
+                  rowSpan: student.items.length, 
+                  styles: { halign: 'center', valign: 'middle' } 
+                },
+                { 
+                  content: `${student.studentName}\n(${student.studentNim})`, 
+                  rowSpan: student.items.length, 
+                  styles: { valign: 'middle', fontStyle: 'bold' } 
+                },
+                { content: item.title, styles: { valign: 'middle' } },
+                { content: item.time || '-', styles: { halign: 'center', valign: 'middle' } }
+              ]);
+            } else {
+              rows.push([
+                { content: item.title, styles: { valign: 'middle' } },
+                { content: item.time || '-', styles: { halign: 'center', valign: 'middle' } }
+              ]);
+            }
+          });
+        });
+      });
+      columnStyles = {
+        0: { cellWidth: 12, halign: 'center' },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 'auto' },
+        3: { cellWidth: 42, halign: 'center' }
+      };
+    } else if (reportType === 'harian') {
+      head = [['No', 'Mahasiswa', 'Absen Masuk', 'Absen Pulang', 'Total Jam', 'Status']];
+      groupedDailyAttendances.forEach(day => {
+        rows.push([
+          {
+            content: day.fullDateLabel,
+            colSpan: 6,
+            styles: {
+              fillColor: [241, 245, 249],
+              textColor: [51, 65, 85],
+              fontStyle: 'bold',
+              halign: 'center',
+              fontSize: 9
+            }
+          }
+        ]);
+        day.records.forEach((rec, rIdx) => {
+          rows.push([
+            { content: String(rIdx + 1), styles: { halign: 'center', valign: 'middle' } },
+            { content: `${rec.studentName}\n(${rec.studentNim})`, styles: { valign: 'middle', fontStyle: 'bold' } },
+            { content: rec.checkInTime, styles: { halign: 'center', valign: 'middle' } },
+            { content: rec.checkOutTime, styles: { halign: 'center', valign: 'middle' } },
+            { content: rec.totalHours, styles: { halign: 'center', valign: 'middle' } },
+            { content: rec.status, styles: { halign: 'center', valign: 'middle' } }
+          ]);
+        });
+      });
+      columnStyles = {
+        0: { cellWidth: 12, halign: 'center' },
+        1: { cellWidth: 50 },
+        2: { cellWidth: 30, halign: 'center' },
+        3: { cellWidth: 30, halign: 'center' },
+        4: { cellWidth: 26, halign: 'center' },
+        5: { cellWidth: 30, halign: 'center' }
+      };
+    } else if (reportType === 'mingguan') {
+      head = [['No', 'Mahasiswa', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Total Jam', 'Kehadiran']];
+      groupedWeeklyAttendances.forEach(week => {
+        rows.push([
+          {
+            content: week.label,
+            colSpan: 9,
+            styles: {
+              fillColor: [241, 245, 249],
+              textColor: [51, 65, 85],
+              fontStyle: 'bold',
+              halign: 'center',
+              fontSize: 9
+            }
+          }
+        ]);
+        week.students.forEach((s, sIdx) => {
+          rows.push([
+            { content: String(sIdx + 1), styles: { halign: 'center', valign: 'middle' } },
+            { content: `${s.studentName}\n(${s.studentNim})`, styles: { valign: 'middle', fontStyle: 'bold' } },
+            { content: s.sen.code, styles: { halign: 'center', valign: 'middle' } },
+            { content: s.sel.code, styles: { halign: 'center', valign: 'middle' } },
+            { content: s.rab.code, styles: { halign: 'center', valign: 'middle' } },
+            { content: s.kam.code, styles: { halign: 'center', valign: 'middle' } },
+            { content: s.jum.code, styles: { halign: 'center', valign: 'middle' } },
+            { content: s.totalHoursFormatted, styles: { halign: 'center', valign: 'middle' } },
+            { content: s.kehadiran, styles: { halign: 'center', valign: 'middle' } }
+          ]);
+        });
+      });
+      columnStyles = {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 46 },
+        2: { cellWidth: 14, halign: 'center' },
+        3: { cellWidth: 14, halign: 'center' },
+        4: { cellWidth: 14, halign: 'center' },
+        5: { cellWidth: 14, halign: 'center' },
+        6: { cellWidth: 14, halign: 'center' },
+        7: { cellWidth: 26, halign: 'center' },
+        8: { cellWidth: 28, halign: 'center' }
+      };
     } else {
-      head = [['Nama Mahasiswa', 'NIM', 'Tanggal', 'Hari', 'Masuk', 'Pulang', 'Total Jam', 'Status']];
-      rows = filteredAttendances.map(a => [
-        a.studentName,
-        a.studentNim,
-        a.date,
-        a.dayName,
-        a.checkInTime || '-',
-        a.checkOutTime || '-',
-        a.totalHours || '-',
-        a.status
-      ]);
+      // reportType === 'bulanan'
+      head = [['No', 'Mahasiswa', 'Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpha', 'Total Jam', '% Kehadiran']];
+      groupedMonthlyAttendances.forEach(month => {
+        rows.push([
+          {
+            content: month.label,
+            colSpan: 9,
+            styles: {
+              fillColor: [241, 245, 249],
+              textColor: [51, 65, 85],
+              fontStyle: 'bold',
+              halign: 'center',
+              fontSize: 9
+            }
+          }
+        ]);
+        month.students.forEach((s, sIdx) => {
+          rows.push([
+            { content: String(sIdx + 1), styles: { halign: 'center', valign: 'middle' } },
+            { content: `${s.studentName}\n(${s.studentNim})`, styles: { valign: 'middle', fontStyle: 'bold' } },
+            { content: String(s.hadir), styles: { halign: 'center', valign: 'middle' } },
+            { content: String(s.terlambat), styles: { halign: 'center', valign: 'middle' } },
+            { content: String(s.izin), styles: { halign: 'center', valign: 'middle' } },
+            { content: String(s.sakit), styles: { halign: 'center', valign: 'middle' } },
+            { content: String(s.alpha), styles: { halign: 'center', valign: 'middle' } },
+            { content: s.totalHoursFormatted, styles: { halign: 'center', valign: 'middle' } },
+            { content: `${s.percentage}%`, styles: { halign: 'center', valign: 'middle' } }
+          ]);
+        });
+      });
+      columnStyles = {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 46 },
+        2: { cellWidth: 15, halign: 'center' },
+        3: { cellWidth: 18, halign: 'center' },
+        4: { cellWidth: 14, halign: 'center' },
+        5: { cellWidth: 14, halign: 'center' },
+        6: { cellWidth: 14, halign: 'center' },
+        7: { cellWidth: 24, halign: 'center' },
+        8: { cellWidth: 25, halign: 'center' }
+      };
     }
 
     autoTable(doc, {
@@ -106,8 +745,20 @@ export const LaporanAdminView: React.FC = () => {
       head: head,
       body: rows,
       theme: 'grid',
-      headStyles: { fillColor: [47, 128, 237] },
-      styles: { fontSize: 8 }
+      headStyles: { 
+        fillColor: [24, 59, 102],
+        textColor: 255,
+        fontStyle: 'bold',
+        halign: 'center',
+        fontSize: 8
+      },
+      styles: { 
+        fontSize: 8,
+        cellPadding: 2.5,
+        lineColor: [220, 226, 235],
+        lineWidth: 0.1
+      },
+      columnStyles: columnStyles
     });
 
     doc.save(`Laporan_MagangKu_${reportType}_${Date.now()}.pdf`);
@@ -129,25 +780,106 @@ export const LaporanAdminView: React.FC = () => {
         'Status': r.status
       }));
     } else if (reportType === 'aktivitas') {
-      dataToExport = filteredActivities.map(a => ({
-        'Nama Mahasiswa': a.studentName || '-',
-        'Hari': a.day || '-',
-        'Tanggal': a.date || a.activityDate || '-',
-        'Judul Aktivitas': a.title,
-        'Waktu': a.time || '-'
-      }));
+      dataToExport = [];
+      groupedActivitiesByDay.forEach(day => {
+        // Baris pembatas tanggal
+        dataToExport.push({
+          'No': '',
+          'Nama Mahasiswa': `--- ${day.fullDateLabel} ---`,
+          'Judul Aktivitas': '',
+          'Waktu Pelaksanaan': ''
+        });
+
+        day.students.forEach((student, sIdx) => {
+          student.items.forEach((item, iIdx) => {
+            dataToExport.push({
+              'No': iIdx === 0 ? sIdx + 1 : '',
+              'Nama Mahasiswa': iIdx === 0 ? `${student.studentName} (${student.studentNim})` : '',
+              'Judul Aktivitas': item.title,
+              'Waktu Pelaksanaan': item.time || '-'
+            });
+          });
+        });
+      });
+    } else if (reportType === 'harian') {
+      dataToExport = [];
+      groupedDailyAttendances.forEach(day => {
+        dataToExport.push({
+          'No': '',
+          'Nama Mahasiswa': `--- ${day.fullDateLabel} ---`,
+          'Absen Masuk': '',
+          'Absen Pulang': '',
+          'Total Jam': '',
+          'Status': ''
+        });
+        day.records.forEach((rec, rIdx) => {
+          dataToExport.push({
+            'No': rIdx + 1,
+            'Nama Mahasiswa': `${rec.studentName} (${rec.studentNim})`,
+            'Absen Masuk': rec.checkInTime,
+            'Absen Pulang': rec.checkOutTime,
+            'Total Jam': rec.totalHours,
+            'Status': rec.status
+          });
+        });
+      });
+    } else if (reportType === 'mingguan') {
+      dataToExport = [];
+      groupedWeeklyAttendances.forEach(week => {
+        dataToExport.push({
+          'No': '',
+          'Nama Mahasiswa': `--- ${week.label} ---`,
+          'Senin': '',
+          'Selasa': '',
+          'Rabu': '',
+          'Kamis': '',
+          'Jumat': '',
+          'Total Jam': '',
+          'Kehadiran': ''
+        });
+        week.students.forEach((s, sIdx) => {
+          dataToExport.push({
+            'No': sIdx + 1,
+            'Nama Mahasiswa': `${s.studentName} (${s.studentNim})`,
+            'Senin': s.sen.code,
+            'Selasa': s.sel.code,
+            'Rabu': s.rab.code,
+            'Kamis': s.kam.code,
+            'Jumat': s.jum.code,
+            'Total Jam': s.totalHoursFormatted,
+            'Kehadiran': s.kehadiran
+          });
+        });
+      });
     } else {
-      dataToExport = filteredAttendances.map(a => ({
-        'Nama Mahasiswa': a.studentName,
-        'NIM': a.studentNim,
-        'Universitas': a.university,
-        'Tanggal': a.date,
-        'Hari': a.dayName,
-        'Absen Masuk': a.checkInTime || '-',
-        'Absen Pulang': a.checkOutTime || '-',
-        'Total Jam': a.totalHours || '-',
-        'Status': a.status
-      }));
+      // reportType === 'bulanan'
+      dataToExport = [];
+      groupedMonthlyAttendances.forEach(month => {
+        dataToExport.push({
+          'No': '',
+          'Nama Mahasiswa': `--- ${month.label} ---`,
+          'Hadir': '',
+          'Terlambat': '',
+          'Izin': '',
+          'Sakit': '',
+          'Alpha': '',
+          'Total Jam': '',
+          '% Kehadiran': ''
+        });
+        month.students.forEach((s, sIdx) => {
+          dataToExport.push({
+            'No': sIdx + 1,
+            'Nama Mahasiswa': `${s.studentName} (${s.studentNim})`,
+            'Hadir': s.hadir,
+            'Terlambat': s.terlambat,
+            'Izin': s.izin,
+            'Sakit': s.sakit,
+            'Alpha': s.alpha,
+            'Total Jam': s.totalHoursFormatted,
+            '% Kehadiran': `${s.percentage}%`
+          });
+        });
+      });
     }
 
     const ws = XLSX.utils.json_to_sheet(dataToExport);
@@ -292,80 +1024,305 @@ export const LaporanAdminView: React.FC = () => {
               </tbody>
             </table>
           ) : reportType === 'aktivitas' ? (
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-100 text-slate-600 font-bold">
-                  <th className="pb-3 pr-3">Mahasiswa</th>
-                  <th className="pb-3 px-3">Tanggal</th>
-                  <th className="pb-3 px-3">Judul Aktivitas</th>
-                  <th className="pb-3 px-3">Waktu</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredActivities.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-8 text-center text-slate-400">
-                      Tidak ada data aktivitas sesuai filter
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[#183B66] text-white font-bold uppercase text-[11px] tracking-wide">
+                    <th className="py-3 px-3 w-12 text-center border-r border-slate-700/60">No</th>
+                    <th className="py-3 px-4 w-60 border-r border-slate-700/60">Mahasiswa</th>
+                    <th className="py-3 px-4 border-r border-slate-700/60">Judul Aktivitas</th>
+                    <th className="py-3 px-4 w-44 text-center">Waktu Pelaksanaan</th>
                   </tr>
-                ) : (
-                  filteredActivities.map(a => (
-                    <tr key={a.id} className="hover:bg-slate-50">
-                      <td className="py-3 pr-3 font-semibold">{a.studentName || '-'}</td>
-                      <td className="py-3 px-3">{a.date || a.activityDate}</td>
-                      <td className="py-3 px-3">{a.title}</td>
-                      <td className="py-3 px-3">{a.time || '-'}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-100 text-slate-600 font-bold">
-                  <th className="pb-3 pr-3">Mahasiswa</th>
-                  <th className="pb-3 px-3">Tanggal</th>
-                  <th className="pb-3 px-3">Absen Masuk</th>
-                  <th className="pb-3 px-3">Absen Pulang</th>
-                  <th className="pb-3 px-3">Total Jam</th>
-                  <th className="pb-3 px-3">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                {filteredAttendances.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className="py-8 text-center text-slate-400">
-                      Tidak ada data absensi sesuai filter
-                    </td>
-                  </tr>
-                ) : (
-                  filteredAttendances.map(a => (
-                    <tr key={a.id} className="hover:bg-slate-50">
-                      <td className="py-3 pr-3 font-semibold">{a.studentName} ({a.studentNim})</td>
-                      <td className="py-3 px-3">{a.dayName}, {a.date}</td>
-                      <td className="py-3 px-3">{a.checkInTime || '-'}</td>
-                      <td className="py-3 px-3">{a.checkOutTime || '-'}</td>
-                      <td className="py-3 px-3">{a.totalHours || '-'}</td>
-                      <td className="py-3 px-3 font-semibold">
-                        <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
-                          a.status === 'Hadir' ? 'bg-emerald-100 text-emerald-700' :
-                          a.status === 'Terlambat' ? 'bg-rose-100 text-rose-700' :
-                          a.status === 'Izin' ? 'bg-amber-100 text-amber-700' :
-                          a.status === 'Sakit' ? 'bg-orange-100 text-orange-700' :
-                          'bg-slate-100 text-slate-600'
-                        }`}>
-                          {a.status}
-                        </span>
-                        {a.correctedByAdmin && (
-                          <span className="block text-[9px] text-[#2F80ED] font-semibold mt-0.5">Dikoreksi Admin</span>
-                        )}
+                </thead>
+                <tbody className="text-slate-700 dark:text-slate-300 font-medium">
+                  {groupedActivitiesByDay.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="py-8 text-center text-slate-400">
+                        Tidak ada data aktivitas sesuai filter
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    groupedActivitiesByDay.map(day => (
+                      <React.Fragment key={day.date}>
+                        {/* Baris Pembatas Tanggal (Full Width) */}
+                        <tr className="bg-slate-100 border-y border-slate-300 dark:bg-slate-800/80 dark:border-slate-700">
+                          <td colSpan={4} className="py-2.5 px-4 text-center font-bold text-slate-700 dark:text-slate-200 text-xs tracking-wide">
+                            {day.fullDateLabel}
+                          </td>
+                        </tr>
+
+                        {/* Mahasiswa dalam hari ini */}
+                        {day.students.map((student, sIdx) => (
+                          <React.Fragment key={`${day.date}-${student.userId || sIdx}`}>
+                            {student.items.map((item, iIdx) => (
+                              <tr 
+                                key={item.id || `${student.userId}-${iIdx}`}
+                                className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors"
+                              >
+                                {iIdx === 0 && (
+                                  <>
+                                    <td 
+                                      rowSpan={student.items.length} 
+                                      className="py-3 px-3 text-center align-middle font-bold text-slate-400 dark:text-slate-500 border-r border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40"
+                                    >
+                                      {sIdx + 1}
+                                    </td>
+                                    <td 
+                                      rowSpan={student.items.length} 
+                                      className="py-3 px-4 align-middle border-r border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40"
+                                    >
+                                      <p className="font-bold text-slate-900 dark:text-slate-100">{student.studentName}</p>
+                                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">({student.studentNim})</p>
+                                    </td>
+                                  </>
+                                )}
+                                <td className="py-2.5 px-4 text-slate-800 dark:text-slate-200 border-r border-b border-slate-200 dark:border-slate-700">
+                                  {item.title}
+                                </td>
+                                <td className="py-2.5 px-4 text-center text-slate-600 dark:text-slate-400 font-mono text-xs whitespace-nowrap border-b border-slate-200 dark:border-slate-700">
+                                  {item.time || '-'}
+                                </td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
+                        ))}
+                      </React.Fragment>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : reportType === 'harian' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[#183B66] text-white font-bold uppercase text-[11px] tracking-wide">
+                    <th className="py-3 px-3 w-12 text-center border-r border-slate-700/60">No</th>
+                    <th className="py-3 px-4 w-64 border-r border-slate-700/60">Mahasiswa</th>
+                    <th className="py-3 px-4 w-32 text-center border-r border-slate-700/60">Absen Masuk</th>
+                    <th className="py-3 px-4 w-32 text-center border-r border-slate-700/60">Absen Pulang</th>
+                    <th className="py-3 px-4 w-28 text-center border-r border-slate-700/60">Total Jam</th>
+                    <th className="py-3 px-4 w-32 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="text-slate-700 dark:text-slate-300 font-medium">
+                  {groupedDailyAttendances.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-8 text-center text-slate-400">
+                        Tidak ada data absensi harian sesuai filter
+                      </td>
+                    </tr>
+                  ) : (
+                    groupedDailyAttendances.map(day => (
+                      <React.Fragment key={day.date}>
+                        {/* Baris Pembatas Tanggal */}
+                        <tr className="bg-slate-100 border-y border-slate-300 dark:bg-slate-800/80 dark:border-slate-700">
+                          <td colSpan={6} className="py-2.5 px-4 text-center font-bold text-slate-700 dark:text-slate-200 text-xs tracking-wide">
+                            {day.fullDateLabel}
+                          </td>
+                        </tr>
+
+                        {day.records.map((rec, rIdx) => (
+                          <tr 
+                            key={rec.id || `${day.date}-${rIdx}`}
+                            className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors border-b border-slate-200 dark:border-slate-700"
+                          >
+                            <td className="py-2.5 px-3 text-center text-slate-400 dark:text-slate-500 font-bold border-r border-slate-200 dark:border-slate-700">
+                              {rIdx + 1}
+                            </td>
+                            <td className="py-2.5 px-4 border-r border-slate-200 dark:border-slate-700">
+                              <p className="font-bold text-slate-900 dark:text-slate-100">{rec.studentName}</p>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">({rec.studentNim})</p>
+                            </td>
+                            <td className="py-2.5 px-4 text-center text-slate-700 dark:text-slate-300 font-mono border-r border-slate-200 dark:border-slate-700">
+                              {rec.checkInTime}
+                            </td>
+                            <td className="py-2.5 px-4 text-center text-slate-700 dark:text-slate-300 font-mono border-r border-slate-200 dark:border-slate-700">
+                              {rec.checkOutTime}
+                            </td>
+                            <td className="py-2.5 px-4 text-center text-slate-700 dark:text-slate-300 font-mono border-r border-slate-200 dark:border-slate-700">
+                              {rec.totalHours}
+                            </td>
+                            <td className="py-2.5 px-4 text-center">
+                              <span className={`font-semibold ${
+                                rec.status === 'Hadir' ? 'text-emerald-700 dark:text-emerald-400' :
+                                rec.status === 'Terlambat' ? 'text-rose-700 dark:text-rose-400' :
+                                rec.status === 'Izin' ? 'text-amber-700 dark:text-amber-400' :
+                                rec.status === 'Sakit' ? 'text-orange-700 dark:text-orange-400' :
+                                rec.status === 'Alpha' ? 'text-red-700 dark:text-red-400' :
+                                'text-slate-700 dark:text-slate-300'
+                              }`}>
+                                {rec.status}
+                              </span>
+                              {rec.correctedByAdmin && (
+                                <span className="block text-[9px] text-[#2F80ED] font-semibold mt-0.5">Dikoreksi Admin</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          ) : reportType === 'mingguan' ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[#183B66] text-white font-bold uppercase text-[11px] tracking-wide">
+                    <th className="py-3 px-3 w-12 text-center border-r border-slate-700/60">No</th>
+                    <th className="py-3 px-4 w-56 border-r border-slate-700/60">Mahasiswa</th>
+                    <th className="py-3 px-2 w-16 text-center border-r border-slate-700/60">Sen</th>
+                    <th className="py-3 px-2 w-16 text-center border-r border-slate-700/60">Sel</th>
+                    <th className="py-3 px-2 w-16 text-center border-r border-slate-700/60">Rab</th>
+                    <th className="py-3 px-2 w-16 text-center border-r border-slate-700/60">Kam</th>
+                    <th className="py-3 px-2 w-16 text-center border-r border-slate-700/60">Jum</th>
+                    <th className="py-3 px-3 w-24 text-center border-r border-slate-700/60">Total Jam</th>
+                    <th className="py-3 px-3 w-28 text-center">Kehadiran</th>
+                  </tr>
+                </thead>
+                <tbody className="text-slate-700 dark:text-slate-300 font-medium">
+                  {groupedWeeklyAttendances.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-8 text-center text-slate-400">
+                        Tidak ada data absensi mingguan sesuai filter
+                      </td>
+                    </tr>
+                  ) : (
+                    groupedWeeklyAttendances.map(week => (
+                      <React.Fragment key={week.weekKey}>
+                        {/* Baris Pembatas Minggu */}
+                        <tr className="bg-slate-100 border-y border-slate-300 dark:bg-slate-800/80 dark:border-slate-700">
+                          <td colSpan={9} className="py-2.5 px-4 text-center font-bold text-slate-700 dark:text-slate-200 text-xs tracking-wide">
+                            {week.label}
+                          </td>
+                        </tr>
+
+                        {week.students.map((student, sIdx) => (
+                          <tr 
+                            key={`${week.weekKey}-${student.userId || sIdx}`}
+                            className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors border-b border-slate-200 dark:border-slate-700"
+                          >
+                            <td className="py-2.5 px-3 text-center text-slate-400 dark:text-slate-500 font-bold border-r border-slate-200 dark:border-slate-700">
+                              {sIdx + 1}
+                            </td>
+                            <td className="py-2.5 px-4 border-r border-slate-200 dark:border-slate-700">
+                              <p className="font-bold text-slate-900 dark:text-slate-100">{student.studentName}</p>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">({student.studentNim})</p>
+                            </td>
+                            <td className={`py-2.5 px-2 text-center ${student.sen.color} border-r border-slate-200 dark:border-slate-700`} title={`Senin: ${student.sen.full}`}>
+                              {student.sen.code}
+                            </td>
+                            <td className={`py-2.5 px-2 text-center ${student.sel.color} border-r border-slate-200 dark:border-slate-700`} title={`Selasa: ${student.sel.full}`}>
+                              {student.sel.code}
+                            </td>
+                            <td className={`py-2.5 px-2 text-center ${student.rab.color} border-r border-slate-200 dark:border-slate-700`} title={`Rabu: ${student.rab.full}`}>
+                              {student.rab.code}
+                            </td>
+                            <td className={`py-2.5 px-2 text-center ${student.kam.color} border-r border-slate-200 dark:border-slate-700`} title={`Kamis: ${student.kam.full}`}>
+                              {student.kam.code}
+                            </td>
+                            <td className={`py-2.5 px-2 text-center ${student.jum.color} border-r border-slate-200 dark:border-slate-700`} title={`Jumat: ${student.jum.full}`}>
+                              {student.jum.code}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-mono text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
+                              {student.totalHoursFormatted}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-semibold text-slate-800 dark:text-slate-200">
+                              {student.kehadiran}
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))
+                  )}
+                </tbody>
+              </table>
+              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700 text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap gap-4 items-center">
+                <span className="font-semibold text-slate-700 dark:text-slate-200">Keterangan:</span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-semibold">H = Hadir</span>
+                <span className="text-rose-700 dark:text-rose-400 font-semibold">T = Terlambat</span>
+                <span className="text-amber-700 dark:text-amber-400 font-semibold">I = Izin</span>
+                <span className="text-orange-700 dark:text-orange-400 font-semibold">S = Sakit</span>
+                <span className="text-red-700 dark:text-red-400 font-semibold">A = Alpha</span>
+              </div>
+            </div>
+          ) : (
+            /* reportType === 'bulanan' */
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-[#183B66] text-white font-bold uppercase text-[11px] tracking-wide">
+                    <th className="py-3 px-3 w-12 text-center border-r border-slate-700/60">No</th>
+                    <th className="py-3 px-4 w-60 border-r border-slate-700/60">Mahasiswa</th>
+                    <th className="py-3 px-3 w-20 text-center border-r border-slate-700/60">Hadir</th>
+                    <th className="py-3 px-3 w-20 text-center border-r border-slate-700/60">Terlambat</th>
+                    <th className="py-3 px-3 w-20 text-center border-r border-slate-700/60">Izin</th>
+                    <th className="py-3 px-3 w-20 text-center border-r border-slate-700/60">Sakit</th>
+                    <th className="py-3 px-3 w-20 text-center border-r border-slate-700/60">Alpha</th>
+                    <th className="py-3 px-3 w-24 text-center border-r border-slate-700/60">Total Jam</th>
+                    <th className="py-3 px-3 w-28 text-center">% Kehadiran</th>
+                  </tr>
+                </thead>
+                <tbody className="text-slate-700 dark:text-slate-300 font-medium">
+                  {groupedMonthlyAttendances.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="py-8 text-center text-slate-400">
+                        Tidak ada data absensi bulanan sesuai filter
+                      </td>
+                    </tr>
+                  ) : (
+                    groupedMonthlyAttendances.map(month => (
+                      <React.Fragment key={month.monthKey}>
+                        {/* Baris Pembatas Bulan */}
+                        <tr className="bg-slate-100 border-y border-slate-300 dark:bg-slate-800/80 dark:border-slate-700">
+                          <td colSpan={9} className="py-2.5 px-4 text-center font-bold text-slate-700 dark:text-slate-200 text-xs tracking-wide">
+                            {month.label}
+                          </td>
+                        </tr>
+
+                        {month.students.map((student, sIdx) => (
+                          <tr 
+                            key={`${month.monthKey}-${student.userId || sIdx}`}
+                            className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors border-b border-slate-200 dark:border-slate-700"
+                          >
+                            <td className="py-2.5 px-3 text-center text-slate-400 dark:text-slate-500 font-bold border-r border-slate-200 dark:border-slate-700">
+                              {sIdx + 1}
+                            </td>
+                            <td className="py-2.5 px-4 border-r border-slate-200 dark:border-slate-700">
+                              <p className="font-bold text-slate-900 dark:text-slate-100">{student.studentName}</p>
+                              <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">({student.studentNim})</p>
+                            </td>
+                            <td className="py-2.5 px-3 text-center text-emerald-700 dark:text-emerald-400 font-bold border-r border-slate-200 dark:border-slate-700">
+                              {student.hadir}
+                            </td>
+                            <td className={`py-2.5 px-3 text-center font-bold border-r border-slate-200 dark:border-slate-700 ${student.terlambat > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-slate-400 font-normal font-mono'}`}>
+                              {student.terlambat}
+                            </td>
+                            <td className={`py-2.5 px-3 text-center font-bold border-r border-slate-200 dark:border-slate-700 ${student.izin > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-slate-400 font-normal font-mono'}`}>
+                              {student.izin}
+                            </td>
+                            <td className={`py-2.5 px-3 text-center font-bold border-r border-slate-200 dark:border-slate-700 ${student.sakit > 0 ? 'text-orange-700 dark:text-orange-400' : 'text-slate-400 font-normal font-mono'}`}>
+                              {student.sakit}
+                            </td>
+                            <td className={`py-2.5 px-3 text-center font-bold border-r border-slate-200 dark:border-slate-700 ${student.alpha > 0 ? 'text-red-700 dark:text-red-400' : 'text-slate-400 font-normal font-mono'}`}>
+                              {student.alpha}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-mono text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
+                              {student.totalHoursFormatted}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-bold text-emerald-700 dark:text-emerald-400">
+                              {student.percentage}%
+                            </td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </div>

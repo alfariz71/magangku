@@ -136,7 +136,6 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
 
       await supabase.from('user_profiles').update({
         photo_url: newAvatarUrl,
-        avatar_url: newAvatarUrl
       }).eq('id', currentUser.id);
 
       await updateCurrentUser({ avatar: newAvatarUrl });
@@ -209,12 +208,12 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
 
           {/* Notification Dropdown Menu */}
           {showNotifications && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-slate-100 bg-white p-3 shadow-xl shadow-slate-900/10 z-50 animate-in fade-in zoom-in-95 duration-150">
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 px-2">
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl border border-slate-100 dark:border-slate-700/80 bg-white dark:bg-slate-900 p-3 shadow-xl shadow-slate-900/10 z-50 animate-in fade-in zoom-in-95 duration-150">
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5 px-2">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-semibold text-slate-900 text-sm">Notifikasi</h3>
+                  <h3 className="font-semibold text-slate-900 dark:text-white text-sm">Notifikasi</h3>
                   {unreadCount > 0 && (
-                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-[#2F80ED]">
+                    <span className="rounded-full bg-blue-50 dark:bg-blue-500/20 px-2 py-0.5 text-xs font-semibold text-[#2F80ED] dark:text-blue-400">
                       {unreadCount} baru
                     </span>
                   )}
@@ -222,16 +221,16 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
                 {unreadCount > 0 && (
                   <button
                     onClick={markAllNotificationsAsRead}
-                    className="text-xs text-[#2F80ED] hover:underline font-medium"
+                    className="text-xs text-[#2F80ED] dark:text-blue-400 hover:underline font-medium"
                   >
                     Tandai dibaca
                   </button>
                 )}
               </div>
 
-              <div className="mt-2 max-h-80 overflow-y-auto space-y-1.5 divide-y divide-slate-50">
+              <div className="mt-2 max-h-80 overflow-y-auto space-y-1.5 divide-y divide-slate-50 dark:divide-slate-800/60">
                 {notifications.length === 0 ? (
-                  <div className="py-6 text-center text-xs text-slate-400">
+                  <div className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">
                     Tidak ada notifikasi baru
                   </div>
                 ) : (
@@ -244,16 +243,18 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
                         setShowNotifications(false);
                       }}
                       className={`cursor-pointer rounded-xl p-2.5 transition-colors ${
-                        n.read ? 'bg-transparent hover:bg-slate-50' : 'bg-blue-50/50 hover:bg-blue-50'
+                        n.read
+                          ? 'bg-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                          : 'bg-blue-50/60 hover:bg-blue-50 dark:bg-blue-950/40 dark:hover:bg-blue-900/40 border border-blue-100/60 dark:border-blue-800/50'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <p className={`text-xs font-medium ${n.read ? 'text-slate-800' : 'text-blue-900 font-semibold'}`}>
+                        <p className={`text-xs ${n.read ? 'font-medium text-slate-800 dark:text-slate-200' : 'font-semibold text-blue-900 dark:text-blue-200'}`}>
                           {n.title}
                         </p>
-                        <span className="text-[10px] text-slate-400 whitespace-nowrap">{n.time}</span>
+                        <span className="text-[10px] text-slate-400 dark:text-slate-400 whitespace-nowrap">{n.time}</span>
                       </div>
-                      <p className="mt-1 text-xs text-slate-600 leading-relaxed line-clamp-2">
+                      <p className={`mt-1 text-xs leading-relaxed line-clamp-2 ${n.read ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
                         {n.message}
                       </p>
                     </div>

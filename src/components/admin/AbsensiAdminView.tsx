@@ -370,10 +370,10 @@ export const AbsensiAdminView: React.FC = () => {
                               </button>
                               <button
                                 onClick={() => setDeletingRecord(item)}
-                                className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50/60 px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-100/70 hover:border-rose-300 transition"
+                                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-rose-600 hover:bg-rose-50 hover:border-rose-300 dark:bg-slate-800 dark:border-slate-700 dark:text-rose-400 dark:hover:bg-rose-950/50 dark:hover:border-rose-800 transition"
                                 title="Hapus Data Absensi"
                               >
-                                <Trash2 className="h-3.5 w-3.5 text-rose-500" />
+                                <Trash2 className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400" />
                                 <span>Hapus</span>
                               </button>
                             </div>

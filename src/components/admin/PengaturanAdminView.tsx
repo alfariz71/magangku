@@ -1,20 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Settings, Shield, Clock, Bell, Save, CheckCircle2, History, Search } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 
 export const PengaturanAdminView: React.FC = () => {
-  const { auditLogs } = useData();
+  const { auditLogs, systemSettings, updateSystemSettings } = useData();
 
-  const [workStartTime, setWorkStartTime] = useState('08:00');
-  const [workEndTime, setWorkEndTime] = useState('17:00');
-  const [lateToleranceMins, setLateToleranceMins] = useState(15);
-  const [allowOvertime, setAllowOvertime] = useState(true);
-  const [requireSignatureOnReport, setRequireSignatureOnReport] = useState(true);
+  const [workStartTime, setWorkStartTime] = useState(systemSettings.workStartTime || '08:00');
+  const [workEndTime, setWorkEndTime] = useState(systemSettings.workEndTime || '17:00');
+  const [lateToleranceMins, setLateToleranceMins] = useState(systemSettings.lateToleranceMins ?? 15);
+  const [allowOvertime, setAllowOvertime] = useState(systemSettings.allowOvertime ?? true);
+  const [requireSignatureOnReport, setRequireSignatureOnReport] = useState(systemSettings.requireSignatureOnReport ?? true);
   const [searchLog, setSearchLog] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  useEffect(() => {
+    setWorkStartTime(systemSettings.workStartTime);
+    setWorkEndTime(systemSettings.workEndTime);
+    setLateToleranceMins(systemSettings.lateToleranceMins);
+    setAllowOvertime(systemSettings.allowOvertime);
+    setRequireSignatureOnReport(systemSettings.requireSignatureOnReport);
+  }, [systemSettings]);
+
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
+    updateSystemSettings({
+      workStartTime,
+      workEndTime,
+      lateToleranceMins: Number(lateToleranceMins) || 0,
+      allowOvertime,
+      requireSignatureOnReport,
+    });
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
   };
@@ -83,9 +98,17 @@ export const PengaturanAdminView: React.FC = () => {
                   onChange={e => setLateToleranceMins(Number(e.target.value))}
                   className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Absensi setelah pukul {workStartTime} + {lateToleranceMins} menit akan otomatis ditandai status 'Terlambat'.
-                </p>
+                {(() => {
+                  const [h, m] = (workStartTime || '08:00').split(':').map(Number);
+                  const total = (h * 60 + (m || 0)) + (Number(lateToleranceMins) || 0);
+                  const cutoffH = String(Math.floor(total / 60) % 24).padStart(2, '0');
+                  const cutoffM = String(total % 60).padStart(2, '0');
+                  return (
+                    <p className="text-[11px] text-[#2F80ED] font-semibold mt-1">
+                      💡 Batas akhir kehadiran tepat waktu: <strong>{cutoffH}:{cutoffM} WIB</strong> (absen lewat dari jam ini otomatis berstatus 'Terlambat').
+                    </p>
+                  );
+                })()}
               </div>
 
               <div className="space-y-2 pt-2 border-t border-slate-100">
