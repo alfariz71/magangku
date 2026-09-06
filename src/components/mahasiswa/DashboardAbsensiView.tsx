@@ -434,8 +434,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
                       <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
                         item.status === 'Hadir' ? 'bg-emerald-100 text-emerald-700' :
                         item.status === 'Terlambat' ? 'bg-rose-100 text-rose-700' :
-                        item.status === 'Izin' ? 'bg-amber-100 text-amber-700' :
-                        item.status === 'Sakit' ? 'bg-orange-100 text-orange-700' :
+                        item.status === 'Izin' || item.status === 'Sakit' ? 'bg-amber-100 text-amber-700' :
                         'bg-slate-100 text-slate-600'
                       }`}>
                         {item.status}
@@ -474,8 +473,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
                     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
                       item.status === 'Hadir' ? 'bg-emerald-100 text-emerald-700' :
                       item.status === 'Terlambat' ? 'bg-rose-100 text-rose-700' :
-                      item.status === 'Izin' ? 'bg-amber-100 text-amber-700' :
-                      item.status === 'Sakit' ? 'bg-orange-100 text-orange-700' :
+                      item.status === 'Izin' || item.status === 'Sakit' ? 'bg-amber-100 text-amber-700' :
                       'bg-slate-100 text-slate-600'
                     }`}>
                       {item.status}

@@ -219,6 +219,10 @@ html.dark .bg-\[\#FEF0EE\] {
 
 html.dark .bg-amber-50,
 html.dark .bg-amber-100,
+html.dark .bg-orange-50,
+html.dark .bg-orange-100,
+html.dark .bg-yellow-50,
+html.dark .bg-yellow-100,
 html.dark .bg-\[\#FEF8E8\] {
   background-color: rgba(242, 153, 74, 0.18) !important;
 }
