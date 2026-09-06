@@ -67,9 +67,14 @@ export default function LokasiAdminView() {
   const handleGenerateQr = async (locId: string) => {
     const existing = locationQrMap[locId];
     if (existing && !window.confirm('QR Code lama akan diganti. Lanjutkan?')) return;
-    setGeneratingId(locId);
-    await generateQrForLocationId(locId);
-    setGeneratingId(null);
+    try {
+      setGeneratingId(locId);
+      await generateQrForLocationId(locId);
+    } catch (err) {
+      console.error('Gagal generate QR:', err);
+    } finally {
+      setGeneratingId(null);
+    }
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -373,11 +378,11 @@ export default function LokasiAdminView() {
                     {/* QR Display */}
                     <div className="shrink-0 flex flex-col items-center">
                       {token ? (
-                        <div className="p-3 bg-white border-2 border-[#2F80ED] rounded-2xl shadow-sm">
+                        <div key={`qr-${loc.id}-${token}`} className="p-3 bg-white border-2 border-[#2F80ED] rounded-2xl shadow-sm">
                           <QRCodeSVG id={`qr-${loc.id}`} value={token} size={150} level="H" />
                         </div>
                       ) : (
-                        <div className="w-[178px] h-[178px] border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-300 gap-2">
+                        <div key={`no-qr-${loc.id}`} className="w-[178px] h-[178px] border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center text-slate-300 gap-2">
                           <QrCode size={40} />
                           <span className="text-xs">Belum ada QR</span>
                         </div>
@@ -413,12 +418,22 @@ export default function LokasiAdminView() {
 
                       <div className="flex flex-col gap-2">
                         <button
+                          type="button"
                           onClick={() => handleGenerateQr(loc.id)}
                           disabled={isGenerating}
                           className="flex items-center justify-center gap-1.5 rounded-xl bg-[#2F80ED] px-3 py-2 text-xs font-semibold text-white hover:bg-blue-600 transition disabled:opacity-60"
                         >
-                          {isGenerating ? <RefreshCw size={13} className="animate-spin" /> : <QrCode size={13} />}
-                          {isGenerating ? 'Membuat...' : token ? 'Generate Ulang QR' : 'Buat QR Code'}
+                          {isGenerating ? (
+                            <span key="loading" className="inline-flex items-center gap-1.5">
+                              <RefreshCw size={13} className="animate-spin" />
+                              <span>Membuat...</span>
+                            </span>
+                          ) : (
+                            <span key="ready" className="inline-flex items-center gap-1.5">
+                              <QrCode size={13} />
+                              <span>{token ? 'Generate Ulang QR' : 'Buat QR Code'}</span>
+                            </span>
+                          )}
                         </button>
                         {token && (
                           <button

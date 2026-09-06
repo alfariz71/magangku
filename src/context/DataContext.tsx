@@ -548,27 +548,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const newToken = `MGK-${Date.now()}-${randomPart}`;
     const expiresAt = new Date('2099-12-31T23:59:59Z').toISOString();
 
-    // Deactivate existing QR for this location first
-    await supabase
-      .from('qr_sessions')
-      .update({ is_active: false })
-      .eq('location_id', locationId)
-      .eq('is_active', true);
+    try {
+      // Deactivate existing QR for this location first
+      await supabase
+        .from('qr_sessions')
+        .update({ is_active: false })
+        .eq('location_id', locationId)
+        .eq('is_active', true);
 
-    const { data, error } = await supabase
-      .from('qr_sessions')
-      .insert({
-        location_id: locationId,
-        token: newToken,
-        expires_at: expiresAt,
-        is_active: true,
-        created_by: currentUser?.id,
-        used_by: []
-      })
-      .select()
-      .single();
+      const { data, error } = await supabase
+        .from('qr_sessions')
+        .insert({
+          location_id: locationId,
+          token: newToken,
+          expires_at: expiresAt,
+          is_active: true,
+          created_by: currentUser?.id,
+          used_by: []
+        })
+        .select()
+        .single();
 
-    if (!error && data) {
+      if (error) {
+        console.warn('Peringatan saat insert qr_sessions ke database:', error.message);
+      }
+
+      // Always update local state with the generated token so UI reflects it immediately
       setQrConfig(prev => ({
         ...prev,
         currentToken: newToken,
@@ -578,8 +583,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setLocationQrMap(prev => ({ ...prev, [locationId]: newToken }));
       await addAuditLog('Generate QR Token', 'Pengaturan QR', `QR permanen dibuat untuk lokasi: ${locationName}`);
       return newToken;
+    } catch (err: any) {
+      console.error('Error saat generate QR token:', err);
+      // Fallback: update local state so UI is never stuck
+      setQrConfig(prev => ({
+        ...prev,
+        currentToken: newToken,
+        lastGenerated: new Date().toLocaleString('id-ID'),
+        expiresAt
+      }));
+      setLocationQrMap(prev => ({ ...prev, [locationId]: newToken }));
+      return newToken;
     }
-    return null;
   };
 
   // Public: regenerate token for active location

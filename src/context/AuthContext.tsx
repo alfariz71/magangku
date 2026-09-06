@@ -24,18 +24,24 @@ export interface RegisterData {
 }
 
 // ============================================================
+// Root Admin Emails List (Can Switch Role)
+// ============================================================
+export const ROOT_EMAILS = ['ikhsanfadil047103@gmail.com'];
+
+// ============================================================
 // Context Types
 // ============================================================
 interface AuthContextType {
   currentUser: User | null;
   role: UserRole;
+  isRootUser: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   register: (data: RegisterData) => Promise<{ success: boolean; message?: string }>;
   updateCurrentUser: (updatedData: Partial<User>) => Promise<{ success: boolean; message?: string }>;
-  switchRole: (role: UserRole) => void; // dev only
+  switchRole: (role: UserRole) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -94,6 +100,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const user = mapProfileToUser(userId, profile, email);
     
+    // If root user, restore saved active role preference from localStorage
+    const isRoot = Boolean(email && ROOT_EMAILS.includes(email.toLowerCase().trim()));
+    if (isRoot) {
+      const savedRole = localStorage.getItem('magangku_root_active_role') as UserRole | null;
+      if (savedRole === 'admin' || savedRole === 'user') {
+        user.role = savedRole;
+      } else {
+        user.role = 'admin';
+      }
+    }
+
     // Sync missing NIM from auth metadata if available (fix for registration RLS block)
     const metadataNim = sessionUser.user_metadata?.nim;
     if (!user.nim && metadataNim) {
@@ -261,6 +278,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     await supabase.auth.signOut();
     setCurrentUser(null);
+    localStorage.removeItem('magangku_root_active_role');
   };
 
   // ---- Update Profile ----
@@ -301,10 +319,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Dev only: switch role for testing
-  const switchRole = (role: UserRole) => {
-    if (currentUser) {
-      setCurrentUser(prev => prev ? { ...prev, role } : prev);
+  // Root check: exclusively for ROOT_EMAILS
+  const isRootUser = Boolean(currentUser?.email && ROOT_EMAILS.includes(currentUser.email.toLowerCase().trim()));
+
+  // Switch role: exclusively functional for root user
+  const switchRole = (newRole: UserRole) => {
+    if (currentUser && isRootUser) {
+      localStorage.setItem('magangku_root_active_role', newRole);
+      setCurrentUser(prev => prev ? { ...prev, role: newRole } : prev);
     }
   };
 
@@ -316,6 +338,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         currentUser,
         role,
+        isRootUser,
         isAuthenticated,
         isLoading,
         login,

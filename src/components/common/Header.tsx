@@ -11,7 +11,8 @@ import {
   Check,
   X,
   Moon,
-  Sun
+  Sun,
+  ArrowLeftRight
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -24,7 +25,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
-  const { currentUser, role, logout, updateCurrentUser } = useAuth();
+  const { currentUser, role, isRootUser, switchRole, logout, updateCurrentUser } = useAuth();
   const { notifications, markNotificationAsRead, markAllNotificationsAsRead } = useData();
 
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -274,6 +275,24 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
           onChange={handleAvatarChange}
         />
 
+        {/* Root User Switch Role Button - ONLY visible for ikhsanfadil047103@gmail.com */}
+        {isRootUser && (
+          <button
+            type="button"
+            onClick={() => switchRole(role === 'admin' ? 'user' : 'admin')}
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer shrink-0 ${
+              role === 'admin'
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-blue-500/25 ring-2 ring-blue-400/20'
+                : 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-orange-500/25 ring-2 ring-orange-400/20'
+            }`}
+            title={`Saat ini dalam mode ${role === 'admin' ? 'Administrator' : 'Mahasiswa'}. Klik untuk beralih mode.`}
+          >
+            <ArrowLeftRight className="w-3.5 h-3.5 animate-pulse" />
+            <span className="hidden sm:inline">Switch:</span>
+            <span>{role === 'admin' ? 'Mahasiswa' : 'Admin'}</span>
+          </button>
+        )}
+
         {/* Profile Card & Mini Column Dropdown */}
         <div className="relative" ref={profileRef}>
           <button
@@ -338,11 +357,29 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
                     <Shield className="h-3 w-3" />
                     {role === 'admin' ? 'Administrator' : `NIM: ${currentUser?.nim || '-'}`}
                   </span>
+                  {isRootUser && (
+                    <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                      ⚡ Root Superadmin
+                    </span>
+                  )}
                 </div>
               </div>
 
               {/* Navigation Actions */}
               <div className="pt-2 space-y-1">
+                {isRootUser && (
+                  <button
+                    onClick={() => {
+                      switchRole(role === 'admin' ? 'user' : 'admin');
+                      setShowProfileMenu(false);
+                    }}
+                    className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50 transition text-left cursor-pointer border border-blue-100/80 mb-1"
+                  >
+                    <ArrowLeftRight className="h-4 w-4 text-blue-500" />
+                    <span>Beralih ke Mode {role === 'admin' ? 'Mahasiswa' : 'Admin'}</span>
+                  </button>
+                )}
+
                 {onNavigate && (
                   <button
                     onClick={() => {
