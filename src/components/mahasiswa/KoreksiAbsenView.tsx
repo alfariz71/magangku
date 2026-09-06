@@ -168,11 +168,23 @@ export const KoreksiAbsenView: React.FC = () => {
   const getStatusBadge = (status: AttendanceCorrectionRequest['status']) => {
     switch (status) {
       case 'Disetujui':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-800"><Check size={11}/> Disetujui</span>;
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30">
+            <Check size={12} /> Disetujui
+          </span>
+        );
       case 'Ditolak':
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800"><X size={11}/> Ditolak</span>;
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200/60 dark:bg-rose-500/15 dark:text-rose-400 dark:border-rose-500/30">
+            <X size={12} /> Ditolak
+          </span>
+        );
       default:
-        return <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800"><Clock size={11}/> Menunggu</span>;
+        return (
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200/60 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30">
+            <Clock size={12} /> Menunggu
+          </span>
+        );
     }
   };
 
@@ -317,21 +329,21 @@ export const KoreksiAbsenView: React.FC = () => {
             <p className="mt-1 text-sm text-gray-500">Anda belum pernah mengajukan koreksi absensi.</p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-slate-100 dark:divide-slate-700/60">
             {myRequests.map(req => (
-              <div key={req.id} className="px-6 py-4">
+              <div key={req.id} className="px-6 py-4 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
                 <div className="flex items-center justify-between cursor-pointer"
                   onClick={() => setExpandedReqId(expandedReqId === req.id ? null : req.id)}>
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="font-semibold text-sm text-gray-900">{formatDate(req.attendanceDate)}</p>
+                      <p className="font-semibold text-sm text-gray-900 dark:text-slate-100">{formatDate(req.attendanceDate)}</p>
                       {req.evidenceUrl && (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-[#2F80ED]">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-[#2F80ED] border border-blue-100/60 dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/30">
                           <ImageIcon size={11} /> Ada Bukti
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-[#2F80ED] font-medium mt-0.5">{req.correctionType}</p>
+                    <p className="text-xs text-[#2F80ED] dark:text-blue-400 font-medium mt-0.5">{req.correctionType}</p>
                   </div>
                   <div className="flex items-center gap-3">
                     {getStatusBadge(req.status)}
@@ -341,41 +353,41 @@ export const KoreksiAbsenView: React.FC = () => {
 
                 {expandedReqId === req.id && (
                   <div className="mt-4 space-y-3">
-                    <div className="grid grid-cols-2 gap-4 bg-gray-50 rounded-xl p-4 text-sm">
+                    <div className="grid grid-cols-2 gap-4 bg-gray-50 dark:bg-slate-900/60 rounded-xl p-4 text-sm border border-gray-100 dark:border-slate-800">
                       {req.requestedCheckIn && (
                         <div>
                           <p className="text-xs font-semibold text-gray-400 uppercase mb-1">Jam Masuk Diminta</p>
-                          <p className="font-medium text-gray-800">{req.requestedCheckIn}</p>
+                          <p className="font-medium text-gray-800 dark:text-slate-200">{req.requestedCheckIn}</p>
                         </div>
                       )}
                       {req.requestedCheckOut && (
                         <div>
                           <p className="text-xs font-semibold text-gray-400 uppercase mb-1">Jam Pulang Diminta</p>
-                          <p className="font-medium text-gray-800">{req.requestedCheckOut}</p>
+                          <p className="font-medium text-gray-800 dark:text-slate-200">{req.requestedCheckOut}</p>
                         </div>
                       )}
                       <div className="col-span-2">
                         <p className="text-xs font-semibold text-gray-400 uppercase mb-1">Alasan</p>
-                        <p className="text-gray-700 leading-relaxed">{req.reason}</p>
+                        <p className="text-gray-700 dark:text-slate-300 leading-relaxed">{req.reason}</p>
                       </div>
 
                       {/* Bukti Lampiran */}
                       {req.evidenceUrl && (
-                        <div className="col-span-2 pt-2 border-t border-gray-200/60">
+                        <div className="col-span-2 pt-2 border-t border-gray-200/60 dark:border-slate-700/60">
                           <p className="text-xs font-semibold text-gray-400 uppercase mb-2">Bukti Lampiran</p>
                           <div className="flex items-center gap-3">
                             <img
                               src={req.evidenceUrl}
                               alt="Bukti Absensi"
-                              className="w-16 h-16 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-85 transition"
+                              className="w-16 h-16 object-cover rounded-lg border border-gray-200 dark:border-slate-700 cursor-pointer hover:opacity-85 transition"
                               onClick={() => setPreviewPhotoModal(req.evidenceUrl!)}
                             />
                             <button
                               type="button"
                               onClick={() => setPreviewPhotoModal(req.evidenceUrl!)}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-600 text-xs font-semibold text-gray-700 dark:text-slate-200 hover:bg-gray-50 dark:hover:bg-slate-700 transition"
                             >
-                              <Eye size={14} className="text-[#2F80ED]" />
+                              <Eye size={14} className="text-[#2F80ED] dark:text-blue-400" />
                               Lihat Foto Bukti
                             </button>
                           </div>
@@ -384,18 +396,18 @@ export const KoreksiAbsenView: React.FC = () => {
 
                       <div>
                         <p className="text-xs font-semibold text-gray-400 uppercase mb-1">Diajukan</p>
-                        <p className="text-gray-700">{formatDateTime(req.createdAt)}</p>
+                        <p className="text-gray-700 dark:text-slate-300">{formatDateTime(req.createdAt)}</p>
                       </div>
                       {req.reviewedAt && (
                         <div>
                           <p className="text-xs font-semibold text-gray-400 uppercase mb-1">Diproses</p>
-                          <p className="text-gray-700">{formatDateTime(req.reviewedAt)}</p>
+                          <p className="text-gray-700 dark:text-slate-300">{formatDateTime(req.reviewedAt)}</p>
                         </div>
                       )}
                     </div>
 
                     {req.adminNotes && (
-                      <div className={`p-4 rounded-xl border text-sm ${req.status === 'Disetujui' ? 'bg-green-50 border-green-100 text-green-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+                      <div className={`p-4 rounded-xl border text-sm ${req.status === 'Disetujui' ? 'bg-emerald-50 border-emerald-200/60 text-emerald-800 dark:bg-emerald-500/15 dark:border-emerald-500/30 dark:text-emerald-400' : 'bg-rose-50 border-rose-200/60 text-rose-800 dark:bg-rose-500/15 dark:border-rose-500/30 dark:text-rose-400'}`}>
                         <p className="font-semibold mb-1">Catatan Admin:</p>
                         <p>{req.adminNotes}</p>
                       </div>

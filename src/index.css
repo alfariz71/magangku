@@ -111,7 +111,7 @@ html.dark .bg-gray-50 {
   color: #CBD5E1 !important;
 }
 
-/* Borders */
+/* Borders & Dividers */
 html.dark .border-slate-100,
 html.dark .border-slate-100\/60,
 html.dark .border-slate-200,
@@ -121,10 +121,18 @@ html.dark .border-slate-200\/80,
 html.dark .border-slate-300,
 html.dark .border-gray-100,
 html.dark .border-gray-200,
+html.dark .border-gray-300,
 html.dark .border-\[\#EAEFF4\],
+html.dark [class*="divide-"] > *,
+html.dark :where([class*="divide-"] > *),
+html.dark .divide-y > *,
+html.dark .divide-x > *,
+html.dark :where(.divide-y > :not(:last-child)),
+html.dark :where(.divide-x > :not(:last-child)),
 html.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
 html.dark .divide-slate-50 > :not([hidden]) ~ :not([hidden]),
-html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]) {
+html.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+html.dark .divide-gray-50 > :not([hidden]) ~ :not([hidden]) {
   border-color: #334155 !important;
 }
 
@@ -206,12 +214,16 @@ html.dark .bg-blue-50\/90 {
 
 html.dark .bg-emerald-50,
 html.dark .bg-emerald-100,
+html.dark .bg-green-50,
+html.dark .bg-green-100,
 html.dark .bg-\[\#E8F8EE\] {
   background-color: rgba(39, 174, 96, 0.18) !important;
 }
 
 html.dark .bg-rose-50,
 html.dark .bg-rose-100,
+html.dark .bg-red-50,
+html.dark .bg-red-100,
 html.dark .bg-\[\#FDEEEE\],
 html.dark .bg-\[\#FEF0EE\] {
   background-color: rgba(235, 87, 87, 0.18) !important;
@@ -223,7 +235,8 @@ html.dark .bg-orange-50,
 html.dark .bg-orange-100,
 html.dark .bg-yellow-50,
 html.dark .bg-yellow-100,
-html.dark .bg-\[\#FEF8E8\] {
+html.dark .bg-\[\#FEF8E8\],
+html.dark .bg-\[\#FEF6E7\] {
   background-color: rgba(242, 153, 74, 0.18) !important;
 }
 
@@ -267,7 +280,8 @@ html.dark .text-blue-700,
 html.dark .text-blue-800,
 html.dark .text-blue-600,
 html.dark .text-blue-500,
-html.dark .text-\[\#2F80ED\] {
+html.dark .text-\[\#2F80ED\],
+html.dark [class*="text-[#2F80ED]"] {
   color: #60A5FA !important; /* blue-400: biru muda terang */
 }
 
@@ -289,6 +303,10 @@ html.dark .text-amber-700,
 html.dark .text-amber-800,
 html.dark .text-amber-600,
 html.dark .text-amber-500,
+html.dark .text-yellow-800,
+html.dark .text-yellow-700,
+html.dark .text-yellow-600,
+html.dark .text-yellow-500,
 html.dark .text-orange-700,
 html.dark .text-orange-600,
 html.dark .text-orange-500,

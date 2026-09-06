@@ -66,10 +66,26 @@ export default function KoreksiAdminView() {
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'Menunggu': return <span className="px-3 py-1 bg-amber-100 text-amber-700 rounded-full text-xs font-bold flex items-center gap-1 w-max"><Clock size={12}/> Menunggu</span>;
-      case 'Disetujui': return <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold flex items-center gap-1 w-max"><Check size={12}/> Disetujui</span>;
-      case 'Ditolak': return <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-xs font-bold flex items-center gap-1 w-max"><X size={12}/> Ditolak</span>;
-      default: return <span className="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-bold">{status}</span>;
+      case 'Menunggu':
+        return (
+          <span className="px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200/60 dark:bg-amber-500/15 dark:text-amber-400 dark:border-amber-500/30 rounded-full text-xs font-bold flex items-center gap-1 w-max">
+            <Clock size={12}/> Menunggu
+          </span>
+        );
+      case 'Disetujui':
+        return (
+          <span className="px-3 py-1 bg-emerald-50 text-emerald-700 border border-emerald-200/60 dark:bg-emerald-500/15 dark:text-emerald-400 dark:border-emerald-500/30 rounded-full text-xs font-bold flex items-center gap-1 w-max">
+            <Check size={12}/> Disetujui
+          </span>
+        );
+      case 'Ditolak':
+        return (
+          <span className="px-3 py-1 bg-rose-50 text-rose-700 border border-rose-200/60 dark:bg-rose-500/15 dark:text-rose-400 dark:border-rose-500/30 rounded-full text-xs font-bold flex items-center gap-1 w-max">
+            <X size={12}/> Ditolak
+          </span>
+        );
+      default:
+        return <span className="px-3 py-1 bg-gray-100 text-gray-700 dark:bg-slate-800 dark:text-slate-300 rounded-full text-xs font-bold">{status}</span>;
     }
   };
 
@@ -150,16 +166,16 @@ export default function KoreksiAdminView() {
                   <th className="p-4 font-semibold text-gray-600 text-sm">Aksi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-50 dark:divide-slate-700/60">
                 {filteredRequests.map(req => (
-                  <tr key={req.id} className="hover:bg-blue-50/30 transition">
+                  <tr key={req.id} className="hover:bg-blue-50/30 dark:hover:bg-slate-800/40 transition">
                     <td className="p-4 align-top">
-                      <p className="font-bold text-[#183B66]">{req.studentName || 'Peserta'}</p>
-                      <p className="text-xs text-gray-500 font-mono mt-1">{req.studentNim || '-'}</p>
+                      <p className="font-bold text-[#183B66] dark:text-slate-100">{req.studentName || 'Peserta'}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-400 font-mono mt-1">{req.studentNim || '-'}</p>
                     </td>
                     <td className="p-4 align-top">
-                      <p className="font-medium text-gray-800">{formatDateShort(req.attendanceDate)}</p>
-                      <p className="text-xs font-semibold text-[#2F80ED] mt-1">{req.correctionType}</p>
+                      <p className="font-medium text-gray-800 dark:text-slate-200">{formatDateShort(req.attendanceDate)}</p>
+                      <p className="text-xs font-semibold text-[#2F80ED] dark:text-blue-400 mt-1">{req.correctionType}</p>
                     </td>
                     <td className="p-4 w-[340px] max-w-[340px] break-words align-top">
                       {expandedReasons[req.id] ? (
@@ -358,7 +374,7 @@ export default function KoreksiAdminView() {
                 selectedReq.adminNotes && (
                   <div>
                     <p className="text-gray-700 font-semibold mb-2 text-sm">Catatan Admin</p>
-                    <div className={`p-4 rounded-xl text-sm border leading-relaxed ${selectedReq.status === 'Disetujui' ? 'bg-green-50 border-green-100 text-green-800' : 'bg-red-50 border-red-100 text-red-800'}`}>
+                    <div className={`p-4 rounded-xl text-sm border leading-relaxed ${selectedReq.status === 'Disetujui' ? 'bg-emerald-50 border-emerald-200/60 text-emerald-800 dark:bg-emerald-500/15 dark:border-emerald-500/30 dark:text-emerald-400' : 'bg-rose-50 border-rose-200/60 text-rose-800 dark:bg-rose-500/15 dark:border-rose-500/30 dark:text-rose-400'}`}>
                       {selectedReq.adminNotes}
                     </div>
                   </div>
