@@ -266,8 +266,8 @@ export const PengajuanIzinView: React.FC = () => {
               Riwayat Pengajuan Izin
             </h3>
 
-            {/* Table */}
-            <div className="mt-4 overflow-x-auto">
+            {/* Desktop Table */}
+            <div className="hidden md:block mt-4 overflow-x-auto">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-slate-100 text-slate-600 font-bold">
@@ -360,12 +360,90 @@ export const PengajuanIzinView: React.FC = () => {
               </table>
             </div>
 
+            {/* Mobile Cards Feed */}
+            <div className="block md:hidden space-y-3 mt-4">
+              {currentLeaveRequests.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs">
+                  Belum ada riwayat pengajuan izin
+                </div>
+              ) : (
+                currentLeaveRequests.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-2xs space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#183B66]">
+                        <Calendar className="h-3.5 w-3.5 text-[#2F80ED]" />
+                        {item.startDate === item.endDate ? item.startDate : `${item.startDate} s/d ${item.endDate}`}
+                      </span>
+                      {item.status === 'Menunggu' && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FEF8E8] px-2.5 py-0.5 text-[11px] font-semibold text-[#F2994A] border border-[#F2994A]/20">
+                            <span className="h-1.5 w-1.5 rounded-full bg-[#F2994A]" />
+                            Menunggu
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRequest(item.id)}
+                            className="rounded-lg p-1 text-slate-300 hover:bg-rose-50 hover:text-rose-600 transition-colors"
+                            title="Batalkan pengajuan izin"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      )}
+                      {item.status === 'Disetujui' && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#E8F8EE] px-2.5 py-0.5 text-[11px] font-semibold text-[#27AE60] border border-[#27AE60]/20">
+                          <span className="h-1.5 w-1.5 rounded-full bg-[#27AE60]" />
+                          Disetujui
+                        </span>
+                      )}
+                      {item.status === 'Ditolak' && (
+                        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#FDEEEE] px-2.5 py-0.5 text-[11px] font-semibold text-[#EB5757] border border-[#EB5757]/20">
+                          <span className="h-1.5 w-1.5 rounded-full bg-[#EB5757]" />
+                          Ditolak
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2 text-xs">
+                      <span className="rounded-md bg-blue-50 px-2 py-0.5 text-[11px] font-bold text-[#2F80ED]">
+                        {item.leaveType}
+                      </span>
+                      <span className="text-slate-400 text-[11px]">
+                        Diajukan: {item.requestDate}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      {item.reason}
+                    </p>
+
+                    {item.documentUrl && (
+                      <div className="pt-2 border-t border-slate-100">
+                        <a
+                          href={item.documentUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#2F80ED] hover:underline"
+                        >
+                          <FileText className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate">{item.documentName || 'Lihat Dokumen Lampiran'}</span>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
             {/* Pagination Controls */}
-            <div className="mt-5 flex items-center justify-between border-t border-slate-100 pt-4 text-xs text-slate-500">
+            <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-100 pt-4 text-xs text-slate-500">
               <span>
                 Menampilkan {startIndex + 1} – {Math.min(startIndex + itemsPerPage, leaveRequests.length)} dari {leaveRequests.length} data
               </span>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 self-end sm:self-auto">
                 <button
                   disabled={currentPage === 1}
                   onClick={() => setCurrentPage(p => Math.max(p - 1, 1))}

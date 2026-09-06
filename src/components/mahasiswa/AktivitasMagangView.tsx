@@ -269,20 +269,20 @@ export const AktivitasMagangView: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 rounded-xl bg-[#2F80ED] px-4 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 transition shadow-md shadow-blue-500/20"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-[#2F80ED] px-4 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 transition shadow-md shadow-blue-500/20"
           >
             <Plus className="h-4 w-4" />
-            Tambah Aktivitas
+            <span>Tambah Aktivitas</span>
           </button>
           <button
             onClick={() => setShowDocModal(true)}
-            className="flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-600 transition shadow-md shadow-emerald-500/20"
+            className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-semibold text-white hover:bg-emerald-600 transition shadow-md shadow-emerald-500/20"
           >
             <Camera className="h-4 w-4" />
-            Tambah Dokumentasi
+            <span>Tambah Dokumentasi</span>
           </button>
         </div>
       </div>
@@ -295,8 +295,8 @@ export const AktivitasMagangView: React.FC = () => {
         </div>
       )}
 
-      {/* Main Table Card */}
-      <div className="rounded-[16px] border border-slate-100 bg-white p-6 shadow-sm">
+      {/* Main Table Card (Desktop) */}
+      <div className="hidden md:block rounded-[16px] border border-slate-100 bg-white p-6 shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
@@ -446,6 +446,146 @@ export const AktivitasMagangView: React.FC = () => {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Unified Day Cards */}
+      <div className="block md:hidden space-y-4">
+        {activities.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-8 text-center text-slate-400 shadow-sm">
+            <Calendar className="mx-auto mb-2 h-8 w-8 opacity-30 text-[#2F80ED]" />
+            <p className="text-xs font-medium">Belum ada aktivitas yang dicatat.</p>
+            <p className="text-[11px] text-slate-400 mt-1">Klik '+ Tambah Aktivitas' di atas.</p>
+          </div>
+        ) : (
+          groupedByDate.map(({ date, dateActivities }) => {
+            const label = getDateLabel(date);
+            const isToday = date === todayStr;
+
+            return (
+              <div
+                key={date}
+                className={`rounded-2xl border shadow-xs overflow-hidden transition-all ${
+                  isToday
+                    ? 'border-blue-200 bg-white shadow-blue-500/5 ring-1 ring-blue-400/20'
+                    : 'border-slate-200/80 bg-white'
+                }`}
+              >
+                {/* Integrated Date Header ("Atap" Kartu) */}
+                <div
+                  className={`flex items-center justify-between px-4 py-3 border-b ${
+                    isToday
+                      ? 'bg-gradient-to-r from-blue-600 to-[#2F80ED] text-white border-blue-600'
+                      : 'bg-slate-50/90 text-slate-700 border-slate-100'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 font-bold text-xs">
+                    <Calendar className={`h-4 w-4 ${isToday ? 'text-blue-100' : 'text-[#2F80ED]'}`} />
+                    <span className="tracking-tight">{formatDateHeader(date)}</span>
+                    {label && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                          isToday
+                            ? 'bg-white text-blue-600 shadow-2xs'
+                            : 'bg-slate-200/80 text-slate-600'
+                        }`}
+                      >
+                        {label}
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`text-[11px] font-semibold ${
+                      isToday ? 'text-blue-100' : 'text-slate-400'
+                    }`}
+                  >
+                    {dateActivities.length} aktivitas
+                  </span>
+                </div>
+
+                {/* List of Activities inside this Day (divided by clean line, not boxes!) */}
+                <div className="divide-y divide-slate-100">
+                  {dateActivities.map((act) => (
+                    <div key={act.id} className="p-4 space-y-2.5 hover:bg-slate-50/40 transition-colors">
+                      {/* Top: Waktu & Aksi (Edit/Hapus) */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="inline-flex items-center gap-1.5 rounded-lg bg-slate-50 border border-slate-200/60 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                          <Clock className="h-3 w-3 text-[#2F80ED]" />
+                          <span>
+                            {act.time || (act.createdAt ? new Date(act.createdAt).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : '08:00 - 17:00 WIB')}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(act)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 text-slate-600 hover:text-[#2F80ED] hover:border-blue-200 hover:bg-blue-50 text-[11px] font-medium transition cursor-pointer"
+                            title="Edit Aktivitas"
+                          >
+                            <Edit2 className="h-3 w-3" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(act.id)}
+                            className="p-1 rounded-lg border border-slate-200 text-slate-400 hover:text-red-600 hover:border-red-200 hover:bg-red-50 transition cursor-pointer"
+                            title="Hapus Aktivitas"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Title & Description */}
+                      <div>
+                        <h4 className="text-sm font-bold text-slate-900 leading-snug">
+                          {act.title}
+                        </h4>
+                        {act.description && !act.description.startsWith('Waktu: ') && (
+                          <p className="text-xs text-slate-600 mt-1.5 leading-relaxed whitespace-pre-line">
+                            {act.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Media Attachment Button */}
+                      {act.attachmentUrl && (
+                        <div className="pt-1">
+                          {isVideoUrl(act.attachmentUrl) ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPhoto({
+                                url: act.attachmentUrl!,
+                                title: act.title,
+                                date: formatDateHeader(act.activityDate || date)
+                              })}
+                              className="w-full flex items-center justify-center gap-2 rounded-xl border border-purple-200 bg-purple-50/70 py-2 px-3 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition shadow-2xs cursor-pointer"
+                            >
+                              <Video className="h-4 w-4 text-purple-600" />
+                              <span>Lihat Video Kegiatan</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedPhoto({
+                                url: act.attachmentUrl!,
+                                title: act.title,
+                                date: formatDateHeader(act.activityDate || date)
+                              })}
+                              className="w-full flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50/70 py-2 px-3 text-xs font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                            >
+                              <ImageIcon className="h-4 w-4 text-[#2F80ED]" />
+                              <span>Lihat Foto Kegiatan</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Form Modal Tambah Aktivitas */}

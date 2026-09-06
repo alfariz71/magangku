@@ -372,18 +372,18 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
       </div>
 
       {/* Riwayat Absensi */}
-      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
+      <div className="rounded-2xl border border-slate-100 bg-white p-4 sm:p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <h3 className="text-base font-bold text-[#183B66]">Riwayat Absensi</h3>
           <div className="flex items-center gap-2">
-            <div className="relative">
+            <div className="relative flex-1 sm:flex-none">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Cari tanggal..."
-                className="rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-800 placeholder-slate-400 focus:border-[#2F80ED] focus:bg-white focus:outline-none"
+                className="w-full sm:w-auto rounded-xl border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-3 text-xs text-slate-800 placeholder-slate-400 focus:border-[#2F80ED] focus:bg-white focus:outline-none"
               />
             </div>
             <select
@@ -400,7 +400,8 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           </div>
         </div>
 
-        <div className="mt-4 overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block mt-4 overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead>
               <tr className="border-b border-slate-100 text-slate-600 font-bold">
@@ -448,6 +449,60 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Mobile Cards View */}
+        <div className="block md:hidden space-y-3 mt-4">
+          {filteredRecords.length === 0 ? (
+            <div className="py-10 text-center">
+              <MapPin className="mx-auto mb-2 h-8 w-8 text-slate-300" />
+              <p className="text-slate-400 text-sm">Belum ada data riwayat absensi</p>
+              <p className="text-slate-300 text-xs mt-1">Riwayat akan muncul setelah Anda melakukan absensi</p>
+            </div>
+          ) : (
+            filteredRecords.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-xl border border-slate-200/70 bg-white p-3.5 shadow-2xs space-y-2.5"
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-xs text-slate-900">{item.date}</span>
+                    <span className="text-[11px] text-slate-500 font-medium">({item.dayName})</span>
+                  </div>
+                  <div>
+                    <span className={`inline-flex rounded-full px-2.5 py-0.5 text-[10px] font-semibold ${
+                      item.status === 'Hadir' ? 'bg-emerald-100 text-emerald-700' :
+                      item.status === 'Terlambat' ? 'bg-rose-100 text-rose-700' :
+                      item.status === 'Izin' ? 'bg-amber-100 text-amber-700' :
+                      item.status === 'Sakit' ? 'bg-orange-100 text-orange-700' :
+                      'bg-slate-100 text-slate-600'
+                    }`}>
+                      {item.status}
+                    </span>
+                    {item.correctedByAdmin && (
+                      <span className="block text-[9px] text-[#2F80ED] font-semibold mt-0.5 text-right">Dikoreksi Admin</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 bg-slate-50/80 rounded-lg p-2.5 text-center">
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Masuk</span>
+                    <span className="font-semibold text-xs text-slate-800">{item.checkInTime || '—'}</span>
+                  </div>
+                  <div className="border-x border-slate-200/60">
+                    <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Pulang</span>
+                    <span className="font-semibold text-xs text-slate-800">{item.checkOutTime || '—'}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Total</span>
+                    <span className="font-semibold text-xs text-slate-800">{item.totalHours || '—'}</span>
+                  </div>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
