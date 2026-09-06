@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Plus, X, Check, Calendar, Clock, AlertCircle, Camera, Image as ImageIcon, Upload, ExternalLink } from 'lucide-react';
+import { Plus, X, Check, Calendar, Clock, AlertCircle, Camera, Image as ImageIcon, Video, Upload, ExternalLink } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { uploadToCloudinary, isVideoUrl } from '../../lib/cloudinary';
 
 export const AktivitasMagangView: React.FC = () => {
   const { activities, addActivity } = useData();
@@ -16,10 +16,11 @@ export const AktivitasMagangView: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState(false);
 
-  // States untuk modal dokumentasi foto
+  // States untuk modal dokumentasi foto & video
   const [showDocModal, setShowDocModal] = useState(false);
-  const [docPhoto, setDocPhoto] = useState<File | null>(null);
-  const [docPhotoPreview, setDocPhotoPreview] = useState<string>('');
+  const [docMedia, setDocMedia] = useState<File | null>(null);
+  const [docMediaPreview, setDocMediaPreview] = useState<string>('');
+  const [docMediaType, setDocMediaType] = useState<'image' | 'video'>('image');
   const [docTitle, setDocTitle] = useState('');
   const [docDesc, setDocDesc] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -89,46 +90,56 @@ export const AktivitasMagangView: React.FC = () => {
     });
   };
 
-  const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setDocPhoto(file);
+
+    const isVideo = file.type.startsWith('video/');
+    if (isVideo) {
+      if (file.size > 30 * 1024 * 1024) {
+        alert('Ukuran video melebihi batas maksimal 30 MB!');
+        return;
+      }
+      setDocMediaType('video');
+    } else {
+      setDocMediaType('image');
+    }
+
+    setDocMedia(file);
     const url = URL.createObjectURL(file);
-    setDocPhotoPreview(url);
+    setDocMediaPreview(url);
   };
 
   const handleSaveDoc = async () => {
     if (!docTitle.trim()) { alert('Judul kegiatan wajib diisi'); return; }
     setIsUploading(true);
     try {
-      let photoUrl = '';
-      if (docPhoto && currentUser?.id) {
-        const compressed = await compressImage(docPhoto);
-        const fileName = `doc-${currentUser.id}-${Date.now()}.jpg`;
-        const { data, error } = await supabase.storage.from('activity-photos').upload(fileName, compressed, {
-          upsert: true, contentType: 'image/jpeg'
-        });
-        if (!error && data) {
-          const { data: urlData } = supabase.storage.from('activity-photos').getPublicUrl(fileName);
-          photoUrl = urlData.publicUrl;
+      let mediaUrl = '';
+      if (docMedia && currentUser?.id) {
+        if (docMediaType === 'image') {
+          const compressed = await compressImage(docMedia);
+          mediaUrl = await uploadToCloudinary(compressed, 'magangku/aktivitas');
+        } else {
+          // Video diunggah langsung ke Cloudinary tanpa kompresi canvas
+          mediaUrl = await uploadToCloudinary(docMedia, 'magangku/aktivitas');
         }
       }
       await addActivity({
         title: docTitle,
         description: docDesc,
         activityDate: new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }),
-        attachmentUrl: photoUrl,
+        attachmentUrl: mediaUrl,
         time: '08:00 - 17:00 WIB',
         createdAt: new Date().toISOString()
       });
       setShowDocModal(false);
-      setDocPhoto(null);
-      setDocPhotoPreview('');
+      setDocMedia(null);
+      setDocMediaPreview('');
       setDocTitle('');
       setDocDesc('');
     } catch (err) {
       console.error('Save doc error:', err);
-      alert('Gagal menyimpan dokumentasi');
+      alert('Gagal menyimpan dokumentasi: ' + (err instanceof Error ? err.message : 'Terjadi kesalahan'));
     } finally {
       setIsUploading(false);
     }
@@ -214,21 +225,36 @@ export const AktivitasMagangView: React.FC = () => {
                       )}
                     </td>
 
-                    {/* Kolom Khusus Foto Dokumentasi (Tombol) */}
+                    {/* Kolom Khusus Media Dokumentasi (Foto / Video) */}
                     <td className="py-4 px-4 whitespace-nowrap">
                       {act.attachmentUrl ? (
-                        <button
-                          type="button"
-                          onClick={() => setSelectedPhoto({
-                            url: act.attachmentUrl!,
-                            title: act.title,
-                            date: new Date(act.activityDate + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
-                          })}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-[11px] font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs cursor-pointer"
-                        >
-                          <ImageIcon className="h-3.5 w-3.5" />
-                          <span>Lihat Foto</span>
-                        </button>
+                        isVideoUrl(act.attachmentUrl) ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPhoto({
+                              url: act.attachmentUrl!,
+                              title: act.title,
+                              date: new Date(act.activityDate + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                            })}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/80 px-2.5 py-1 text-[11px] font-semibold text-purple-600 hover:bg-purple-100 transition shadow-2xs cursor-pointer"
+                          >
+                            <Video className="h-3.5 w-3.5" />
+                            <span>Lihat Video</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedPhoto({
+                              url: act.attachmentUrl!,
+                              title: act.title,
+                              date: new Date(act.activityDate + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })
+                            })}
+                            className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-[11px] font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                          >
+                            <ImageIcon className="h-3.5 w-3.5" />
+                            <span>Lihat Foto</span>
+                          </button>
+                        )
                       ) : (
                         <span className="text-slate-300 text-xs">—</span>
                       )}
@@ -354,17 +380,29 @@ export const AktivitasMagangView: React.FC = () => {
               </button>
             </div>
 
-            {/* Photo Upload */}
+            {/* Photo / Video Upload */}
             <div
               className="mb-4 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 cursor-pointer hover:border-[#2F80ED] hover:bg-blue-50/30 transition"
-              onClick={() => document.getElementById('doc-photo-input')?.click()}
+              onClick={() => document.getElementById('doc-media-input')?.click()}
             >
-              {docPhotoPreview ? (
+              {docMediaPreview ? (
                 <div className="relative w-full">
-                  <img src={docPhotoPreview} alt="Preview" className="w-full max-h-48 object-cover rounded-xl" />
+                  {docMediaType === 'video' ? (
+                    <video
+                      src={docMediaPreview}
+                      controls
+                      className="w-full max-h-48 rounded-xl object-contain bg-black"
+                    />
+                  ) : (
+                    <img
+                      src={docMediaPreview}
+                      alt="Preview"
+                      className="w-full max-h-48 object-cover rounded-xl"
+                    />
+                  )}
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); setDocPhoto(null); setDocPhotoPreview(''); }}
+                    onClick={(e) => { e.stopPropagation(); setDocMedia(null); setDocMediaPreview(''); }}
                     className="absolute top-2 right-2 rounded-full bg-slate-900/70 p-1.5 text-white hover:bg-slate-900"
                   >
                     <X className="h-4 w-4" />
@@ -375,16 +413,16 @@ export const AktivitasMagangView: React.FC = () => {
                   <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EBF3FE] text-[#2F80ED]">
                     <Upload className="h-6 w-6" />
                   </div>
-                  <p className="text-xs font-semibold text-slate-700">Klik untuk upload foto</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">JPG, PNG, WebP (maks. 2MB)</p>
+                  <p className="text-xs font-semibold text-slate-700">Klik untuk upload foto atau video</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Foto (JPG, PNG, WebP) atau Video (MP4, WebM maks. 30MB)</p>
                 </div>
               )}
               <input
-                id="doc-photo-input"
+                id="doc-media-input"
                 type="file"
-                accept="image/*"
+                accept="image/*,video/mp4,video/quicktime,video/webm"
                 className="hidden"
-                onChange={handlePhotoSelect}
+                onChange={handleMediaSelect}
               />
             </div>
 
@@ -419,7 +457,7 @@ export const AktivitasMagangView: React.FC = () => {
               disabled={isUploading || !docTitle.trim()}
               className="mt-5 w-full rounded-2xl bg-emerald-500 py-3 text-xs font-bold text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 disabled:opacity-50 transition"
             >
-              {isUploading ? 'Mengunggah Foto...' : 'Simpan Dokumentasi'}
+              {isUploading ? 'Mengunggah Media...' : 'Simpan Dokumentasi'}
             </button>
           </div>
         </div>
@@ -453,12 +491,21 @@ export const AktivitasMagangView: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center max-h-[70vh]">
-              <img
-                src={selectedPhoto.url}
-                alt={selectedPhoto.title}
-                className="w-full h-auto max-h-[65vh] object-contain"
-              />
+            <div className="mt-4 overflow-hidden rounded-xl bg-slate-900 border border-slate-200 flex items-center justify-center max-h-[70vh]">
+              {isVideoUrl(selectedPhoto.url) ? (
+                <video
+                  src={selectedPhoto.url}
+                  controls
+                  autoPlay
+                  className="w-full h-auto max-h-[65vh] object-contain rounded-lg"
+                />
+              ) : (
+                <img
+                  src={selectedPhoto.url}
+                  alt={selectedPhoto.title}
+                  className="w-full h-auto max-h-[65vh] object-contain"
+                />
+              )}
             </div>
 
             <div className="mt-4 flex justify-end">

@@ -17,7 +17,7 @@ import {
 import confetti from 'canvas-confetti';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { uploadToCloudinary } from '../../lib/cloudinary';
 import { LeaveType } from '../../types';
 
 export const PengajuanIzinView: React.FC = () => {
@@ -156,18 +156,13 @@ export const PengajuanIzinView: React.FC = () => {
           }
         }
 
-        const { data: uploadData, error: uploadErr } = await supabase.storage
-          .from('activity-photos')
-          .upload(storageFileName, fileToUpload, {
-            upsert: true,
-            contentType: selectedFile.type || (selectedFile.name.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg'),
-          });
-
-        if (uploadErr) {
-          console.error('Storage upload error:', uploadErr);
-        } else if (uploadData) {
-          const { data: urlData } = supabase.storage.from('activity-photos').getPublicUrl(storageFileName);
-          uploadedUrl = urlData.publicUrl;
+        try {
+          uploadedUrl = await uploadToCloudinary(fileToUpload, 'magangku/izin');
+        } catch (uploadErr) {
+          console.error('Cloudinary upload error:', uploadErr);
+          setErrorMessage('Gagal mengunggah dokumen bukti izin ke Cloudinary.');
+          setIsSubmitting(false);
+          return;
         }
       }
 

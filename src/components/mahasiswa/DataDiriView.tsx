@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ChevronDown, Check, AlertCircle, Camera } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../lib/supabase';
+import { uploadToCloudinary } from '../../lib/cloudinary';
 
 interface DataDiriViewProps {
   onSuccess?: () => void;
@@ -153,16 +154,13 @@ export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
     setIsLoading(true);
     try {
       const compressed = await compressImage(file);
-      const fileName = `avatar-${currentUser.id}-${Date.now()}.jpg`;
-      const { data, error } = await supabase.storage.from('avatars').upload(fileName, compressed, { upsert: true, contentType: 'image/jpeg' });
-      if (!error && data) {
-        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
-        await supabase.from('user_profiles').update({ avatar_url: urlData.publicUrl }).eq('id', currentUser.id);
-        updateCurrentUser({ avatar: urlData.publicUrl });
-        setFormData(prev => ({ ...prev, avatar: urlData.publicUrl }));
-      }
+      const newAvatarUrl = await uploadToCloudinary(compressed, 'magangku/avatars');
+      await supabase.from('user_profiles').update({ avatar_url: newAvatarUrl }).eq('id', currentUser.id);
+      updateCurrentUser({ avatar: newAvatarUrl });
+      setFormData(prev => ({ ...prev, avatar: newAvatarUrl }));
     } catch (err) {
       console.error('Upload avatar error:', err);
+      alert('Gagal mengunggah foto profil ke Cloudinary. Periksa koneksi internet Anda.');
     } finally {
       setIsLoading(false);
     }

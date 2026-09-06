@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Search, Clock, Calendar, Image as ImageIcon, X } from 'lucide-react';
+import { Search, Clock, Calendar, Image as ImageIcon, Video, ExternalLink, X } from 'lucide-react';
 import { useData } from '../../context/DataContext';
+import { isVideoUrl } from '../../lib/cloudinary';
 
 interface PhotoModalState {
   url: string;
@@ -163,18 +164,33 @@ export const AktivitasAdminView: React.FC = () => {
                           <td className="py-3.5 px-4 text-slate-800 font-medium">
                             <p className="font-semibold text-slate-900">{act.title}</p>
                             {act.attachmentUrl && (
-                              <button
-                                onClick={() => setSelectedPhoto({
-                                  url: act.attachmentUrl!,
-                                  title: act.title,
-                                  student: act.studentName || 'Peserta',
-                                  date: formatDateHeader(act.activityDate || date)
-                                })}
-                                className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-[11px] font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs"
-                              >
-                                <ImageIcon className="h-3.5 w-3.5" />
-                                <span>Lihat Foto Kegiatan</span>
-                              </button>
+                              isVideoUrl(act.attachmentUrl) ? (
+                                <button
+                                  onClick={() => setSelectedPhoto({
+                                    url: act.attachmentUrl!,
+                                    title: act.title,
+                                    student: act.studentName || 'Peserta',
+                                    date: formatDateHeader(act.activityDate || date)
+                                  })}
+                                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/80 px-2.5 py-1 text-[11px] font-semibold text-purple-600 hover:bg-purple-100 transition shadow-2xs cursor-pointer"
+                                >
+                                  <Video className="h-3.5 w-3.5" />
+                                  <span>Lihat Video Kegiatan</span>
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => setSelectedPhoto({
+                                    url: act.attachmentUrl!,
+                                    title: act.title,
+                                    student: act.studentName || 'Peserta',
+                                    date: formatDateHeader(act.activityDate || date)
+                                  })}
+                                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-[11px] font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                                >
+                                  <ImageIcon className="h-3.5 w-3.5" />
+                                  <span>Lihat Foto Kegiatan</span>
+                                </button>
+                              )
                             )}
                           </td>
 
@@ -216,20 +232,40 @@ export const AktivitasAdminView: React.FC = () => {
                 <h3 className="text-sm font-bold text-slate-900">{selectedPhoto.title}</h3>
                 <p className="text-[11px] text-slate-400">{selectedPhoto.student} • {selectedPhoto.date}</p>
               </div>
-              <button
-                onClick={() => setSelectedPhoto(null)}
-                className="rounded-lg p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
-              >
-                <X className="h-5 w-5" />
-              </button>
+              <div className="flex items-center gap-1.5">
+                <a
+                  href={selectedPhoto.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-lg p-1.5 text-slate-400 hover:text-[#2F80ED] hover:bg-blue-50 transition"
+                  title="Buka Tab Baru"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                </a>
+                <button
+                  onClick={() => setSelectedPhoto(null)}
+                  className="rounded-lg p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center max-h-[70vh]">
-              <img
-                src={selectedPhoto.url}
-                alt={selectedPhoto.title}
-                className="w-full h-auto max-h-[65vh] object-contain"
-              />
+            <div className="mt-4 overflow-hidden rounded-xl bg-slate-900 border border-slate-200 flex items-center justify-center max-h-[70vh]">
+              {isVideoUrl(selectedPhoto.url) ? (
+                <video
+                  src={selectedPhoto.url}
+                  controls
+                  autoPlay
+                  className="w-full h-auto max-h-[65vh] object-contain rounded-lg"
+                />
+              ) : (
+                <img
+                  src={selectedPhoto.url}
+                  alt={selectedPhoto.title}
+                  className="w-full h-auto max-h-[65vh] object-contain"
+                />
+              )}
             </div>
 
             <div className="mt-4 flex justify-end">

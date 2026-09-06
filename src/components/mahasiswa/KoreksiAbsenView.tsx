@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { ClipboardEdit, Clock, AlertCircle, Check, X, FileUp, Calendar, RefreshCw, ChevronDown, ChevronUp, Image as ImageIcon, ExternalLink, Eye } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { supabase } from '../../lib/supabase';
+import { uploadToCloudinary } from '../../lib/cloudinary';
 import { AttendanceCorrectionRequest } from '../../types';
 
 export const KoreksiAbsenView: React.FC = () => {
@@ -130,24 +130,9 @@ export const KoreksiAbsenView: React.FC = () => {
       if (evidenceFile && currentUser?.id) {
         try {
           const compressed = await compressImage(evidenceFile);
-          const fileExt = evidenceFile.name.split('.').pop() || 'jpg';
-          const fileName = `evidence-${currentUser.id}-${Date.now()}.${fileExt}`;
-          
-          const { data: uploadData, error: uploadErr } = await supabase.storage
-            .from('activity-photos')
-            .upload(fileName, compressed, {
-              upsert: true,
-              contentType: evidenceFile.type.startsWith('image/') ? 'image/jpeg' : evidenceFile.type,
-            });
-
-          if (!uploadErr && uploadData) {
-            const { data: urlData } = supabase.storage.from('activity-photos').getPublicUrl(fileName);
-            uploadedUrl = urlData.publicUrl;
-          } else if (uploadErr) {
-            console.error('Storage upload error:', uploadErr);
-          }
+          uploadedUrl = await uploadToCloudinary(compressed, 'magangku/koreksi');
         } catch (uploadException) {
-          console.error('Error during evidence compression/upload:', uploadException);
+          console.error('Error during evidence upload to Cloudinary:', uploadException);
         }
       }
 

@@ -14,6 +14,7 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { supabase } from '../../lib/supabase';
+import { uploadToCloudinary } from '../../lib/cloudinary';
 
 interface HeaderProps {
   onMenuToggle?: () => void;
@@ -102,15 +103,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
     setIsUploadingPhoto(true);
     try {
       const compressed = await compressImage(file);
-      const fileName = `avatar-${currentUser.id}-${Date.now()}.jpg`;
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, compressed, {
-        upsert: true,
-        contentType: 'image/jpeg'
-      });
-      if (uploadError) throw uploadError;
-
-      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(fileName);
-      const newAvatarUrl = urlData.publicUrl;
+      const newAvatarUrl = await uploadToCloudinary(compressed, 'magangku/avatars');
 
       await supabase.from('user_profiles').update({
         photo_url: newAvatarUrl,
@@ -121,8 +114,8 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
       setUploadSuccess(true);
       setTimeout(() => setUploadSuccess(false), 3000);
     } catch (err) {
-      console.error('Error uploading avatar:', err);
-      alert('Gagal mengunggah foto profil. Pastikan koneksi internet Anda stabil.');
+      console.error('Error uploading avatar to Cloudinary:', err);
+      alert('Gagal mengunggah foto profil ke Cloudinary. Pastikan koneksi internet Anda stabil.');
     } finally {
       setIsUploadingPhoto(false);
       if (e.target) e.target.value = '';
