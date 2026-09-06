@@ -13,7 +13,7 @@ import {
   Location,
   AttendanceCorrectionRequest
 } from '../types';
-import { useAuth } from './AuthContext';
+import { useAuth, ROOT_EMAILS } from './AuthContext';
 
 // ============================================================
 // GPS State Types
@@ -1449,29 +1449,72 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const refreshStudents = async () => {
     setIsStudentsLoading(true);
     try {
-      const { data } = await supabase.from('user_profiles').select('*').eq('role', 'user');
+      // Simpan root user ID jika saat ini login sebagai akun root (ikhsanfadil047103@gmail.com)
+      if (currentUser?.id && ROOT_EMAILS.includes(currentUser.email?.toLowerCase().trim() || '')) {
+        try { localStorage.setItem('magangku_root_user_id', currentUser.id); } catch (_) {}
+      }
+      const savedRootId = typeof window !== 'undefined' ? localStorage.getItem('magangku_root_user_id') : null;
+
+      // Ambil seluruh user_profiles dari Supabase
+      const { data } = await supabase.from('user_profiles').select('*');
+
       if (data) {
-        setStudents(data.map((p: Record<string, unknown>) => ({
-          id: p.id as string,
-          email: '',
-          name: (p.full_name as string) || '',
-          role: 'user' as const,
-          username: ((p.full_name as string) || '').toLowerCase().replace(' ', '.'),
-          avatar: (p.photo_url as string) || `https://ui-avatars.com/api/?name=${encodeURIComponent((p.full_name as string) || 'User')}&background=2F80ED&color=fff`,
-          phone: p.phone as string | undefined,
-          nim: p.nim as string | undefined,
-          birthPlace: p.birth_place as string | undefined,
-          birthDate: p.birth_date as string | undefined,
-          gender: p.gender as 'Laki-laki' | 'Perempuan' | undefined,
-          university: p.university as string | undefined,
-          faculty: p.faculty as string | undefined,
-          major: p.major as string | undefined,
-          concentration: p.concentration as string | undefined,
-          position: p.position as string | undefined,
-          startDate: p.start_date as string | undefined,
-          endDate: p.end_date as string | undefined,
-          status: (p.status as 'Aktif' | 'Nonaktif' | 'Selesai') || 'Aktif',
-        })));
+        // Filter agar:
+        // 1. Akun Administrator murni (Administrator MagangKu) TIDAK masuk ke daftar mahasiswa magang.
+        // 2. Seluruh mahasiswa magang (role = user) dimasukkan.
+        // 3. Akun superadmin Ikhsan (ikhsanfadil047103@gmail.com) TETAP dimasukkan layaknya peserta magang.
+        const filtered = data.filter((p: Record<string, unknown>) => {
+          const fullName = ((p.full_name as string) || '').toLowerCase().trim();
+          
+          // Kecualikan akun Administrator sistem
+          if (fullName.includes('administrator') || fullName === 'admin') {
+            return false;
+          }
+
+          // Masukkan seluruh mahasiswa magang normal
+          if (p.role === 'user') {
+            return true;
+          }
+
+          // Masukkan akun superadmin Ikhsan meskipun role di DB adalah 'admin'
+          if (
+            fullName.includes('ikhsan') ||
+            fullName.includes('fadil') ||
+            (savedRootId && p.id === savedRootId) ||
+            (currentUser?.id && p.id === currentUser.id && ROOT_EMAILS.includes(currentUser.email?.toLowerCase().trim() || ''))
+          ) {
+            return true;
+          }
+
+          return false;
+        });
+
+        setStudents(filtered.map((p: Record<string, unknown>) => {
+          const fullName = ((p.full_name as string) || '').trim();
+          const email = (p.email as string) || '';
+
+          return {
+            id: p.id as string,
+            email,
+            name: fullName || 'Peserta',
+            role: 'user' as const, // Di daftar mahasiswa, selalu diperlakukan sebagai 'user'
+            username: fullName.toLowerCase().replace(/\s+/g, '.'),
+            avatar: (p.photo_url as string) || `https://ui-avatars.com/api/?name=${encodeURIComponent(fullName || 'User')}&background=2F80ED&color=fff`,
+            phone: p.phone as string | undefined,
+            nim: p.nim as string | undefined,
+            birthPlace: p.birth_place as string | undefined,
+            birthDate: p.birth_date as string | undefined,
+            gender: p.gender as 'Laki-laki' | 'Perempuan' | undefined,
+            university: p.university as string | undefined,
+            faculty: p.faculty as string | undefined,
+            major: p.major as string | undefined,
+            concentration: p.concentration as string | undefined,
+            position: p.position as string | undefined,
+            startDate: p.start_date as string | undefined,
+            endDate: p.end_date as string | undefined,
+            status: (p.status as 'Aktif' | 'Nonaktif' | 'Selesai') || 'Aktif',
+          };
+        }));
       }
     } finally {
       setIsStudentsLoading(false);
@@ -1495,6 +1538,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       nim: data.nim,
       university: data.university,
       major: data.major,
+      concentration: data.concentration,
       status: data.status,
     }).eq('id', id);
     await refreshStudents();

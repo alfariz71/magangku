@@ -55,7 +55,9 @@ export const DataPesertaAdminView: React.FC = () => {
 
   // Filter students
   const filteredStudents = students.filter(s => {
-    if (s.role === 'admin') return false;
+    const nameLower = s.name.toLowerCase();
+    if (nameLower.includes('administrator') || nameLower === 'admin') return false;
+    if (s.role === 'admin' && s.email !== 'ikhsanfadil047103@gmail.com' && !nameLower.includes('ikhsan')) return false;
     const matchQuery = 
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (s.nim && s.nim.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -168,7 +170,6 @@ export const DataPesertaAdminView: React.FC = () => {
                         </div>
                         <div>
                           <p className="font-bold text-slate-900">{student.name}</p>
-                          <p className="text-xs text-slate-500">{student.email}</p>
                         </div>
                       </div>
                     </td>
@@ -187,9 +188,13 @@ export const DataPesertaAdminView: React.FC = () => {
 
                     {/* Konsentrasi Magang */}
                     <td className="py-3.5 px-3">
-                      <span className="inline-flex rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[#2F80ED]">
-                        {student.concentration || student.position || 'Peserta Magang'}
-                      </span>
+                      {student.concentration && student.concentration.trim() && student.concentration.trim().toLowerCase() !== 'peserta magang' ? (
+                        <span className="inline-flex rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[#2F80ED]">
+                          {student.concentration}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-normal">-</span>
+                      )}
                     </td>
 
                     {/* Periode */}
@@ -308,7 +313,11 @@ export const DataPesertaAdminView: React.FC = () => {
                   </div>
                   <div>
                     <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Konsentrasi</span>
-                    <span className="font-semibold text-[#2F80ED] line-clamp-1">{student.concentration || student.position || 'Magang'}</span>
+                    {student.concentration && student.concentration.trim() && student.concentration.trim().toLowerCase() !== 'peserta magang' ? (
+                      <span className="font-semibold text-[#2F80ED] line-clamp-1">{student.concentration}</span>
+                    ) : (
+                      <span className="text-slate-400 font-normal">-</span>
+                    )}
                   </div>
                 </div>
 
@@ -422,6 +431,17 @@ export const DataPesertaAdminView: React.FC = () => {
                 </div>
               </div>
 
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Konsentrasi Magang</label>
+                <input
+                  type="text"
+                  value={editingStudent.concentration || ''}
+                  onChange={e => setEditingStudent({ ...editingStudent, concentration: e.target.value })}
+                  placeholder="Contoh: Frontend Engineering, Data Science"
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
+                />
+              </div>
+
               <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
                 <button
                   type="button"
@@ -473,7 +493,7 @@ export const DataPesertaAdminView: React.FC = () => {
               <div className="flex justify-between"><span className="text-slate-400">NIM:</span> <span className="font-semibold">{viewDetailStudent.nim || '-'}</span></div>
               <div className="flex justify-between"><span className="text-slate-400">Universitas:</span> <span className="font-semibold">{viewDetailStudent.university || '-'}</span></div>
               <div className="flex justify-between"><span className="text-slate-400">Jurusan:</span> <span className="font-semibold">{viewDetailStudent.major || '-'}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Konsentrasi:</span> <span className="font-semibold">{viewDetailStudent.concentration || '-'}</span></div>
+              <div className="flex justify-between"><span className="text-slate-400">Konsentrasi:</span> <span className="font-semibold">{viewDetailStudent.concentration && viewDetailStudent.concentration.trim() && viewDetailStudent.concentration.trim().toLowerCase() !== 'peserta magang' ? viewDetailStudent.concentration : '-'}</span></div>
               <div className="flex justify-between"><span className="text-slate-400">Telepon:</span> <span className="font-semibold">{viewDetailStudent.phone || '-'}</span></div>
               <div className="flex justify-between"><span className="text-slate-400">Periode Magang:</span> <span className="font-semibold">{viewDetailStudent.startDate} s/d {viewDetailStudent.endDate}</span></div>
             </div>

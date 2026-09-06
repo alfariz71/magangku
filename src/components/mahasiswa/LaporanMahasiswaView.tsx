@@ -55,7 +55,7 @@ export const LaporanMahasiswaView: React.FC = () => {
     doc.text(`Nama   : ${currentUser?.name || '-'}`, 14, 24);
     doc.text(`NIM    : ${currentUser?.nim || '-'}`, 14, 29);
     doc.text(`Instansi    : ${currentUser?.university || '-'}`, 14, 34);
-    doc.text(`Konsentrasi : ${currentUser?.concentration || currentUser?.position || '-'}`, 14, 39);
+    doc.text(`Konsentrasi : ${currentUser?.concentration && currentUser.concentration.trim() && currentUser.concentration.trim().toLowerCase() !== 'peserta magang' ? currentUser.concentration : '-'}`, 14, 39);
     doc.text(`Periode     : ${sortedAttendances[0]?.date || '-'} s/d ${sortedAttendances[sortedAttendances.length - 1]?.date || '-'}`, 14, 44);
 
     const tableRows = sortedAttendances.map((item, idx) => [
@@ -129,7 +129,7 @@ export const LaporanMahasiswaView: React.FC = () => {
     ws1Data.push(['Nama', currentUser?.name || '-']);
     ws1Data.push(['NIM', currentUser?.nim || '-']);
     ws1Data.push(['Instansi/Universitas', currentUser?.university || '-']);
-    ws1Data.push(['Konsentrasi Magang', currentUser?.concentration || currentUser?.position || '-']);
+    ws1Data.push(['Konsentrasi Magang', currentUser?.concentration && currentUser.concentration.trim() && currentUser.concentration.trim().toLowerCase() !== 'peserta magang' ? currentUser.concentration : '-']);
     ws1Data.push(['Periode', `${sortedAttendances[0]?.date || '-'} s/d ${sortedAttendances[sortedAttendances.length - 1]?.date || '-'}`]);
     ws1Data.push([]);
 
