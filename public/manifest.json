@@ -10,22 +10,16 @@
   "theme_color": "#183B66",
   "icons": [
     {
+      "src": "/logo-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
       "src": "/apple-touch-icon.png",
       "sizes": "192x192 512x512",
       "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/magangku-icon-hd.jpg",
-      "sizes": "192x192 512x512",
-      "type": "image/jpeg",
       "purpose": "any"
-    },
-    {
-      "src": "/logo-icon.svg",
-      "sizes": "192x192 512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
     }
   ]
 }
