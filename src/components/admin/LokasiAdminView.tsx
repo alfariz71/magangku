@@ -77,20 +77,189 @@ export default function LokasiAdminView() {
     await deleteLocation(id);
   };
 
-  const handleDownloadQr = (locId: string, locName: string) => {
-    const svg = document.getElementById(`qr-${locId}`);
+  const drawRoundRect = (
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    r: number
+  ) => {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y);
+    ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r);
+    ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h);
+    ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  };
+
+  const handleDownloadQr = (loc: Location) => {
+    const svg = document.getElementById(`qr-${loc.id}`);
     if (!svg) return;
     const svgData = new XMLSerializer().serializeToString(svg);
     const canvas = document.createElement('canvas');
-    canvas.width = 300; canvas.height = 300;
+    canvas.width = 640;
+    canvas.height = 840;
     const ctx = canvas.getContext('2d')!;
+
     const img = new Image();
     img.onload = () => {
-      ctx.fillStyle = 'white';
-      ctx.fillRect(0, 0, 300, 300);
-      ctx.drawImage(img, 0, 0, 300, 300);
+      // 1. White Background
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, 640, 840);
+
+      // Outer border frame
+      ctx.strokeStyle = '#E2E8F0';
+      ctx.lineWidth = 2;
+      drawRoundRect(ctx, 16, 16, 608, 808, 20);
+      ctx.stroke();
+
+      // Top colored accent bar
+      ctx.fillStyle = '#2F80ED';
+      ctx.beginPath();
+      ctx.moveTo(36, 16);
+      ctx.lineTo(604, 16);
+      ctx.lineTo(604, 26);
+      ctx.lineTo(36, 26);
+      ctx.closePath();
+      ctx.fill();
+
+      // 2. Header Section
+      ctx.textAlign = 'center';
+      
+      // Brand tag
+      ctx.font = 'bold 12px Inter, sans-serif';
+      ctx.fillStyle = '#2F80ED';
+      ctx.fillText('MAGANGKU • SISTEM PRESENSI RESMI', 320, 56);
+
+      // Main Title
+      ctx.font = 'bold 22px Inter, sans-serif';
+      ctx.fillStyle = '#183B66';
+      ctx.fillText('QR CODE PRESENSI KEHADIRAN', 320, 86);
+
+      // Subtitle
+      ctx.font = '12px Inter, sans-serif';
+      ctx.fillStyle = '#64748B';
+      ctx.fillText('Pindai menggunakan kamera di web MagangKu untuk Absen Masuk', 320, 108);
+
+      // 3. QR Code Box (Center)
+      const qrBoxX = 145;
+      const qrBoxY = 126;
+      const qrBoxSize = 350;
+
+      // QR Box Background & Border
+      ctx.fillStyle = '#F8FAFC';
+      ctx.strokeStyle = '#CBD5E1';
+      ctx.lineWidth = 1.5;
+      drawRoundRect(ctx, qrBoxX, qrBoxY, qrBoxSize, qrBoxSize, 20);
+      ctx.fill();
+      ctx.stroke();
+
+      // Draw QR Image
+      const qrPadding = 20;
+      ctx.drawImage(
+        img,
+        qrBoxX + qrPadding,
+        qrBoxY + qrPadding,
+        qrBoxSize - (qrPadding * 2),
+        qrBoxSize - (qrPadding * 2)
+      );
+
+      // 4. Location Information (Bawah QR Code)
+      // Location Name Pill Badge
+      const pillY = 500;
+      ctx.fillStyle = '#EFF6FF';
+      ctx.strokeStyle = '#93C5FD';
+      ctx.lineWidth = 1.5;
+      drawRoundRect(ctx, 50, pillY, 540, 52, 14);
+      ctx.fill();
+      ctx.stroke();
+
+      // Office Name Text
+      ctx.font = 'bold 20px Inter, sans-serif';
+      ctx.fillStyle = '#1E40AF';
+      ctx.fillText(`📍 ${loc.name}`, 320, pillY + 33);
+
+      // Office Address (Multi-line wrap support)
+      ctx.font = '13px Inter, sans-serif';
+      ctx.fillStyle = '#475569';
+      const addressMaxWidth = 520;
+      const words = (loc.address || 'Alamat kantor terdaftar').split(' ');
+      let line = '';
+      let addressY = 574;
+      for (let n = 0; n < words.length; n++) {
+        const testLine = line + words[n] + ' ';
+        const metrics = ctx.measureText(testLine);
+        if (metrics.width > addressMaxWidth && n > 0) {
+          ctx.fillText(line.trim(), 320, addressY);
+          line = words[n] + ' ';
+          addressY += 20;
+        } else {
+          line = testLine;
+        }
+      }
+      ctx.fillText(line.trim(), 320, addressY);
+
+      // 5. Details Card (Radius & GPS Coordinates)
+      const detailsCardY = addressY + 18;
+      ctx.fillStyle = '#F8FAFC';
+      ctx.strokeStyle = '#E2E8F0';
+      ctx.lineWidth = 1;
+      drawRoundRect(ctx, 50, detailsCardY, 540, 68, 12);
+      ctx.fill();
+      ctx.stroke();
+
+      // Left column: Radius
+      ctx.textAlign = 'left';
+      ctx.font = '11px Inter, sans-serif';
+      ctx.fillStyle = '#64748B';
+      ctx.fillText('RADIUS PRESENSI MAKSIMAL', 75, detailsCardY + 28);
+      ctx.font = 'bold 15px Inter, sans-serif';
+      ctx.fillStyle = '#1E293B';
+      ctx.fillText(`${loc.radiusMeters} Meter dari Kantor`, 75, detailsCardY + 50);
+
+      // Vertical Divider inside details card
+      ctx.strokeStyle = '#E2E8F0';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(310, detailsCardY + 14);
+      ctx.lineTo(310, detailsCardY + 54);
+      ctx.stroke();
+
+      // Right column: Coordinates
+      ctx.font = '11px Inter, sans-serif';
+      ctx.fillStyle = '#64748B';
+      ctx.fillText('TITIK KOORDINAT GPS', 330, detailsCardY + 28);
+      ctx.font = 'bold 13px monospace';
+      ctx.fillStyle = '#1E293B';
+      ctx.fillText(`${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}`, 330, detailsCardY + 50);
+
+      // 6. Security & Verification Note
+      ctx.textAlign = 'center';
+      ctx.font = 'italic 11px Inter, sans-serif';
+      ctx.fillStyle = '#059669';
+      ctx.fillText('✓ QR Code Resmi & Permanen • Terverifikasi Otomatis dengan Validasi Lokasi GPS', 320, detailsCardY + 95);
+
+      // 7. Footer Divider & Note
+      ctx.strokeStyle = '#F1F5F9';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(50, 785);
+      ctx.lineTo(590, 785);
+      ctx.stroke();
+
+      ctx.font = '11px Inter, sans-serif';
+      ctx.fillStyle = '#94A3B8';
+      ctx.fillText('Sistem Presensi Magang Digital — Dicetak untuk Penempatan Lokasi Fisik', 320, 808);
+
+      // Download Action
       const a = document.createElement('a');
-      a.download = `QR-${locName.replace(/\s+/g, '-')}.png`;
+      a.download = `QR-Presensi-${loc.name.replace(/\s+/g, '-')}.png`;
       a.href = canvas.toDataURL('image/png');
       a.click();
     };
@@ -253,10 +422,10 @@ export default function LokasiAdminView() {
                         </button>
                         {token && (
                           <button
-                            onClick={() => handleDownloadQr(loc.id, loc.name)}
+                            onClick={() => handleDownloadQr(loc)}
                             className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition"
                           >
-                            <Download size={13} /> Unduh QR (PNG)
+                            <Download size={13} /> Unduh QR Lengkap (PNG)
                           </button>
                         )}
                       </div>
