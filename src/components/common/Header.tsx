@@ -12,7 +12,8 @@ import {
   X,
   Moon,
   Sun,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Clock
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
@@ -276,11 +277,21 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
                           <p className={`text-xs ${n.read ? 'font-medium text-slate-800 dark:text-slate-200' : 'font-semibold text-blue-900 dark:text-blue-200'}`}>
                             {n.title}
                           </p>
-                          <span className="text-[10px] text-slate-400 dark:text-slate-400 whitespace-nowrap">{n.time}</span>
+                          {!n.read && (
+                            <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0 mt-0.5 shadow-xs" title="Belum dibaca" />
+                          )}
                         </div>
-                        <p className={`mt-1 text-xs leading-relaxed line-clamp-2 ${n.read ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
-                          {n.message}
-                        </p>
+                        <div className="mt-1 flex items-baseline justify-between gap-2">
+                          <p className={`text-xs leading-relaxed line-clamp-2 flex-1 ${n.read ? 'text-slate-600 dark:text-slate-400' : 'text-slate-700 dark:text-slate-300'}`}>
+                            {n.message}
+                          </p>
+                          {n.time && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-800/90 px-1.5 py-0.5 rounded-md shrink-0 whitespace-nowrap">
+                              <Clock className="w-2.5 h-2.5 text-slate-400 dark:text-slate-400" />
+                              {n.time}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     ))
                   )}

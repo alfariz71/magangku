@@ -1582,6 +1582,49 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
     const notifs: NotificationItem[] = [];
 
+    // Helper untuk memformat waktu secara presisi ke jam & menit WIB
+    const formatTimeWib = (dateInput: string | number | Date | null | undefined, defaultTime = '17:00 WIB') => {
+      if (!dateInput) return defaultTime;
+      try {
+        const d = new Date(dateInput);
+        if (isNaN(d.getTime())) return defaultTime;
+        const timeStr = d.toLocaleTimeString('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+          timeZone: 'Asia/Jakarta',
+        }).replace('.', ':') + ' WIB';
+
+        const dDateStr = d.toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+        if (dDateStr === todayStr) {
+          return timeStr;
+        } else {
+          const dateStr = d.toLocaleDateString('id-ID', {
+            day: '2-digit',
+            month: 'short',
+            timeZone: 'Asia/Jakarta',
+          });
+          return `${dateStr}, ${timeStr}`;
+        }
+      } catch {
+        return defaultTime;
+      }
+    };
+
+    // Cek apakah waktu lokal Jakarta (WIB) saat ini sudah mencapai pukul 17:00 atau lebih
+    const currentHourJakarta = (() => {
+      try {
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: 'Asia/Jakarta',
+          hour: 'numeric',
+          hour12: false,
+        }).formatToParts(new Date());
+        return parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+      } catch {
+        return new Date().getHours();
+      }
+    })();
+    const isPastClosingTime = currentHourJakarta >= 17;
+
     if (isAdmin) {
       // 1. Pengajuan izin yang pending
       const { data: pendingLeave } = await supabase
@@ -1594,7 +1637,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: 'notif-izin-pending',
           title: `${pendingLeave.length} Pengajuan Izin Menunggu`,
           message: `Ada ${pendingLeave.length} pengajuan izin mahasiswa yang belum diproses.`,
-          time: 'Hari ini',
+          time: formatTimeWib(pendingLeave[0]?.created_at, 'Hari ini'),
           read: false,
           type: 'warning',
           linkTab: 'izin',
@@ -1612,7 +1655,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           id: 'notif-koreksi-pending',
           title: `${pendingCorr.length} Koreksi Absensi Diajukan`,
           message: `Ada ${pendingCorr.length} permintaan koreksi absensi yang perlu ditinjau.`,
-          time: 'Hari ini',
+          time: formatTimeWib(pendingCorr[0]?.created_at, 'Hari ini'),
           read: false,
           type: 'warning',
           linkTab: 'koreksi',
@@ -1648,9 +1691,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // A. Event Absen Pulang (jika sudah checkout)
           if (att.check_out_time) {
             const outDate = new Date(att.check_out_time);
-            const formattedOut = !isNaN(outDate.getTime())
-              ? outDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB'
-              : 'Hari ini';
+            const formattedOut = formatTimeWib(att.check_out_time);
 
             attendanceEvents.push({
               id: `notif-att-out-${att.id}`,
@@ -1667,9 +1708,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // B. Event Absen Masuk (jika sudah checkin)
           if (att.check_in_time) {
             const inDate = new Date(att.check_in_time);
-            const formattedIn = !isNaN(inDate.getTime())
-              ? inDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB'
-              : 'Hari ini';
+            const formattedIn = formatTimeWib(att.check_in_time);
             const isLate = att.status === 'Terlambat';
 
             attendanceEvents.push({
@@ -1697,36 +1736,40 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       // 4. Mahasiswa yang absen masuk hari ini tapi belum pulang
-      const { data: checkInOnly } = await supabase
-        .from('attendance_records')
-        .select('id')
-        .eq('date', todayStr)
-        .not('check_in_time', 'is', null)
-        .is('check_out_time', null);
-      if (checkInOnly && checkInOnly.length > 0) {
-        notifs.push({
-          id: 'notif-belum-pulang',
-          title: `${checkInOnly.length} Peserta Belum Absen Pulang`,
-          message: `${checkInOnly.length} peserta sudah absen masuk hari ini namun belum melakukan absen pulang.`,
-          time: 'Hari ini',
-          read: false,
-          type: 'reminder',
-          linkTab: 'absensi',
-        });
+      // HANYA MUNCUL PADA PUKUL 17:00 WIB KE ATAS
+      if (isPastClosingTime) {
+        const { data: checkInOnly } = await supabase
+          .from('attendance_records')
+          .select('id')
+          .eq('date', todayStr)
+          .not('check_in_time', 'is', null)
+          .is('check_out_time', null);
+        if (checkInOnly && checkInOnly.length > 0) {
+          notifs.push({
+            id: 'notif-belum-pulang',
+            title: `${checkInOnly.length} Peserta Belum Absen Pulang`,
+            message: `${checkInOnly.length} peserta sudah absen masuk hari ini namun belum melakukan absen pulang hingga jam operasional selesai.`,
+            time: '17:00 WIB',
+            read: false,
+            type: 'reminder',
+            linkTab: 'absensi',
+          });
+        }
       }
 
       // 5. Peserta baru yang terdaftar hari ini
       const { data: newStudents } = await supabase
         .from('user_profiles')
-        .select('id')
+        .select('id, created_at')
         .eq('role', 'user')
-        .gte('created_at', todayStr + 'T00:00:00+07:00');
+        .gte('created_at', todayStr + 'T00:00:00+07:00')
+        .order('created_at', { ascending: false });
       if (newStudents && newStudents.length > 0) {
         notifs.push({
           id: 'notif-peserta-baru',
           title: `${newStudents.length} Peserta Baru Terdaftar`,
           message: `${newStudents.length} peserta magang baru mendaftar hari ini.`,
-          time: 'Hari ini',
+          time: formatTimeWib(newStudents[0]?.created_at, 'Hari ini'),
           read: false,
           type: 'info',
           linkTab: 'datapeserta',
@@ -1749,7 +1792,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: `notif-izin-${l.id}`,
             title: l.status === 'Disetujui' ? '✅ Izin Disetujui' : '❌ Izin Ditolak',
             message: `Pengajuan ${l.leave_type} Anda telah ${l.status.toLowerCase()} oleh admin.`,
-            time: new Date(l.updated_at).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }),
+            time: formatTimeWib(l.updated_at, 'Hari ini'),
             read: false,
             type: l.status === 'Disetujui' ? 'success' : 'warning',
             linkTab: 'izin',
@@ -1764,26 +1807,28 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .eq('user_id', currentUser.id)
         .eq('date', todayStr)
         .maybeSingle();
-      if (todayAbs?.check_in_time && !todayAbs?.check_out_time) {
-        const formattedCheckIn = new Date(todayAbs.check_in_time).toLocaleTimeString('id-ID', {
-          hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta'
-        }) + ' WIB';
+
+      // Reminder Absen Pulang: HANYA MUNCUL PADA PUKUL 17:00 WIB KE ATAS
+      if (isPastClosingTime && todayAbs?.check_in_time && !todayAbs?.check_out_time) {
+        const formattedCheckIn = formatTimeWib(todayAbs.check_in_time);
         notifs.push({
           id: 'notif-belum-pulang-user',
-          title: '⏰ Jangan Lupa Absen Pulang',
-          message: `Anda sudah absen masuk pukul ${formattedCheckIn}. Jangan lupa absen pulang sebelum meninggalkan kantor.`,
-          time: 'Hari ini',
+          title: '⏰ Waktunya Absen Pulang',
+          message: `Jam kerja operasional telah selesai (17:00 WIB). Anda sudah absen masuk pukul ${formattedCheckIn}, jangan lupa absen pulang sebelum meninggalkan kantor.`,
+          time: '17:00 WIB',
           read: false,
           type: 'reminder',
           linkTab: 'dashboard',
         });
       }
+
       if (todayAbs?.check_in_time && todayAbs?.check_out_time) {
+        const formattedOut = formatTimeWib(todayAbs.check_out_time);
         notifs.push({
           id: 'notif-absen-selesai',
           title: '✅ Absensi Hari Ini Selesai',
-          message: `Absensi hari ini sudah tercatat lengkap. Status: ${todayAbs.status}.`,
-          time: 'Hari ini',
+          message: `Absensi hari ini sudah tercatat lengkap. Anda absen pulang pukul ${formattedOut}. Status: ${todayAbs.status}.`,
+          time: formattedOut,
           read: true,
           type: 'success',
           linkTab: 'dashboard',
