@@ -4,6 +4,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { useData } from '../../context/DataContext';
+import { isIndonesianHoliday, getIndonesianHolidayName } from '../../lib/holidays';
 
 export const LaporanAdminView: React.FC = () => {
   const { attendances, leaveRequests, activities, students } = useData();
@@ -189,6 +190,8 @@ export const LaporanAdminView: React.FC = () => {
       dayName: string;
       formattedDate: string;
       fullDateLabel: string;
+      isHoliday?: boolean;
+      holidayName?: string | null;
       records: {
         id: string;
         userId: string;
@@ -209,11 +212,14 @@ export const LaporanAdminView: React.FC = () => {
       if (!dateMap.has(dateKey)) {
         const day = getDayName(dateKey);
         const fDate = formatDateIndo(dateKey);
+        const holiday = getIndonesianHolidayName(dateKey);
         dateMap.set(dateKey, {
           date: dateKey,
           dayName: day,
           formattedDate: fDate,
-          fullDateLabel: `${day}, ${fDate}`,
+          fullDateLabel: holiday ? `${day}, ${fDate} (🔴 ${holiday})` : `${day}, ${fDate}`,
+          isHoliday: !!holiday,
+          holidayName: holiday,
           records: []
         });
       }
@@ -269,15 +275,23 @@ export const LaporanAdminView: React.FC = () => {
       const fFri = friday.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 
       const daysKeys: { [dayIdx: number]: string } = {};
+      let weekHolidayCount = 0;
       for (let i = 0; i < 5; i++) {
         const dt = new Date(monday);
         dt.setDate(monday.getDate() + i);
-        daysKeys[i] = toKey(dt);
+        const k = toKey(dt);
+        daysKeys[i] = k;
+        if (isIndonesianHoliday(k)) weekHolidayCount++;
       }
+
+      const effectiveWeekDays = 5 - weekHolidayCount;
+      const weekLabel = weekHolidayCount > 0
+        ? `Minggu (${fMon} – ${fFri} — ${effectiveWeekDays} Hari Kerja, ${weekHolidayCount} Libur Nasional)`
+        : `Minggu (${fMon} – ${fFri} — 5 Hari Kerja)`;
 
       return {
         weekKey: mondayKey,
-        label: `Minggu (${fMon} – ${fFri} — 5 Hari Kerja)`,
+        label: weekLabel,
         daysKeys
       };
     };
@@ -344,8 +358,17 @@ export const LaporanAdminView: React.FC = () => {
             }
           }
 
-          // Jika tidak ada catatan absensi:
-          // Jika tanggal hari kerja sudah berlalu / hari ini:
+          // 1. Cek apakah tanggal ini merupakan Hari Libur Nasional / Tanggal Merah
+          const holidayName = getIndonesianHolidayName(dateKey);
+          if (holidayName) {
+            return {
+              code: 'L',
+              color: 'text-rose-600 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-950/40 rounded px-1',
+              full: `Libur: ${holidayName}`
+            };
+          }
+
+          // 2. Jika bukan hari libur dan tanggal hari kerja sudah berlalu / hari ini:
           if (dateKey <= todayJakarta) {
             // Cek apakah ada pengajuan izin/sakit yang disetujui
             const leave = leaveRequests.find(l => 
@@ -371,7 +394,9 @@ export const LaporanAdminView: React.FC = () => {
         const kam = getStatusCode(week.daysKeys[3], s.dayRecords[week.daysKeys[3]]);
         const jum = getStatusCode(week.daysKeys[4], s.dayRecords[week.daysKeys[4]]);
 
-        const daysPresent = [sen, sel, rab, kam, jum].filter(d => d.code === 'H' || d.code === 'T').length;
+        const daysList = [sen, sel, rab, kam, jum];
+        const daysPresent = daysList.filter(d => d.code === 'H' || d.code === 'T').length;
+        const workingDaysCount = daysList.filter(d => d.code !== 'L').length;
 
         return {
           userId: s.userId,
@@ -383,9 +408,12 @@ export const LaporanAdminView: React.FC = () => {
           kam,
           jum,
           totalHoursFormatted: formatHours(s.totalHoursNum),
-          kehadiran: `${daysPresent} / 5 Hari`
+          kehadiran: workingDaysCount < 5 
+            ? `${daysPresent} / ${workingDaysCount} Hari`
+            : `${daysPresent} / 5 Hari`
         };
       }).sort((a, b) => a.studentName.localeCompare(b.studentName, 'id'));
+
 
       return {
         weekKey: week.weekKey,
@@ -420,26 +448,38 @@ export const LaporanAdminView: React.FC = () => {
         const isCurrentMonth = now.getFullYear() === year && now.getMonth() === monthIndex;
         const maxDay = isCurrentMonth ? Math.min(daysInMonth, now.getDate()) : daysInMonth;
 
-        // Kumpulkan hari kerja (Senin - Jumat) di bulan ini (Sabtu & Minggu libur)
+        // Kumpulkan hari kerja resmi (Senin - Jumat, BUKAN Sabtu/Minggu dan BUKAN Tanggal Merah)
         const workingDays: string[] = [];
         for (let day = 1; day <= maxDay; day++) {
           const dt = new Date(year, monthIndex, day);
           const dayOfWeek = dt.getDay(); // 0 is Sun, 6 is Sat -> Libur!
-          if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-            const pad = (n: number) => String(n).padStart(2, '0');
-            workingDays.push(`${year}-${pad(monthIndex + 1)}-${pad(day)}`);
+          const pad = (n: number) => String(n).padStart(2, '0');
+          const dateKey = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
+
+          if (dayOfWeek !== 0 && dayOfWeek !== 6 && !isIndonesianHoliday(dateKey)) {
+            workingDays.push(dateKey);
           }
         }
 
         let totalWorkingDaysInMonth = 0;
+        let totalHolidaysInMonth = 0;
         for (let day = 1; day <= daysInMonth; day++) {
           const dt = new Date(year, monthIndex, day);
-          if (dt.getDay() !== 0 && dt.getDay() !== 6) totalWorkingDaysInMonth++;
+          const pad = (n: number) => String(n).padStart(2, '0');
+          const dateKey = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
+          if (dt.getDay() !== 0 && dt.getDay() !== 6) {
+            if (isIndonesianHoliday(dateKey)) {
+              totalHolidaysInMonth++;
+            } else {
+              totalWorkingDaysInMonth++;
+            }
+          }
         }
 
+        const holidayNote = totalHolidaysInMonth > 0 ? ` & ${totalHolidaysInMonth} Libur Nasional` : '';
         const mLabel = isCurrentMonth
-          ? `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (${workingDays.length} Hari Kerja Berjalan — Sabtu & Minggu Libur)`
-          : `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (${totalWorkingDaysInMonth} Hari Kerja — Sabtu & Minggu Libur)`;
+          ? `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (${workingDays.length} Hari Kerja Berjalan — Libur: Sabtu, Minggu${holidayNote})`
+          : `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (${totalWorkingDaysInMonth} Hari Kerja — Libur: Sabtu, Minggu${holidayNote})`;
 
         monthMap.set(mKey, {
           monthKey: mKey,
@@ -1116,9 +1156,13 @@ export const LaporanAdminView: React.FC = () => {
                     groupedDailyAttendances.map(day => (
                       <React.Fragment key={day.date}>
                         {/* Baris Pembatas Tanggal */}
-                        <tr className="bg-slate-100 border-y border-slate-300 dark:bg-slate-800/80 dark:border-slate-700">
-                          <td colSpan={6} className="py-2.5 px-4 text-center font-bold text-slate-700 dark:text-slate-200 text-xs tracking-wide">
-                            {day.fullDateLabel}
+                        <tr className={`border-y ${
+                          day.isHoliday
+                            ? 'bg-rose-50/90 border-rose-200 dark:bg-rose-950/40 dark:border-rose-900/60'
+                            : 'bg-slate-100 border-slate-300 dark:bg-slate-800/80 dark:border-slate-700'
+                        }`}>
+                          <td colSpan={6} className="py-2.5 px-4 text-center font-bold text-xs tracking-wide">
+                            <span className="text-slate-700 dark:text-slate-200">{day.fullDateLabel}</span>
                           </td>
                         </tr>
 
@@ -1246,6 +1290,7 @@ export const LaporanAdminView: React.FC = () => {
                 <span className="text-amber-700 dark:text-amber-400 font-semibold">I = Izin</span>
                 <span className="text-orange-700 dark:text-orange-400 font-semibold">S = Sakit</span>
                 <span className="text-red-700 dark:text-red-400 font-semibold">A = Alpha</span>
+                <span className="text-rose-600 dark:text-rose-400 font-semibold">L = Libur Nasional / Tanggal Merah</span>
               </div>
             </div>
           ) : (
