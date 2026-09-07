@@ -50,7 +50,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
   } = useData();
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
-  const [isProcessingCheckIn, setIsProcessingCheckIn] = useState(false);
+  const [activeLoadingProcess, setActiveLoadingProcess] = useState<'check_in' | 'check_out' | null>(null);
   const [feedbackToast, setFeedbackToast] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('Semua');
@@ -142,12 +142,19 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
       showToast('error', `Anda harus berada di lokasi kantor untuk absen pulang. Posisi saat ini di luar radius kantor (${gpsState.distanceMeters ?? '?'}m).`);
       return;
     }
-    const res = await performCheckOut();
-    if (res.success) {
-      showToast('success', res.message);
-      try { confetti({ particleCount: 40, spread: 50, origin: { y: 0.6 } }); } catch { /* ignore */ }
-    } else {
-      showToast('error', res.message);
+    setActiveLoadingProcess('check_out');
+    try {
+      const res = await performCheckOut();
+      if (res.success) {
+        showToast('success', res.message);
+        try { confetti({ particleCount: 40, spread: 50, origin: { y: 0.6 } }); } catch { /* ignore */ }
+      } else {
+        showToast('error', res.message);
+      }
+    } catch (err: any) {
+      showToast('error', err?.message || 'Terjadi kesalahan saat memproses absen pulang.');
+    } finally {
+      setActiveLoadingProcess(null);
     }
   };
 
@@ -415,16 +422,16 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           <button
             type="button"
             onClick={handleCheckInClick}
-            disabled={todayAttendance.isCheckedIn || isProcessingCheckIn}
+            disabled={todayAttendance.isCheckedIn || !!activeLoadingProcess}
             className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold shadow-md transition-all ${
               todayAttendance.isCheckedIn
                 ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
-                : isProcessingCheckIn
+                : activeLoadingProcess === 'check_in'
                 ? 'bg-blue-400 text-white shadow-none cursor-wait'
                 : 'bg-[#2F80ED] text-white shadow-blue-500/25 hover:bg-blue-600 active:scale-[0.98]'
             }`}
           >
-            {isProcessingCheckIn ? (
+            {activeLoadingProcess === 'check_in' ? (
               <>
                 <RefreshCw className="h-4 w-4 animate-spin" />
                 <span>Menyimpan...</span>
@@ -446,24 +453,38 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           <button
             type="button"
             onClick={handleCheckOutClick}
-            disabled={!todayAttendance.isCheckedIn || todayAttendance.isCheckedOut}
+            disabled={!todayAttendance.isCheckedIn || todayAttendance.isCheckedOut || !!activeLoadingProcess}
             className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition-all ${
               todayAttendance.isCheckedOut
                 ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
                 : !todayAttendance.isCheckedIn
                 ? 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed'
+                : activeLoadingProcess === 'check_out'
+                ? 'border-rose-300 bg-rose-50 text-rose-400 cursor-wait'
                 : 'border-[#EB5757] bg-white text-[#EB5757] hover:bg-rose-50 shadow-sm active:scale-[0.98]'
             }`}
           >
-            <LogOut className="h-4 w-4" />
-            {todayAttendance.isCheckedOut ? 'Sudah Pulang ✓' : 'Absen Pulang'}
+            {activeLoadingProcess === 'check_out' ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                <span>Memproses...</span>
+              </>
+            ) : (
+              <>
+                <LogOut className="h-4 w-4" />
+                {todayAttendance.isCheckedOut ? 'Sudah Pulang ✓' : 'Absen Pulang'}
+              </>
+            )}
           </button>
 
           {/* Input Izin */}
           <button
             type="button"
             onClick={onNavigateToIzin}
-            className="flex items-center justify-center gap-2 rounded-xl border border-[#2F80ED] bg-white py-3 text-sm font-semibold text-[#2F80ED] transition-all hover:bg-blue-50 active:scale-[0.98]"
+            disabled={!!activeLoadingProcess}
+            className={`flex items-center justify-center gap-2 rounded-xl border border-[#2F80ED] bg-white py-3 text-sm font-semibold text-[#2F80ED] transition-all ${
+              activeLoadingProcess ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-50 active:scale-[0.98]'
+            }`}
           >
             <FileEdit className="h-4 w-4" />
             Ajukan Izin
@@ -649,7 +670,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           setIsScannerOpen(false);
           // Langsung otomatis catat Absen Masuk saat scan QR berhasil (1x scan langsung masuk)
           if (!todayAttendance.isCheckedIn) {
-            setIsProcessingCheckIn(true);
+            setActiveLoadingProcess('check_in');
             try {
               const mode = isCsStudent ? 'cs' : 'reguler';
               const csShift = selectedShift === 'cs_shift_2' ? 'shift_2' : 'shift_1';
@@ -667,13 +688,40 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
             } catch (err: any) {
               showToast('error', err?.message || 'Terjadi kesalahan saat menyimpan absensi.');
             } finally {
-              setIsProcessingCheckIn(false);
+              setActiveLoadingProcess(null);
             }
           } else {
             showToast('success', 'Anda sudah melakukan absen masuk hari ini.');
           }
         }}
       />
+
+      {/* Full-screen Blurred Loading Overlay */}
+      {activeLoadingProcess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative mx-4 flex max-w-sm flex-col items-center rounded-3xl bg-white/95 dark:bg-slate-900/95 p-6 sm:p-8 text-center shadow-2xl border border-slate-100/80 dark:border-slate-800 backdrop-blur-xl animate-in zoom-in-95 duration-200">
+            <div className="relative flex h-16 w-16 items-center justify-center mb-4">
+              <div className="absolute inset-0 rounded-full bg-[#2F80ED]/15 animate-ping duration-1000" />
+              <div className="h-14 w-14 rounded-full border-4 border-[#2F80ED]/20 border-t-[#2F80ED] animate-spin" />
+              <div className="absolute flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/50 text-[#2F80ED]">
+                {activeLoadingProcess === 'check_in' ? <LogIn className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}
+              </div>
+            </div>
+            <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
+              {activeLoadingProcess === 'check_in' ? 'Memproses Absen Masuk...' : 'Memproses Absen Pulang...'}
+            </h3>
+            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-[240px]">
+              {activeLoadingProcess === 'check_in'
+                ? 'Memvalidasi lokasi GPS & token QR Code magang Anda...'
+                : 'Menghitung total jam kerja dan menyimpan presensi Anda...'}
+            </p>
+            <div className="mt-5 flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-medium text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#2F80ED] animate-pulse" />
+              <span>Mohon tunggu sebentar</span>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
