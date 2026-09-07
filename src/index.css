@@ -122,6 +122,12 @@ html.dark .border-slate-300,
 html.dark .border-gray-100,
 html.dark .border-gray-200,
 html.dark .border-gray-300,
+html.dark .border-blue-100,
+html.dark .border-blue-200,
+html.dark .border-indigo-100,
+html.dark .border-indigo-200,
+html.dark .border-purple-100,
+html.dark .border-purple-200,
 html.dark .border-\[\#EAEFF4\],
 html.dark [class*="divide-"] > *,
 html.dark :where([class*="divide-"] > *),
@@ -147,7 +153,9 @@ html.dark .text-\[\#183B66\],
 html.dark .text-slate-900,
 html.dark .text-slate-800,
 html.dark .text-gray-900,
-html.dark .text-gray-800 {
+html.dark .text-gray-800,
+html.dark .text-indigo-950,
+html.dark .text-indigo-900 {
   color: #F8FAFC !important;
 }
 
@@ -224,6 +232,7 @@ html.dark button.bg-white:hover {
 
 /* Badges / Translucent Tints in Dark Mode */
 html.dark .bg-blue-50,
+html.dark .bg-blue-50\/40,
 html.dark .bg-blue-50\/50,
 html.dark .bg-blue-50\/60,
 html.dark .bg-blue-50\/70,
@@ -231,6 +240,7 @@ html.dark .bg-blue-50\/80,
 html.dark .bg-blue-50\/90,
 html.dark .bg-\[\#EBF3FE\],
 html.dark .bg-indigo-50,
+html.dark .bg-indigo-50\/40,
 html.dark .bg-indigo-50\/50,
 html.dark .bg-indigo-50\/60,
 html.dark .bg-indigo-50\/70,
@@ -273,9 +283,23 @@ html.dark .bg-\[\#FEF6E7\] {
 }
 
 html.dark .bg-purple-50,
+html.dark .bg-purple-50\/40,
+html.dark .bg-purple-50\/50,
+html.dark .bg-purple-50\/60,
 html.dark .bg-purple-50\/70,
-html.dark .bg-purple-50\/80 {
+html.dark .bg-purple-50\/80,
+html.dark .bg-purple-100 {
   background-color: rgba(147, 51, 234, 0.18) !important;
+}
+
+/* Shift Scheme Card Container */
+.shift-scheme-card {
+  background-color: rgba(248, 250, 252, 0.85);
+  border: 1px solid #E2E8F0;
+}
+html.dark .shift-scheme-card {
+  background-color: rgba(15, 23, 42, 0.45) !important;
+  border-color: #334155 !important;
 }
 
 /* Badges & Pills Netral / Slate ("Kemarin", "Nonaktif", pill tanggal, chip status) */

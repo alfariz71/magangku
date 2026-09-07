@@ -77,86 +77,98 @@ export const PengaturanAdminView: React.FC = () => {
               Kebijakan Waktu Presensi &amp; Shift Kerja
             </h3>
 
-            <form onSubmit={handleSaveSettings} className="space-y-5">
+            <form onSubmit={handleSaveSettings} className="space-y-4">
               {/* 1. Skema Reguler */}
-              <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-3.5 space-y-2.5">
+              <div className="shift-scheme-card rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#183B66]">💼 Skema 1: Reguler (5 Hari: Sen – Jum)</span>
-                  <span className="text-[10px] bg-blue-100 text-[#2F80ED] px-2 py-0.5 rounded font-semibold">8 Jam Kerja</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                    💼 Skema 1: Reguler (5 Hari: Sen – Jum)
+                  </span>
+                  <span className="text-[10px] bg-blue-100 text-[#2F80ED] dark:bg-blue-900/50 dark:text-blue-300 dark:border dark:border-blue-700/60 px-2.5 py-0.5 rounded-full font-bold">
+                    8 Jam Kerja
+                  </span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jam Masuk</label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">Jam Masuk</label>
                     <input
                       type="time"
                       value={workStartTime}
                       onChange={e => setWorkStartTime(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jam Pulang</label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">Jam Pulang</label>
                     <input
                       type="time"
                       value={workEndTime}
                       onChange={e => setWorkEndTime(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                     />
                   </div>
                 </div>
               </div>
 
               {/* 2. Skema CS Shift 1 */}
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3.5 space-y-2.5">
+              <div className="shift-scheme-card rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-950">🎧 Skema 2: CS Shift 1 (6 Hari: Sen – Sab)</span>
-                  <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-semibold">6 Jam Kerja</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                    🎧 Skema 2: CS Shift 1 (6 Hari: Sen – Sab)
+                  </span>
+                  <span className="text-[10px] bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 dark:border dark:border-indigo-700/60 px-2.5 py-0.5 rounded-full font-bold">
+                    6 Jam Kerja
+                  </span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jam Masuk (Pagi)</label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">Jam Masuk (Pagi)</label>
                     <input
                       type="time"
                       value={csShift1StartTime}
                       onChange={e => setCsShift1StartTime(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jam Pulang</label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">Jam Pulang</label>
                     <input
                       type="time"
                       value={csShift1EndTime}
                       onChange={e => setCsShift1EndTime(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                     />
                   </div>
                 </div>
               </div>
 
               {/* 3. Skema CS Shift 2 */}
-              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3.5 space-y-2.5">
+              <div className="shift-scheme-card rounded-xl p-4 space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-indigo-950">🎧 Skema 3: CS Shift 2 (6 Hari: Sen – Sab)</span>
-                  <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-semibold">6 Jam Kerja</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-white flex items-center gap-1.5">
+                    🎧 Skema 3: CS Shift 2 (6 Hari: Sen – Sab)
+                  </span>
+                  <span className="text-[10px] bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 dark:border dark:border-purple-700/60 px-2.5 py-0.5 rounded-full font-bold">
+                    6 Jam Kerja
+                  </span>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jam Masuk (Sore)</label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">Jam Masuk (Sore)</label>
                     <input
                       type="time"
                       value={csShift2StartTime}
                       onChange={e => setCsShift2StartTime(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jam Pulang (Malam)</label>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">Jam Pulang (Malam)</label>
                     <input
                       type="time"
                       value={csShift2EndTime}
                       onChange={e => setCsShift2EndTime(e.target.value)}
-                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                      className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                     />
                   </div>
                 </div>
@@ -164,29 +176,29 @@ export const PengaturanAdminView: React.FC = () => {
 
               {/* 4. Toleransi Keterlambatan */}
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
                   Toleransi Keterlambatan Semua Shift (Menit)
                 </label>
                 <input
                   type="number"
                   value={lateToleranceMins}
                   onChange={e => setLateToleranceMins(Number(e.target.value))}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                 />
-                <p className="text-[11px] text-slate-500 mt-1">
-                  💡 Contoh: Jika toleransi 15 menit, batas masuk Reguler &amp; CS 1 adalah <strong>08:15 WIB</strong>, dan CS 2 adalah <strong>15:15 WIB</strong>.
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                  💡 Contoh: Jika toleransi {lateToleranceMins} menit, batas masuk Reguler &amp; CS 1 adalah <strong className="text-[#2F80ED] dark:text-blue-400 font-bold">08:{String(lateToleranceMins).padStart(2, '0')} WIB</strong>, dan CS 2 adalah <strong className="text-[#2F80ED] dark:text-blue-400 font-bold">15:{String(lateToleranceMins).padStart(2, '0')} WIB</strong>.
                 </p>
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-slate-100">
+              <div className="space-y-2 pt-3 border-t border-slate-100 dark:border-slate-700/80">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={allowOvertime}
                     onChange={e => setAllowOvertime(e.target.checked)}
-                    className="h-4 w-4 rounded text-[#2F80ED]"
+                    className="h-4 w-4 rounded text-[#2F80ED] focus:ring-[#2F80ED]"
                   />
-                  <span className="text-xs text-slate-700 font-medium">Izinkan pencatatan jam kerja lembur</span>
+                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">Izinkan pencatatan jam kerja lembur</span>
                 </label>
 
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -194,16 +206,16 @@ export const PengaturanAdminView: React.FC = () => {
                     type="checkbox"
                     checked={requireSignatureOnReport}
                     onChange={e => setRequireSignatureOnReport(e.target.checked)}
-                    className="h-4 w-4 rounded text-[#2F80ED]"
+                    className="h-4 w-4 rounded text-[#2F80ED] focus:ring-[#2F80ED]"
                   />
-                  <span className="text-xs text-slate-700 font-medium">Wajibkan tanda tangan digital pada ekspor laporan</span>
+                  <span className="text-xs text-slate-700 dark:text-slate-200 font-medium">Wajibkan tanda tangan digital pada ekspor laporan</span>
                 </label>
               </div>
 
               <div className="flex justify-end pt-3">
                 <button
                   type="submit"
-                  className="flex items-center gap-2 rounded-xl bg-[#2F80ED] px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-blue-600"
+                  className="flex items-center gap-2 rounded-xl bg-[#2F80ED] px-5 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-blue-600 transition-all cursor-pointer"
                 >
                   <Save className="h-4 w-4" />
                   Simpan Kebijakan
