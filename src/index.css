@@ -151,20 +151,39 @@ html.dark .text-gray-800 {
   color: #F8FAFC !important;
 }
 
-/* Secondary and Body Text */
+/* Secondary and Body Text: Tingkatkan ke #E2E8F0 (slate-200) agar cerah, jelas, dan kontras tinggi */
 html.dark .text-slate-700,
 html.dark .text-slate-600,
 html.dark .text-gray-700,
-html.dark .text-gray-600 {
+html.dark .text-gray-600,
+html.dark .text-zinc-700,
+html.dark .text-zinc-600 {
+  color: #E2E8F0 !important;
+}
+
+/* Muted Text, Subtitles, Deskripsi, Metadata, NIM, Tanggal & Kolom: Tingkatkan dari #94A3B8 ke #CBD5E1 (slate-300) agar tulisan silver abu-abu tajam dan tidak redup */
+html.dark .text-slate-500,
+html.dark .text-slate-400,
+html.dark .text-slate-300,
+html.dark .text-gray-500,
+html.dark .text-gray-400,
+html.dark .text-gray-300,
+html.dark .text-zinc-500,
+html.dark .text-zinc-400,
+html.dark [class*="text-slate-500"],
+html.dark [class*="text-slate-400"],
+html.dark [class*="text-gray-500"],
+html.dark [class*="text-gray-400"],
+html.dark .dark\:text-slate-500,
+html.dark .dark\:text-slate-400 {
   color: #CBD5E1 !important;
 }
 
-/* Muted Text */
-html.dark .text-slate-500,
-html.dark .text-slate-400,
-html.dark .text-gray-500,
-html.dark .text-gray-400 {
-  color: #94A3B8 !important;
+/* Table Headers (th): Pastikan semua judul kolom tabel terang & jelas terbaca */
+html.dark th,
+html.dark thead th,
+html.dark table th {
+  color: #E2E8F0 !important;
 }
 
 /* Hover States */
@@ -186,9 +205,10 @@ html.dark textarea {
   border-color: #334155 !important;
 }
 
+/* Form Placeholders: Naikkan ke #94A3B8 agar teks placeholder search & input terbaca jelas */
 html.dark input::placeholder,
 html.dark textarea::placeholder {
-  color: #64748B !important;
+  color: #94A3B8 !important;
 }
 
 /* Outlined White Buttons */
@@ -251,8 +271,38 @@ html.dark .bg-purple-50\/80 {
   background-color: rgba(147, 51, 234, 0.18) !important;
 }
 
-html.dark .bg-slate-100 {
+/* Badges & Pills Netral / Slate ("Kemarin", "Nonaktif", pill tanggal, chip status) */
+html.dark .bg-slate-100,
+html.dark .bg-slate-100\/80,
+html.dark .bg-slate-100\/70,
+html.dark .bg-slate-100\/60,
+html.dark .bg-slate-100\/50,
+html.dark .bg-slate-200,
+html.dark .bg-slate-200\/80,
+html.dark .bg-slate-200\/70,
+html.dark .bg-slate-200\/60,
+html.dark .bg-slate-300,
+html.dark .bg-gray-100,
+html.dark .bg-gray-200,
+html.dark .bg-gray-300 {
   background-color: #334155 !important;
+  color: #F8FAFC !important;
+  border-color: #475569 !important;
+}
+
+html.dark .bg-slate-100 *,
+html.dark .bg-slate-100\/80 *,
+html.dark .bg-slate-200 *,
+html.dark .bg-slate-200\/80 *,
+html.dark .bg-slate-300 *,
+html.dark .bg-gray-100 *,
+html.dark .bg-gray-200 * {
+  color: #F8FAFC !important;
+}
+
+/* Empty State Icons Opacity: Pastikan ikon tidak terlalu pudar di mode gelap */
+html.dark .opacity-30 {
+  opacity: 0.55 !important;
 }
 
 /* ==========================================================================

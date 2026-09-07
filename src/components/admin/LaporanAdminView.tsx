@@ -1063,7 +1063,7 @@ export const LaporanAdminView: React.FC = () => {
                                   <>
                                     <td 
                                       rowSpan={student.items.length} 
-                                      className="py-3 px-3 text-center align-middle font-bold text-slate-400 dark:text-slate-500 border-r border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40"
+                                      className="py-3 px-3 text-center align-middle font-bold text-slate-500 dark:text-slate-300 border-r border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/40"
                                     >
                                       {sIdx + 1}
                                     </td>
@@ -1127,7 +1127,7 @@ export const LaporanAdminView: React.FC = () => {
                             key={rec.id || `${day.date}-${rIdx}`}
                             className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors border-b border-slate-200 dark:border-slate-700"
                           >
-                            <td className="py-2.5 px-3 text-center text-slate-400 dark:text-slate-500 font-bold border-r border-slate-200 dark:border-slate-700">
+                            <td className="py-2.5 px-3 text-center text-slate-500 dark:text-slate-300 font-bold border-r border-slate-200 dark:border-slate-700">
                               {rIdx + 1}
                             </td>
                             <td className="py-2.5 px-4 border-r border-slate-200 dark:border-slate-700">
@@ -1204,7 +1204,7 @@ export const LaporanAdminView: React.FC = () => {
                             key={`${week.weekKey}-${student.userId || sIdx}`}
                             className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors border-b border-slate-200 dark:border-slate-700"
                           >
-                            <td className="py-2.5 px-3 text-center text-slate-400 dark:text-slate-500 font-bold border-r border-slate-200 dark:border-slate-700">
+                            <td className="py-2.5 px-3 text-center text-slate-500 dark:text-slate-300 font-bold border-r border-slate-200 dark:border-slate-700">
                               {sIdx + 1}
                             </td>
                             <td className="py-2.5 px-4 border-r border-slate-200 dark:border-slate-700">
@@ -1287,7 +1287,7 @@ export const LaporanAdminView: React.FC = () => {
                             key={`${month.monthKey}-${student.userId || sIdx}`}
                             className="hover:bg-slate-50/70 dark:hover:bg-slate-800/30 transition-colors border-b border-slate-200 dark:border-slate-700"
                           >
-                            <td className="py-2.5 px-3 text-center text-slate-400 dark:text-slate-500 font-bold border-r border-slate-200 dark:border-slate-700">
+                            <td className="py-2.5 px-3 text-center text-slate-500 dark:text-slate-300 font-bold border-r border-slate-200 dark:border-slate-700">
                               {sIdx + 1}
                             </td>
                             <td className="py-2.5 px-4 border-r border-slate-200 dark:border-slate-700">

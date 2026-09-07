@@ -341,7 +341,7 @@ export const AktivitasMagangView: React.FC = () => {
                               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
                                 isToday
                                   ? 'bg-[#2F80ED] text-white'
-                                  : 'bg-slate-200 text-slate-600'
+                                  : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-100'
                               }`}>
                                 {label}
                               </span>
@@ -487,7 +487,7 @@ export const AktivitasMagangView: React.FC = () => {
                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
                           isToday
                             ? 'bg-white text-blue-600 shadow-2xs'
-                            : 'bg-slate-200/80 text-slate-600'
+                            : 'bg-slate-200/80 text-slate-600 dark:bg-slate-700 dark:text-slate-100'
                         }`}
                       >
                         {label}

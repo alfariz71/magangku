@@ -264,7 +264,7 @@ export const AbsensiAdminView: React.FC = () => {
                               <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${
                                 isToday
                                   ? 'bg-[#2F80ED] text-white'
-                                  : 'bg-slate-200 text-slate-600'
+                                  : 'bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-100'
                               }`}>
                                 {label}
                               </span>
@@ -425,7 +425,7 @@ export const AbsensiAdminView: React.FC = () => {
                           {label}
                         </span>
                       )}
-                      <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                      <span className="rounded-full bg-slate-200/80 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-100">
                         {records.length}
                       </span>
                     </div>

@@ -254,7 +254,7 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
 
                 <div className="mt-2 max-h-[65vh] sm:max-h-80 overflow-y-auto space-y-1.5 divide-y divide-slate-50 dark:divide-slate-800/60">
                   {notifications.length === 0 ? (
-                    <div className="py-6 text-center text-xs text-slate-400 dark:text-slate-500">
+                    <div className="py-6 text-center text-xs text-slate-400 dark:text-slate-300">
                       Tidak ada notifikasi baru
                     </div>
                   ) : (
