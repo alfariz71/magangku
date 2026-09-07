@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Plus, X, Check, Calendar, Clock, AlertCircle, Camera, Image as ImageIcon, Video, Upload, ExternalLink, Edit2, Trash2, Folder } from 'lucide-react';
+import { Plus, X, Check, Calendar, Clock, AlertCircle, Camera, Image as ImageIcon, Video, Upload, ExternalLink, Edit2, Trash2 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { uploadToCloudinary, isVideoUrl } from '../../lib/cloudinary';
@@ -19,10 +19,7 @@ export const AktivitasMagangView: React.FC = () => {
 
   // States untuk modal dokumentasi foto & video
   const [showDocModal, setShowDocModal] = useState(false);
-  const [showMediaSheet, setShowMediaSheet] = useState(false);
-  const galleryInputRef = useRef<HTMLInputElement | null>(null);
-  const cameraInputRef = useRef<HTMLInputElement | null>(null);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const docFileInputRef = useRef<HTMLInputElement | null>(null);
   const [docDate, setDocDate] = useState(new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }));
   const [docMedia, setDocMedia] = useState<File | null>(null);
   const [docMediaPreview, setDocMediaPreview] = useState<string>('');
@@ -36,9 +33,6 @@ export const AktivitasMagangView: React.FC = () => {
 
   // States untuk Edit Aktivitas
   const [editModalOpen, setEditModalOpen] = useState(false);
-  const [showEditMediaSheet, setShowEditMediaSheet] = useState(false);
-  const editGalleryInputRef = useRef<HTMLInputElement | null>(null);
-  const editCameraInputRef = useRef<HTMLInputElement | null>(null);
   const editFileInputRef = useRef<HTMLInputElement | null>(null);
   const [editingActivity, setEditingActivity] = useState<ActivityRecord | null>(null);
   const [editTitle, setEditTitle] = useState('');
@@ -60,7 +54,6 @@ export const AktivitasMagangView: React.FC = () => {
     setEditAttachmentUrl(act.attachmentUrl || '');
     setEditNewMedia(null);
     setEditNewMediaPreview('');
-    setShowEditMediaSheet(false);
     setEditModalOpen(true);
   };
 
@@ -746,120 +739,48 @@ export const AktivitasMagangView: React.FC = () => {
             </div>
 
             {/* Photo / Video Upload */}
-            <div className="relative mb-4">
-              <div
-                className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 cursor-pointer hover:border-[#2F80ED] hover:bg-blue-50/30 transition"
-                onClick={() => {
-                  if (!docMediaPreview) {
-                    setShowMediaSheet((prev) => !prev);
-                  }
-                }}
-              >
-                {docMediaPreview ? (
-                  <div className="relative w-full">
-                    {docMediaType === 'video' ? (
-                      <video
-                        src={docMediaPreview}
-                        controls
-                        className="w-full max-h-48 rounded-xl object-contain bg-black"
-                      />
-                    ) : (
-                      <img
-                        src={docMediaPreview}
-                        alt="Preview"
-                        className="w-full max-h-48 object-cover rounded-xl"
-                      />
-                    )}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); setDocMedia(null); setDocMediaPreview(''); }}
-                      className="absolute top-2 right-2 rounded-full bg-slate-900/70 p-1.5 text-white hover:bg-slate-900"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="py-6 text-center">
-                    <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EBF3FE] text-[#2F80ED]">
-                      <Upload className="h-6 w-6" />
-                    </div>
-                    <p className="text-xs font-semibold text-slate-700">Klik untuk upload foto atau video</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Foto (JPG, PNG, WebP) atau Video (MP4, WebM maks. 30MB)</p>
-                  </div>
-                )}
-              </div>
-
-              {/* iOS-style Action Sheet Dropdown */}
-              {showMediaSheet && (
-                <>
-                  <div
-                    className="fixed inset-0 z-40"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowMediaSheet(false);
-                    }}
-                  />
-                  <div
-                    className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/3 z-50 w-64 rounded-2xl bg-[#2C2C2E]/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden divide-y divide-white/10 text-white select-none animate-in fade-in zoom-in-95 duration-150"
-                    onClick={(e) => e.stopPropagation()}
+            <div
+              className="mb-4 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 cursor-pointer hover:border-[#2F80ED] hover:bg-blue-50/30 transition"
+              onClick={() => {
+                if (!docMediaPreview) {
+                  docFileInputRef.current?.click();
+                }
+              }}
+            >
+              {docMediaPreview ? (
+                <div className="relative w-full">
+                  {docMediaType === 'video' ? (
+                    <video
+                      src={docMediaPreview}
+                      controls
+                      className="w-full max-h-48 rounded-xl object-contain bg-black"
+                    />
+                  ) : (
+                    <img
+                      src={docMediaPreview}
+                      alt="Preview"
+                      className="w-full max-h-48 object-cover rounded-xl"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setDocMedia(null); setDocMediaPreview(''); }}
+                    className="absolute top-2 right-2 rounded-full bg-slate-900/70 p-1.5 text-white hover:bg-slate-900"
                   >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowMediaSheet(false);
-                        galleryInputRef.current?.click();
-                      }}
-                      className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/10 active:bg-white/20 transition-colors"
-                    >
-                      <span className="text-[14px] font-normal text-slate-100">Photo Library</span>
-                      <ImageIcon className="h-5 w-5 text-slate-300" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowMediaSheet(false);
-                        cameraInputRef.current?.click();
-                      }}
-                      className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/10 active:bg-white/20 transition-colors"
-                    >
-                      <span className="text-[14px] font-normal text-slate-100">Take Photo or Video</span>
-                      <Camera className="h-5 w-5 text-slate-300" />
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setShowMediaSheet(false);
-                        fileInputRef.current?.click();
-                      }}
-                      className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/10 active:bg-white/20 transition-colors"
-                    >
-                      <span className="text-[14px] font-normal text-slate-100">Choose File</span>
-                      <Folder className="h-5 w-5 text-slate-300" />
-                    </button>
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              ) : (
+                <div className="py-6 text-center">
+                  <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EBF3FE] text-[#2F80ED]">
+                    <Upload className="h-6 w-6" />
                   </div>
-                </>
+                  <p className="text-xs font-semibold text-slate-700">Klik untuk upload foto atau video</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Foto (JPG, PNG, WebP) atau Video (MP4, WebM maks. 30MB)</p>
+                </div>
               )}
-
-              {/* Hidden Inputs for camera, gallery, file picker */}
               <input
-                ref={galleryInputRef}
-                type="file"
-                accept="image/*,video/mp4,video/quicktime,video/webm,video/*"
-                className="hidden"
-                onChange={handleMediaSelect}
-              />
-              <input
-                ref={cameraInputRef}
-                type="file"
-                accept="image/*,video/mp4,video/quicktime,video/webm,video/*"
-                capture="environment"
-                className="hidden"
-                onChange={handleMediaSelect}
-              />
-              <input
-                ref={fileInputRef}
+                ref={docFileInputRef}
                 type="file"
                 accept="*/*"
                 className="hidden"
@@ -1071,7 +992,7 @@ export const AktivitasMagangView: React.FC = () => {
                     <div className="mt-2.5 flex items-center justify-between px-1">
                       <button
                         type="button"
-                        onClick={() => setShowEditMediaSheet((prev) => !prev)}
+                        onClick={() => editFileInputRef.current?.click()}
                         className="text-xs font-semibold text-[#2F80ED] hover:underline cursor-pointer"
                       >
                         Ganti Media
@@ -1089,7 +1010,7 @@ export const AktivitasMagangView: React.FC = () => {
                   /* Belum ada media sama sekali */
                   <div
                     className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 cursor-pointer hover:border-[#2F80ED] hover:bg-blue-50/30 transition"
-                    onClick={() => setShowEditMediaSheet((prev) => !prev)}
+                    onClick={() => editFileInputRef.current?.click()}
                   >
                     <Upload className="h-5 w-5 text-[#2F80ED] mb-1" />
                     <p className="text-xs font-semibold text-slate-700">Unggah foto atau video baru</p>
@@ -1097,74 +1018,6 @@ export const AktivitasMagangView: React.FC = () => {
                   </div>
                 )}
 
-                {/* iOS-style Action Sheet Dropdown for Edit */}
-                {showEditMediaSheet && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowEditMediaSheet(false);
-                      }}
-                    />
-                    <div
-                      className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/3 z-50 w-64 rounded-2xl bg-[#2C2C2E]/95 backdrop-blur-xl border border-white/10 shadow-2xl overflow-hidden divide-y divide-white/10 text-white select-none animate-in fade-in zoom-in-95 duration-150"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowEditMediaSheet(false);
-                          editGalleryInputRef.current?.click();
-                        }}
-                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/10 active:bg-white/20 transition-colors"
-                      >
-                        <span className="text-[14px] font-normal text-slate-100">Photo Library</span>
-                        <ImageIcon className="h-5 w-5 text-slate-300" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowEditMediaSheet(false);
-                          editCameraInputRef.current?.click();
-                        }}
-                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/10 active:bg-white/20 transition-colors"
-                      >
-                        <span className="text-[14px] font-normal text-slate-100">Take Photo or Video</span>
-                        <Camera className="h-5 w-5 text-slate-300" />
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowEditMediaSheet(false);
-                          editFileInputRef.current?.click();
-                        }}
-                        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-white/10 active:bg-white/20 transition-colors"
-                      >
-                        <span className="text-[14px] font-normal text-slate-100">Choose File</span>
-                        <Folder className="h-5 w-5 text-slate-300" />
-                      </button>
-                    </div>
-                  </>
-                )}
-
-                <input
-                  ref={editGalleryInputRef}
-                  type="file"
-                  accept="image/*,video/mp4,video/quicktime,video/webm,video/*"
-                  className="hidden"
-                  onChange={handleEditMediaSelect}
-                />
-                <input
-                  ref={editCameraInputRef}
-                  type="file"
-                  accept="image/*,video/mp4,video/quicktime,video/webm,video/*"
-                  capture="environment"
-                  className="hidden"
-                  onChange={handleEditMediaSelect}
-                />
                 <input
                   ref={editFileInputRef}
                   type="file"
