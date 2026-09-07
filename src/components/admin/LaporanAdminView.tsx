@@ -88,9 +88,14 @@ export const LaporanAdminView: React.FC = () => {
     }
   };
 
+  // Tanggal dimulainya skema Customer Service (CS 6 Hari Kerja).
+  // Sebelum tanggal ini (1 - 5 September 2026), seluruh peserta masih berstatus Magang Reguler (5 Hari Kerja, Sabtu libur).
+  const CS_START_DATE = '2026-09-07';
+
   // Helper cek apakah mahasiswa merupakan divisi Customer Service (CS 6 Hari Kerja)
-  const isCsStudent = (userId?: string, studentName?: string, notes?: string) => {
+  const isCsStudent = (userId?: string, studentName?: string, notes?: string, dateStr?: string) => {
     if (notes && /cs/i.test(notes)) return true;
+    if (dateStr && dateStr < CS_START_DATE) return false;
     const s = students.find(st => st.id === userId || st.name === studentName);
     return Boolean(s?.concentration && /cs|customer\s*service/i.test(s.concentration));
   };
@@ -241,7 +246,7 @@ export const LaporanAdminView: React.FC = () => {
         displayTotalHours = hNum > 0 ? formatHours(hNum) : (a.totalHours.includes('jam') ? a.totalHours : `${a.totalHours} jam`);
       }
 
-      const isCs = isCsStudent(a.userId, a.studentName, a.notes);
+      const isCs = isCsStudent(a.userId, a.studentName, a.notes, dateKey);
       let shiftLabel = 'Reguler (08:00 - 17:00)';
       if (a.notes) {
         shiftLabel = a.notes;
@@ -364,8 +369,12 @@ export const LaporanAdminView: React.FC = () => {
       });
 
       const students = Array.from(studentMap.values()).map(s => {
-        const isCs = isCsStudent(s.userId, s.studentName) || Object.values(s.dayRecords).some(r => r.notes && /cs/i.test(r.notes));
-        const skema = isCs ? 'CS (6 Hari)' : 'Reguler (5 Hari)';
+        // Sebelum CS_START_DATE (misal minggu 1 - 5 September), semua peserta masih skema Reguler 5 hari kerja (Sabtu libur)
+        const isCsActiveThisWeek = week.weekKey >= CS_START_DATE
+          ? (isCsStudent(s.userId, s.studentName) || Object.values(s.dayRecords).some(r => r.notes && /cs/i.test(r.notes)))
+          : Object.values(s.dayRecords).some(r => r.notes && /cs/i.test(r.notes));
+        const skema = isCsActiveThisWeek ? 'CS (6 Hari)' : 'Reguler (5 Hari)';
+        const isCs = isCsActiveThisWeek;
 
         const getStatusCode = (dateKey: string, rec?: (typeof filteredAttendances)[0]) => {
           if (rec) {
@@ -490,11 +499,22 @@ export const LaporanAdminView: React.FC = () => {
           const pad = (n: number) => String(n).padStart(2, '0');
           const dateKey = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
 
-          if (dayOfWeek !== 0 && !isIndonesianHoliday(dateKey)) {
-            csWorkingDays.push(dateKey); // CS: Senin - Sabtu
+          if (dayOfWeek === 0 || isIndonesianHoliday(dateKey)) continue;
+
+          // Hari kerja reguler: Senin - Jumat (Sabtu libur)
+          if (dayOfWeek !== 6) {
+            regulerWorkingDays.push(dateKey);
+          }
+
+          // Hari kerja CS:
+          // Sebelum CS_START_DATE (1 - 6 September 2026), seluruh peserta masih skema Reguler (Sabtu libur).
+          // Mulai CS_START_DATE (7 September 2026), peserta CS bekerja 6 hari (Senin - Sabtu).
+          if (dateKey < CS_START_DATE) {
             if (dayOfWeek !== 6) {
-              regulerWorkingDays.push(dateKey); // Reguler: Senin - Jumat
+              csWorkingDays.push(dateKey);
             }
+          } else {
+            csWorkingDays.push(dateKey);
           }
         }
 
@@ -507,14 +527,20 @@ export const LaporanAdminView: React.FC = () => {
           const dateKey = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
           const dayOfWeek = dt.getDay();
 
-          if (dayOfWeek !== 0) {
-            if (isIndonesianHoliday(dateKey)) {
-              totalHolidaysInMonth++;
+          if (dayOfWeek === 0) continue;
+
+          if (isIndonesianHoliday(dateKey)) {
+            totalHolidaysInMonth++;
+          } else {
+            if (dayOfWeek !== 6) {
+              totalRegulerDaysInMonth++;
+            }
+            if (dateKey < CS_START_DATE) {
+              if (dayOfWeek !== 6) {
+                totalCsDaysInMonth++;
+              }
             } else {
               totalCsDaysInMonth++;
-              if (dayOfWeek !== 6) {
-                totalRegulerDaysInMonth++;
-              }
             }
           }
         }

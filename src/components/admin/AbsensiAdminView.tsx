@@ -93,13 +93,13 @@ export const AbsensiAdminView: React.FC = () => {
       if (filterShift === 'Semua') return true;
       const notes = a.notes || '';
       if (filterShift === 'Reguler') {
-        return !notes || notes.toLowerCase().includes('reguler');
+        return a.date < '2026-09-07' || !notes || notes.toLowerCase().includes('reguler');
       }
       if (filterShift === 'CS - Shift 1') {
-        return notes.includes('Shift 1');
+        return a.date >= '2026-09-07' && notes.includes('Shift 1');
       }
       if (filterShift === 'CS - Shift 2') {
-        return notes.includes('Shift 2');
+        return a.date >= '2026-09-07' && notes.includes('Shift 2');
       }
       return true;
     };
@@ -318,15 +318,15 @@ export const AbsensiAdminView: React.FC = () => {
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-2 flex-wrap">
                               <span className="font-bold text-slate-900">{item.studentName}</span>
-                              {item.notes?.includes('Shift 1') ? (
+                              {item.date >= '2026-09-07' && item.notes?.includes('Shift 1') ? (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 border border-indigo-200">
                                   🎧 CS Shift 1
                                 </span>
-                              ) : item.notes?.includes('Shift 2') ? (
+                              ) : item.date >= '2026-09-07' && item.notes?.includes('Shift 2') ? (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200">
                                   🎧 CS Shift 2
                                 </span>
-                              ) : item.notes?.includes('CS') ? (
+                              ) : item.date >= '2026-09-07' && item.notes?.includes('CS') ? (
                                 <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200">
                                   🎧 CS
                                 </span>
@@ -489,15 +489,15 @@ export const AbsensiAdminView: React.FC = () => {
                           <div className="truncate">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <p className="font-bold text-slate-900 text-xs truncate">{item.studentName}</p>
-                              {item.notes?.includes('Shift 1') ? (
+                              {item.date >= '2026-09-07' && item.notes?.includes('Shift 1') ? (
                                 <span className="inline-flex items-center rounded-full bg-indigo-50 px-1.5 py-0.2 text-[9px] font-semibold text-indigo-700 border border-indigo-200">
                                   🎧 CS 1
                                 </span>
-                              ) : item.notes?.includes('Shift 2') ? (
+                              ) : item.date >= '2026-09-07' && item.notes?.includes('Shift 2') ? (
                                 <span className="inline-flex items-center rounded-full bg-purple-50 px-1.5 py-0.2 text-[9px] font-semibold text-purple-700 border border-purple-200">
                                   🎧 CS 2
                                 </span>
-                              ) : item.notes?.includes('CS') ? (
+                              ) : item.date >= '2026-09-07' && item.notes?.includes('CS') ? (
                                 <span className="inline-flex items-center rounded-full bg-blue-50 px-1.5 py-0.2 text-[9px] font-semibold text-blue-700 border border-blue-200">
                                   🎧 CS
                                 </span>
