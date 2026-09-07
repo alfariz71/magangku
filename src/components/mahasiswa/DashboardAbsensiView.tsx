@@ -195,6 +195,20 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
     hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Jakarta'
   });
 
+  // Helper hitung jam batas toleransi (bisa minus, 0, atau positif)
+  const getCutoffDisplay = (startTimeStr: string, toleranceMins: number = 0) => {
+    try {
+      const [h, m] = startTimeStr.split(':').map(Number);
+      const totalMinutes = h * 60 + (m || 0) + toleranceMins;
+      const normalizedMinutes = ((totalMinutes % 1440) + 1440) % 1440;
+      const cutoffH = String(Math.floor(normalizedMinutes / 60)).padStart(2, '0');
+      const cutoffM = String(normalizedMinutes % 60).padStart(2, '0');
+      return `${cutoffH}:${cutoffM} WIB`;
+    } catch {
+      return `${startTimeStr} WIB`;
+    }
+  };
+
   const currentOfficeName = gpsState.nearestLocationName || qrConfig.officeName || 'Lokasi Magang';
   const currentRadius = gpsState.targetRadiusMeters || qrConfig.radiusMeters || 50;
 
@@ -352,13 +366,33 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
               </strong>
             </span>
           </div>
-          <span className="text-[11px] font-semibold text-[#2F80ED] dark:text-blue-400 bg-white/80 dark:bg-slate-800/80 px-2 py-0.5 rounded-md border border-blue-200/50 dark:border-blue-500/30">
-            {isCsStudent && selectedShift === 'cs_shift_2'
-              ? `Batas Masuk: ${systemSettings?.csShift2StartTime || '15:00'} WIB`
-              : isCsStudent
-              ? `Batas Masuk: ${systemSettings?.csShift1StartTime || '08:00'} WIB`
-              : `Batas Masuk: ${systemSettings?.workStartTime || '08:00'} WIB`}
-          </span>
+          {(() => {
+            let cutoffStr = '';
+            if (isCsStudent && selectedShift === 'cs_shift_2') {
+              const start = systemSettings?.csShift2StartTime || '15:00';
+              const tol = typeof systemSettings?.lateToleranceCsShift2Mins === 'number'
+                ? systemSettings.lateToleranceCsShift2Mins
+                : -10;
+              cutoffStr = getCutoffDisplay(start, tol);
+            } else if (isCsStudent && selectedShift === 'cs_shift_1') {
+              const start = systemSettings?.csShift1StartTime || '08:00';
+              const tol = typeof systemSettings?.lateToleranceCsShift1Mins === 'number'
+                ? systemSettings.lateToleranceCsShift1Mins
+                : 0;
+              cutoffStr = getCutoffDisplay(start, tol);
+            } else {
+              const start = systemSettings?.workStartTime || '08:00';
+              const tol = typeof systemSettings?.lateToleranceMins === 'number'
+                ? systemSettings.lateToleranceMins
+                : 15;
+              cutoffStr = getCutoffDisplay(start, tol);
+            }
+            return (
+              <span className="text-[11px] font-semibold text-[#2F80ED] dark:text-blue-400 bg-white/80 dark:bg-slate-800/80 px-2 py-0.5 rounded-md border border-blue-200/50 dark:border-blue-500/30">
+                Batas Masuk: {cutoffStr}
+              </span>
+            );
+          })()}
         </div>
 
         {/* Ringkasan Hari Ini (Absen Masuk, Absen Pulang, Total Jam) */}

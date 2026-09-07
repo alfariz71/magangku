@@ -137,7 +137,9 @@ export interface SystemSettings {
   csShift1EndTime?: string;
   csShift2StartTime?: string;
   csShift2EndTime?: string;
-  lateToleranceMins: number;
+  lateToleranceMins: number; // Toleransi Reguler (bisa minus, 0, atau positif)
+  lateToleranceCsShift1Mins?: number; // Toleransi CS Shift 1 (bisa minus, 0, atau positif)
+  lateToleranceCsShift2Mins?: number; // Toleransi CS Shift 2 (bisa minus, 0, atau positif)
   allowOvertime: boolean;
   requireSignatureOnReport: boolean;
 }
@@ -150,6 +152,8 @@ const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   csShift2StartTime: '15:00',
   csShift2EndTime: '21:00',
   lateToleranceMins: 15,
+  lateToleranceCsShift1Mins: 0,
+  lateToleranceCsShift2Mins: -10,
   allowOvertime: true,
   requireSignatureOnReport: true,
 };
@@ -870,9 +874,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const now = new Date();
     const jakartaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
     
-    // Tentukan jam patokan masuk berdasarkan mode & shift dari systemSettings
+    // Tentukan jam patokan masuk & toleransi berdasarkan mode & shift dari systemSettings
     let targetStartHour = 8;
     let targetStartMinute = 0;
+    let shiftTolerance = typeof systemSettings.lateToleranceMins === 'number' ? systemSettings.lateToleranceMins : 15;
     let shiftNotes = 'Reguler (08:00 - 17:00)';
 
     if (mode === 'cs') {
@@ -880,12 +885,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const [h, m] = (systemSettings.csShift2StartTime || '15:00').split(':').map(Number);
         targetStartHour = h;
         targetStartMinute = m || 0;
+        shiftTolerance = typeof systemSettings.lateToleranceCsShift2Mins === 'number'
+          ? systemSettings.lateToleranceCsShift2Mins
+          : -10;
         const endStr = systemSettings.csShift2EndTime || '21:00';
         shiftNotes = `CS - Shift 2 (${systemSettings.csShift2StartTime || '15:00'} - ${endStr})`;
       } else {
         const [h, m] = (systemSettings.csShift1StartTime || '08:00').split(':').map(Number);
         targetStartHour = h;
         targetStartMinute = m || 0;
+        shiftTolerance = typeof systemSettings.lateToleranceCsShift1Mins === 'number'
+          ? systemSettings.lateToleranceCsShift1Mins
+          : 0;
         const endStr = systemSettings.csShift1EndTime || '15:00';
         shiftNotes = `CS - Shift 1 (${systemSettings.csShift1StartTime || '08:00'} - ${endStr})`;
       }
@@ -893,11 +904,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const [startH, startM] = (systemSettings.workStartTime || '08:00').split(':').map(Number);
       targetStartHour = startH;
       targetStartMinute = startM || 0;
+      shiftTolerance = typeof systemSettings.lateToleranceMins === 'number'
+        ? systemSettings.lateToleranceMins
+        : 15;
       const endStr = systemSettings.workEndTime || '17:00';
       shiftNotes = `Reguler (${systemSettings.workStartTime || '08:00'} - ${endStr})`;
     }
 
-    const cutoffMinutes = (targetStartHour * 60 + targetStartMinute) + (systemSettings.lateToleranceMins || 0);
+    const cutoffMinutes = (targetStartHour * 60 + targetStartMinute) + shiftTolerance;
     const currentMinutes = jakartaTime.getHours() * 60 + jakartaTime.getMinutes();
     const isLate = currentMinutes > cutoffMinutes;
     const status: AttendanceStatus = isLate ? 'Terlambat' : 'Hadir';

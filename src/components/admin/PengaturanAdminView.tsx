@@ -11,7 +11,9 @@ export const PengaturanAdminView: React.FC = () => {
   const [csShift1EndTime, setCsShift1EndTime] = useState(systemSettings.csShift1EndTime || '15:00');
   const [csShift2StartTime, setCsShift2StartTime] = useState(systemSettings.csShift2StartTime || '15:00');
   const [csShift2EndTime, setCsShift2EndTime] = useState(systemSettings.csShift2EndTime || '21:00');
-  const [lateToleranceMins, setLateToleranceMins] = useState(systemSettings.lateToleranceMins ?? 15);
+  const [lateToleranceMins, setLateToleranceMins] = useState<number | string>(systemSettings.lateToleranceMins ?? 15);
+  const [lateToleranceCsShift1Mins, setLateToleranceCsShift1Mins] = useState<number | string>(systemSettings.lateToleranceCsShift1Mins ?? 0);
+  const [lateToleranceCsShift2Mins, setLateToleranceCsShift2Mins] = useState<number | string>(systemSettings.lateToleranceCsShift2Mins ?? -10);
   const [allowOvertime, setAllowOvertime] = useState(systemSettings.allowOvertime ?? true);
   const [requireSignatureOnReport, setRequireSignatureOnReport] = useState(systemSettings.requireSignatureOnReport ?? true);
   const [searchLog, setSearchLog] = useState('');
@@ -24,10 +26,25 @@ export const PengaturanAdminView: React.FC = () => {
     setCsShift1EndTime(systemSettings.csShift1EndTime || '15:00');
     setCsShift2StartTime(systemSettings.csShift2StartTime || '15:00');
     setCsShift2EndTime(systemSettings.csShift2EndTime || '21:00');
-    setLateToleranceMins(systemSettings.lateToleranceMins);
+    setLateToleranceMins(systemSettings.lateToleranceMins ?? 15);
+    setLateToleranceCsShift1Mins(systemSettings.lateToleranceCsShift1Mins ?? 0);
+    setLateToleranceCsShift2Mins(systemSettings.lateToleranceCsShift2Mins ?? -10);
     setAllowOvertime(systemSettings.allowOvertime);
     setRequireSignatureOnReport(systemSettings.requireSignatureOnReport);
   }, [systemSettings]);
+
+  const calcCutoffTime = (timeStr: string, tolMins: number | string) => {
+    try {
+      const [h, m] = (timeStr || '08:00').split(':').map(Number);
+      const total = h * 60 + (m || 0) + (Number(tolMins) || 0);
+      const normalized = ((total % 1440) + 1440) % 1440;
+      const ch = String(Math.floor(normalized / 60)).padStart(2, '0');
+      const cm = String(normalized % 60).padStart(2, '0');
+      return `${ch}:${cm}`;
+    } catch {
+      return timeStr || '08:00';
+    }
+  };
 
   const handleSaveSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +56,8 @@ export const PengaturanAdminView: React.FC = () => {
       csShift2StartTime,
       csShift2EndTime,
       lateToleranceMins: Number(lateToleranceMins) || 0,
+      lateToleranceCsShift1Mins: Number(lateToleranceCsShift1Mins) || 0,
+      lateToleranceCsShift2Mins: Number(lateToleranceCsShift2Mins) || 0,
       allowOvertime,
       requireSignatureOnReport,
     });
@@ -108,6 +127,21 @@ export const PengaturanAdminView: React.FC = () => {
                     />
                   </div>
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                    Toleransi Keterlambatan Reguler (Menit)
+                  </label>
+                  <input
+                    type="number"
+                    value={lateToleranceMins}
+                    onChange={e => setLateToleranceMins(e.target.value)}
+                    placeholder="Contoh: 15, 0, atau -5"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
+                  />
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                    💡 Batas masuk tepat waktu: <strong className="text-[#2F80ED] dark:text-blue-400 font-bold">{calcCutoffTime(workStartTime, lateToleranceMins)} WIB</strong> ({Number(lateToleranceMins) >= 0 ? `+${lateToleranceMins}` : lateToleranceMins} menit).
+                  </p>
+                </div>
               </div>
 
               {/* 2. Skema CS Shift 1 */}
@@ -139,6 +173,21 @@ export const PengaturanAdminView: React.FC = () => {
                       className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                     />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                    Toleransi Keterlambatan CS Shift 1 (Menit)
+                  </label>
+                  <input
+                    type="number"
+                    value={lateToleranceCsShift1Mins}
+                    onChange={e => setLateToleranceCsShift1Mins(e.target.value)}
+                    placeholder="Contoh: 0, 5, atau -10"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
+                  />
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                    💡 Batas masuk tepat waktu: <strong className="text-[#2F80ED] dark:text-blue-400 font-bold">{calcCutoffTime(csShift1StartTime, lateToleranceCsShift1Mins)} WIB</strong> ({Number(lateToleranceCsShift1Mins) >= 0 ? `+${lateToleranceCsShift1Mins}` : lateToleranceCsShift1Mins} menit).
+                  </p>
                 </div>
               </div>
 
@@ -172,22 +221,21 @@ export const PengaturanAdminView: React.FC = () => {
                     />
                   </div>
                 </div>
-              </div>
-
-              {/* 4. Toleransi Keterlambatan */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
-                  Toleransi Keterlambatan Semua Shift (Menit)
-                </label>
-                <input
-                  type="number"
-                  value={lateToleranceMins}
-                  onChange={e => setLateToleranceMins(Number(e.target.value))}
-                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
-                />
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
-                  💡 Contoh: Jika toleransi {lateToleranceMins} menit, batas masuk Reguler &amp; CS 1 adalah <strong className="text-[#2F80ED] dark:text-blue-400 font-bold">08:{String(lateToleranceMins).padStart(2, '0')} WIB</strong>, dan CS 2 adalah <strong className="text-[#2F80ED] dark:text-blue-400 font-bold">15:{String(lateToleranceMins).padStart(2, '0')} WIB</strong>.
-                </p>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1.5">
+                    Toleransi Keterlambatan CS Shift 2 (Menit - Bisa Diisi Minus)
+                  </label>
+                  <input
+                    type="number"
+                    value={lateToleranceCsShift2Mins}
+                    onChange={e => setLateToleranceCsShift2Mins(e.target.value)}
+                    placeholder="Contoh: -10, -5, 0, atau 10"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
+                  />
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1.5">
+                    💡 Batas masuk tepat waktu: <strong className="text-[#2F80ED] dark:text-blue-400 font-bold">{calcCutoffTime(csShift2StartTime, lateToleranceCsShift2Mins)} WIB</strong> ({Number(lateToleranceCsShift2Mins) >= 0 ? `+${lateToleranceCsShift2Mins}` : lateToleranceCsShift2Mins} menit). {Number(lateToleranceCsShift2Mins) < 0 ? 'Wajib hadir lebih awal untuk pergantian (handover) meja CS.' : ''}
+                  </p>
+                </div>
               </div>
 
               <div className="space-y-2 pt-3 border-t border-slate-100 dark:border-slate-700/80">
