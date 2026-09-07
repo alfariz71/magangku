@@ -55,25 +55,21 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
   const [filterStatus, setFilterStatus] = useState<string>('Semua');
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Mode selection: 'reguler' | 'cs' | null (Wajib pilih salah satu card sebelum absen)
-  const [selectedAttendanceMode, setSelectedAttendanceMode] = useState<'reguler' | 'cs' | null>(null);
-  const [selectedCsShift, setSelectedCsShift] = useState<'shift_1' | 'shift_2'>('shift_1');
+  // Shift option: 'reguler' | 'cs_shift_1' | 'cs_shift_2'
+  type ShiftOption = 'reguler' | 'cs_shift_1' | 'cs_shift_2';
+  const [selectedShift, setSelectedShift] = useState<ShiftOption>('reguler');
 
-  const isCsAttendanceToday = todayAttendance.notes?.includes('CS') ?? false;
-  const isRegulerAttendanceToday = todayAttendance.notes?.includes('Reguler') ?? false;
-
-  // Auto-sync active card selection if today's attendance is already recorded
+  // Auto-sync selected shift if today's attendance is already recorded
   useEffect(() => {
-    if (todayAttendance.isCheckedIn) {
-      if (todayAttendance.notes?.includes('CS')) {
-        setSelectedAttendanceMode('cs');
-        if (todayAttendance.notes?.includes('Shift 2')) {
-          setSelectedCsShift('shift_2');
+    if (todayAttendance.isCheckedIn && todayAttendance.notes) {
+      if (todayAttendance.notes.includes('CS')) {
+        if (todayAttendance.notes.includes('Shift 2')) {
+          setSelectedShift('cs_shift_2');
         } else {
-          setSelectedCsShift('shift_1');
+          setSelectedShift('cs_shift_1');
         }
       } else {
-        setSelectedAttendanceMode('reguler');
+        setSelectedShift('reguler');
       }
     }
   }, [todayAttendance.isCheckedIn, todayAttendance.notes]);
@@ -104,20 +100,14 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
     setFeedbackToast({ type, message });
   };
 
-  // Check-In (Validasi card terpilih lalu buka Scanner QR)
-  const handleCheckInClick = (mode: 'reguler' | 'cs') => {
-    if (selectedAttendanceMode !== mode) {
-      setSelectedAttendanceMode(mode);
-    }
+  // Check-In (Buka Scanner QR)
+  const handleCheckInClick = () => {
     if (todayAttendance.isCheckedIn) return;
     setIsScannerOpen(true);
   };
 
   // Check-Out (Cukup klik & validasi GPS tanpa scan QR)
-  const handleCheckOutClick = async (mode: 'reguler' | 'cs') => {
-    if (selectedAttendanceMode !== mode) {
-      setSelectedAttendanceMode(mode);
-    }
+  const handleCheckOutClick = async () => {
     if (!todayAttendance.isCheckedIn) {
       showToast('error', 'Anda belum melakukan absen masuk hari ini.');
       return;
@@ -266,78 +256,192 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
         </div>
       </div>
 
-      {/* Mode Selection Prompt Banner */}
-      {!selectedAttendanceMode && (
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/70 p-4 shadow-sm animate-in fade-in duration-300">
+      {/* ============================================================ */}
+      {/* KARTU PRESENSI UTAMA (PILIHAN: REGULER, CS SHIFT 1, CS SHIFT 2) */}
+      {/* ============================================================ */}
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-5 sm:p-7 shadow-sm transition-all">
+        {/* Header Kartu */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 pb-4 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
-              <Info className="h-5 w-5" />
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#2F80ED] text-white shadow-md shadow-blue-500/20">
+              <Calendar className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-sm font-bold text-blue-900">Pilih Mode Absensi Hari Ini</p>
-              <p className="text-xs text-blue-700">
-                Silakan centang/pilih salah satu kartu di bawah ini: <strong>Mode Reguler</strong> (08:00 - 17:00) atau <strong>Mode CS</strong> (Shift 1 / Shift 2) untuk mengaktifkan tombol absensi Anda.
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base sm:text-lg font-bold text-[#183B66]">Absensi Kehadiran Magang</h3>
+                {selectedShift === 'reguler' && (
+                  <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700">
+                    Reguler (08:00 – 17:00)
+                  </span>
+                )}
+                {selectedShift === 'cs_shift_1' && (
+                  <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
+                    CS Shift 1 (08:00 – 15:00)
+                  </span>
+                )}
+                {selectedShift === 'cs_shift_2' && (
+                  <span className="rounded-full bg-purple-100 px-2.5 py-0.5 text-[11px] font-semibold text-purple-700">
+                    CS Shift 2 (15:00 – 21:00)
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Pilih jenis shift kerja Anda sebelum melakukan absensi masuk
               </p>
             </div>
           </div>
         </div>
-      )}
 
-      {/* ============================================================ */}
-      {/* CARD 1: ABSENSI MAGANG REGULER (08:00 - 17:00 WIB) */}
-      {/* ============================================================ */}
-      <div
-        className={`rounded-2xl transition-all duration-300 ${
-          selectedAttendanceMode === 'reguler'
-            ? 'border-2 border-[#2F80ED] bg-white p-6 shadow-md ring-4 ring-blue-50'
-            : 'border border-slate-200 bg-white/75 p-6 shadow-sm opacity-85 hover:border-slate-300'
-        }`}
-      >
-        {/* Header Card 1 */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                selectedAttendanceMode === 'reguler'
-                  ? 'bg-[#2F80ED] text-white shadow-sm shadow-blue-500/30'
-                  : 'bg-slate-100 text-slate-500'
-              }`}
-            >
-              <Briefcase className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-[#183B66]">Absensi Magang Reguler</h3>
-                <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700">
-                  08:00 – 17:00 WIB
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">Untuk peserta magang jam kerja standar non-shift</p>
-            </div>
+        {/* Pilihan Shift (3 Opsi: Reguler, CS Shift 1, CS Shift 2) */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+              <span>Pilih Jadwal / Shift Hari Ini:</span>
+            </label>
+            {todayAttendance.isCheckedIn && (
+              <span className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-lg">
+                🔒 Shift terkunci untuk hari ini
+              </span>
+            )}
           </div>
 
-          {/* Selector Button */}
-          <button
-            type="button"
-            onClick={() => setSelectedAttendanceMode(selectedAttendanceMode === 'reguler' ? null : 'reguler')}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
-              selectedAttendanceMode === 'reguler'
-                ? 'bg-[#2F80ED] text-white shadow-sm shadow-blue-500/25 ring-2 ring-blue-200'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            {selectedAttendanceMode === 'reguler' ? (
-              <>
-                <CheckCircle2 className="h-4 w-4 text-white" />
-                <span>Mode Reguler Dipilih ✓</span>
-              </>
-            ) : (
-              <>
-                <Circle className="h-4 w-4 text-slate-400" />
-                <span>Pilih Mode Reguler</span>
-              </>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Opsi 1: Reguler */}
+            <button
+              type="button"
+              disabled={todayAttendance.isCheckedIn}
+              onClick={() => setSelectedShift('reguler')}
+              className={`group relative flex flex-col justify-between rounded-xl p-4 text-left transition-all duration-200 ${
+                selectedShift === 'reguler'
+                  ? 'border-2 border-[#2F80ED] bg-blue-50/60 shadow-sm ring-2 ring-blue-500/20'
+                  : 'border border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300'
+              } ${todayAttendance.isCheckedIn ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}
+            >
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                  selectedShift === 'reguler' ? 'bg-[#2F80ED] text-white shadow-xs' : 'bg-slate-200/70 text-slate-600'
+                }`}>
+                  <Briefcase className="h-4 w-4" />
+                </div>
+                <div className={`flex h-5 w-5 items-center justify-center rounded-full border transition-all ${
+                  selectedShift === 'reguler'
+                    ? 'border-[#2F80ED] bg-[#2F80ED] text-white'
+                    : 'border-slate-300 bg-white'
+                }`}>
+                  {selectedShift === 'reguler' && <Check className="h-3 w-3 stroke-[3]" />}
+                </div>
+              </div>
+              <div>
+                <p className={`text-xs font-bold ${selectedShift === 'reguler' ? 'text-blue-950' : 'text-slate-800'}`}>
+                  Magang Reguler
+                </p>
+                <p className="text-[11px] font-semibold text-blue-600 mt-0.5">
+                  08:00 – 17:00 WIB
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Non-Shift (Kantor Standar)
+                </p>
+              </div>
+            </button>
+
+            {/* Opsi 2: CS Shift 1 */}
+            <button
+              type="button"
+              disabled={todayAttendance.isCheckedIn}
+              onClick={() => setSelectedShift('cs_shift_1')}
+              className={`group relative flex flex-col justify-between rounded-xl p-4 text-left transition-all duration-200 ${
+                selectedShift === 'cs_shift_1'
+                  ? 'border-2 border-indigo-600 bg-indigo-50/60 shadow-sm ring-2 ring-indigo-500/20'
+                  : 'border border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300'
+              } ${todayAttendance.isCheckedIn ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}
+            >
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                  selectedShift === 'cs_shift_1' ? 'bg-indigo-600 text-white shadow-xs' : 'bg-slate-200/70 text-slate-600'
+                }`}>
+                  <Headphones className="h-4 w-4" />
+                </div>
+                <div className={`flex h-5 w-5 items-center justify-center rounded-full border transition-all ${
+                  selectedShift === 'cs_shift_1'
+                    ? 'border-indigo-600 bg-indigo-600 text-white'
+                    : 'border-slate-300 bg-white'
+                }`}>
+                  {selectedShift === 'cs_shift_1' && <Check className="h-3 w-3 stroke-[3]" />}
+                </div>
+              </div>
+              <div>
+                <p className={`text-xs font-bold ${selectedShift === 'cs_shift_1' ? 'text-indigo-950' : 'text-slate-800'}`}>
+                  CS – Shift 1 (Pagi)
+                </p>
+                <p className="text-[11px] font-semibold text-indigo-600 mt-0.5">
+                  08:00 – 15:00 WIB
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Customer Service Pagi
+                </p>
+              </div>
+            </button>
+
+            {/* Opsi 3: CS Shift 2 */}
+            <button
+              type="button"
+              disabled={todayAttendance.isCheckedIn}
+              onClick={() => setSelectedShift('cs_shift_2')}
+              className={`group relative flex flex-col justify-between rounded-xl p-4 text-left transition-all duration-200 ${
+                selectedShift === 'cs_shift_2'
+                  ? 'border-2 border-purple-600 bg-purple-50/60 shadow-sm ring-2 ring-purple-500/20'
+                  : 'border border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300'
+              } ${todayAttendance.isCheckedIn ? 'cursor-not-allowed opacity-90' : 'cursor-pointer'}`}
+            >
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${
+                  selectedShift === 'cs_shift_2' ? 'bg-purple-600 text-white shadow-xs' : 'bg-slate-200/70 text-slate-600'
+                }`}>
+                  <Headphones className="h-4 w-4" />
+                </div>
+                <div className={`flex h-5 w-5 items-center justify-center rounded-full border transition-all ${
+                  selectedShift === 'cs_shift_2'
+                    ? 'border-purple-600 bg-purple-600 text-white'
+                    : 'border-slate-300 bg-white'
+                }`}>
+                  {selectedShift === 'cs_shift_2' && <Check className="h-3 w-3 stroke-[3]" />}
+                </div>
+              </div>
+              <div>
+                <p className={`text-xs font-bold ${selectedShift === 'cs_shift_2' ? 'text-purple-950' : 'text-slate-800'}`}>
+                  CS – Shift 2 (Sore)
+                </p>
+                <p className="text-[11px] font-semibold text-purple-600 mt-0.5">
+                  15:00 – 21:00 WIB
+                </p>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Customer Service Sore/Malam
+                </p>
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Info Petunjuk Shift Terpilih */}
+        <div className={`mb-6 rounded-xl p-3.5 text-xs flex items-center gap-2.5 border ${
+          selectedShift === 'reguler'
+            ? 'bg-blue-50/70 border-blue-200 text-blue-900'
+            : selectedShift === 'cs_shift_1'
+            ? 'bg-indigo-50/70 border-indigo-200 text-indigo-900'
+            : 'bg-purple-50/70 border-purple-200 text-purple-900'
+        }`}>
+          <Info className="h-4 w-4 shrink-0" />
+          <span>
+            {selectedShift === 'reguler' && (
+              <>Jadwal <strong>Reguler</strong>: Jam masuk patokan <strong>08:00 WIB</strong> (toleransi keterlambatan aktif), absen pulang mulai <strong>17:00 WIB</strong>.</>
             )}
-          </button>
+            {selectedShift === 'cs_shift_1' && (
+              <>Jadwal <strong>CS Shift 1</strong>: Jam masuk patokan <strong>08:00 WIB</strong> (toleransi keterlambatan aktif), absen pulang mulai <strong>15:00 WIB</strong>.</>
+            )}
+            {selectedShift === 'cs_shift_2' && (
+              <>Jadwal <strong>CS Shift 2</strong>: Jam masuk patokan <strong>15:00 WIB</strong> (toleransi keterlambatan aktif), absen pulang mulai <strong>21:00 WIB</strong>.</>
+            )}
+          </span>
         </div>
 
         {/* Today Summary */}
@@ -362,22 +466,19 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           </div>
         </div>
 
-        {/* Status Hari Ini - Card 1 */}
-        {todayAttendance.isCheckedIn && isCsAttendanceToday ? (
-          <div className="mb-4 flex items-center gap-2 rounded-xl p-3 text-xs font-semibold bg-indigo-50 text-indigo-800 border border-indigo-200">
-            <Info className="h-4 w-4 shrink-0 text-indigo-600" />
-            <span>Presensi hari ini tercatat pada <strong>Mode Customer Service ({todayAttendance.notes || 'CS'})</strong>. Silakan gunakan kartu CS di bawah.</span>
-          </div>
-        ) : todayAttendance.status ? (
-          <div className={`mb-4 flex items-center gap-2 rounded-xl p-3 text-xs font-semibold ${
+        {/* Status Hari Ini Banner */}
+        {todayAttendance.status && (
+          <div className={`mb-5 flex items-center gap-2 rounded-xl p-3 text-xs font-semibold ${
             todayAttendance.status === 'Hadir' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
             todayAttendance.status === 'Terlambat' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
             'bg-amber-50 text-amber-700 border border-amber-200'
           }`}>
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            Status hari ini: <strong>{todayAttendance.status}</strong> (Reguler)
+            <span>
+              Status Hari Ini: <strong>{todayAttendance.status}</strong> {todayAttendance.notes ? `(${todayAttendance.notes})` : ''}
+            </span>
           </div>
-        ) : null}
+        )}
 
         {/* GPS Status Live */}
         <div className={`mb-6 flex items-center justify-between gap-3 rounded-xl border p-3.5 ${gpsDisplay.bg} ${gpsDisplay.border}`}>
@@ -405,12 +506,10 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           {/* Absen Masuk */}
           <button
             type="button"
-            onClick={() => handleCheckInClick('reguler')}
-            disabled={selectedAttendanceMode !== 'reguler' || todayAttendance.isCheckedIn || isProcessingCheckIn}
+            onClick={handleCheckInClick}
+            disabled={todayAttendance.isCheckedIn || isProcessingCheckIn}
             className={`flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold shadow-md transition-all ${
-              selectedAttendanceMode !== 'reguler'
-                ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
-                : todayAttendance.isCheckedIn
+              todayAttendance.isCheckedIn
                 ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
                 : isProcessingCheckIn
                 ? 'bg-blue-400 text-white shadow-none cursor-wait'
@@ -438,12 +537,10 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           {/* Absen Pulang */}
           <button
             type="button"
-            onClick={() => handleCheckOutClick('reguler')}
-            disabled={selectedAttendanceMode !== 'reguler' || !todayAttendance.isCheckedIn || todayAttendance.isCheckedOut}
+            onClick={handleCheckOutClick}
+            disabled={!todayAttendance.isCheckedIn || todayAttendance.isCheckedOut}
             className={`flex items-center justify-center gap-2 rounded-xl border py-3.5 text-sm font-semibold transition-all ${
-              selectedAttendanceMode !== 'reguler'
-                ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                : todayAttendance.isCheckedOut
+              todayAttendance.isCheckedOut
                 ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
                 : !todayAttendance.isCheckedIn
                 ? 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed'
@@ -466,272 +563,14 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
         </div>
 
         {/* Hint messages */}
-        {selectedAttendanceMode !== 'reguler' && (
-          <p className="mt-3 text-center text-[11px] text-slate-400">
-            ℹ️ Klik tombol <strong>"Pilih Mode Reguler"</strong> di atas untuk mengaktifkan tombol absensi kartu ini.
-          </p>
-        )}
-        {selectedAttendanceMode === 'reguler' && !isQrScannedToday && !todayAttendance.isCheckedIn && (
+        {!isQrScannedToday && !todayAttendance.isCheckedIn && (
           <p className="mt-3 text-center text-[11px] text-amber-600">
             ⚠️ Pindai QR Code dan pastikan berada dalam radius lokasi sebelum absen masuk.
           </p>
         )}
-        {selectedAttendanceMode === 'reguler' && todayAttendance.isCheckedIn && !todayAttendance.isCheckedOut && (
+        {todayAttendance.isCheckedIn && !todayAttendance.isCheckedOut && (
           <p className="mt-3 text-center text-[11px] text-blue-600">
-            ℹ️ Jadwal pulang Reguler: 17:00 WIB. Jangan lupa absen pulang sebelum meninggalkan lokasi.
-          </p>
-        )}
-      </div>
-
-      {/* ============================================================ */}
-      {/* CARD 2: ABSENSI KHUSUS CUSTOMER SERVICE (CS) */}
-      {/* ============================================================ */}
-      <div
-        className={`rounded-2xl transition-all duration-300 ${
-          selectedAttendanceMode === 'cs'
-            ? 'border-2 border-indigo-600 bg-white p-6 shadow-md ring-4 ring-indigo-50'
-            : 'border border-slate-200 bg-white/75 p-6 shadow-sm opacity-85 hover:border-slate-300'
-        }`}
-      >
-        {/* Header Card 2 */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-                selectedAttendanceMode === 'cs'
-                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/30'
-                  : 'bg-slate-100 text-slate-500'
-              }`}
-            >
-              <Headphones className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-base font-bold text-[#183B66]">Absensi Customer Service (CS)</h3>
-                <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
-                  Khusus Petugas CS
-                </span>
-              </div>
-              <p className="text-xs text-slate-500 mt-0.5">Tersedia 2 pilihan shift kerja operasional CS</p>
-            </div>
-          </div>
-
-          {/* Selector Button */}
-          <button
-            type="button"
-            onClick={() => setSelectedAttendanceMode(selectedAttendanceMode === 'cs' ? null : 'cs')}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
-              selectedAttendanceMode === 'cs'
-                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/25 ring-2 ring-indigo-200'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            {selectedAttendanceMode === 'cs' ? (
-              <>
-                <CheckCircle2 className="h-4 w-4 text-white" />
-                <span>Mode CS Dipilih ✓</span>
-              </>
-            ) : (
-              <>
-                <Circle className="h-4 w-4 text-slate-400" />
-                <span>Pilih Mode CS</span>
-              </>
-            )}
-          </button>
-        </div>
-
-        {/* CS Shift Switcher */}
-        <div className="mb-6 rounded-2xl bg-indigo-50/60 p-4 border border-indigo-100">
-          <div className="flex items-center justify-between mb-2.5">
-            <span className="text-xs font-bold text-indigo-900">Pilih Shift Kerja Hari Ini:</span>
-            <span className="text-[11px] text-indigo-600 font-medium">
-              {selectedCsShift === 'shift_1' ? 'Shift 1: Pagi - Sore' : 'Shift 2: Siang - Malam'}
-            </span>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-            {/* Shift 1 Pill */}
-            <button
-              type="button"
-              onClick={() => setSelectedCsShift('shift_1')}
-              className={`flex items-center justify-between rounded-xl px-4 py-3 text-left transition-all ${
-                selectedCsShift === 'shift_1'
-                  ? 'bg-white border-2 border-indigo-600 shadow-sm text-indigo-950 ring-2 ring-indigo-200/50'
-                  : 'bg-white/70 border border-indigo-100 text-slate-600 hover:bg-white'
-              }`}
-            >
-              <div>
-                <p className="text-xs font-bold">Shift 1 (Pagi)</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">08:00 – 15:00 WIB</p>
-              </div>
-              <div className={`h-5 w-5 rounded-full flex items-center justify-center border ${
-                selectedCsShift === 'shift_1' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300'
-              }`}>
-                {selectedCsShift === 'shift_1' && <Check className="h-3 w-3 stroke-[3]" />}
-              </div>
-            </button>
-
-            {/* Shift 2 Pill */}
-            <button
-              type="button"
-              onClick={() => setSelectedCsShift('shift_2')}
-              className={`flex items-center justify-between rounded-xl px-4 py-3 text-left transition-all ${
-                selectedCsShift === 'shift_2'
-                  ? 'bg-white border-2 border-indigo-600 shadow-sm text-indigo-950 ring-2 ring-indigo-200/50'
-                  : 'bg-white/70 border border-indigo-100 text-slate-600 hover:bg-white'
-              }`}
-            >
-              <div>
-                <p className="text-xs font-bold">Shift 2 (Sore/Malam)</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">15:00 – 21:00 WIB</p>
-              </div>
-              <div className={`h-5 w-5 rounded-full flex items-center justify-center border ${
-                selectedCsShift === 'shift_2' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300'
-              }`}>
-                {selectedCsShift === 'shift_2' && <Check className="h-3 w-3 stroke-[3]" />}
-              </div>
-            </button>
-          </div>
-        </div>
-
-        {/* Today Summary CS */}
-        <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-2xl bg-slate-50/70 p-4 text-center mb-6">
-          <div className="px-2">
-            <span className="text-xs text-slate-500">Absen Masuk CS</span>
-            <p className="text-lg font-bold text-indigo-600 mt-1">
-              {todayAttendance.checkIn || '—'}
-            </p>
-          </div>
-          <div className="px-2">
-            <span className="text-xs text-slate-500">Absen Pulang CS</span>
-            <p className="text-lg font-bold text-indigo-600 mt-1">
-              {todayAttendance.checkOut || '—'}
-            </p>
-          </div>
-          <div className="px-2">
-            <span className="text-xs text-slate-500">Target Shift</span>
-            <p className="text-xs font-bold text-indigo-700 mt-2">
-              {selectedCsShift === 'shift_1' ? '08:00 - 15:00' : '15:00 - 21:00'}
-            </p>
-          </div>
-        </div>
-
-        {/* Status Hari Ini - Card 2 CS */}
-        {todayAttendance.isCheckedIn && isRegulerAttendanceToday ? (
-          <div className="mb-4 flex items-center gap-2 rounded-xl p-3 text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200">
-            <Info className="h-4 w-4 shrink-0 text-blue-600" />
-            <span>Presensi hari ini tercatat pada <strong>Mode Magang Reguler</strong>. Silakan gunakan kartu Reguler di atas.</span>
-          </div>
-        ) : todayAttendance.status && (isCsAttendanceToday || selectedAttendanceMode === 'cs') ? (
-          <div className={`mb-4 flex items-center gap-2 rounded-xl p-3 text-xs font-semibold ${
-            todayAttendance.status === 'Hadir' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-            todayAttendance.status === 'Terlambat' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
-            'bg-amber-50 text-amber-700 border border-amber-200'
-          }`}>
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            Status CS hari ini: <strong>{todayAttendance.status}</strong> ({todayAttendance.notes || (selectedCsShift === 'shift_1' ? 'Shift 1: 08:00 - 15:00' : 'Shift 2: 15:00 - 21:00')})
-          </div>
-        ) : null}
-
-        {/* GPS Status Live */}
-        <div className={`mb-6 flex items-center justify-between gap-3 rounded-xl border p-3.5 ${gpsDisplay.bg} ${gpsDisplay.border}`}>
-          <div className="flex items-center gap-2.5">
-            {gpsDisplay.icon}
-            <div>
-              <p className={`text-xs font-semibold ${gpsDisplay.color}`}>{gpsDisplay.label}</p>
-              {gpsState.lastUpdated && (
-                <p className="text-[10px] text-slate-400 mt-0.5">Diperbarui: {gpsState.lastUpdated}</p>
-              )}
-            </div>
-          </div>
-          {(gpsState.status === 'permission_denied' || gpsState.status === 'unavailable' || gpsState.status === 'low_accuracy') && (
-            <button
-              onClick={retryGps}
-              className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
-            >
-              <RefreshCw className="h-3 w-3" /> Coba Lagi
-            </button>
-          )}
-        </div>
-
-        {/* Action Buttons CS */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          {/* Absen Masuk CS */}
-          <button
-            type="button"
-            onClick={() => handleCheckInClick('cs')}
-            disabled={selectedAttendanceMode !== 'cs' || todayAttendance.isCheckedIn || isProcessingCheckIn}
-            className={`flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold shadow-md transition-all ${
-              selectedAttendanceMode !== 'cs'
-                ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
-                : todayAttendance.isCheckedIn
-                ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
-                : isProcessingCheckIn
-                ? 'bg-indigo-400 text-white shadow-none cursor-wait'
-                : 'bg-indigo-600 text-white shadow-indigo-500/25 hover:bg-indigo-700 active:scale-[0.98]'
-            }`}
-          >
-            {isProcessingCheckIn ? (
-              <>
-                <RefreshCw className="h-4 w-4 animate-spin" />
-                <span>Menyimpan Absensi CS...</span>
-              </>
-            ) : todayAttendance.isCheckedIn ? (
-              <>
-                <LogIn className="h-4 w-4" />
-                <span>Sudah Absen Masuk ✓</span>
-              </>
-            ) : (
-              <>
-                <LogIn className="h-4 w-4" />
-                <span>Absen Masuk CS ({selectedCsShift === 'shift_1' ? 'Shift 1' : 'Shift 2'})</span>
-              </>
-            )}
-          </button>
-
-          {/* Absen Pulang CS */}
-          <button
-            type="button"
-            onClick={() => handleCheckOutClick('cs')}
-            disabled={selectedAttendanceMode !== 'cs' || !todayAttendance.isCheckedIn || todayAttendance.isCheckedOut}
-            className={`flex items-center justify-center gap-2 rounded-xl border py-3.5 text-sm font-semibold transition-all ${
-              selectedAttendanceMode !== 'cs'
-                ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                : todayAttendance.isCheckedOut
-                ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
-                : !todayAttendance.isCheckedIn
-                ? 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed'
-                : 'border-[#EB5757] bg-white text-[#EB5757] hover:bg-rose-50 shadow-sm active:scale-[0.98]'
-            }`}
-          >
-            <LogOut className="h-4 w-4" />
-            {todayAttendance.isCheckedOut ? 'Sudah Absen Pulang ✓' : 'Absen Pulang CS'}
-          </button>
-
-          {/* Input Izin */}
-          <button
-            type="button"
-            onClick={onNavigateToIzin}
-            className="flex items-center justify-center gap-2 rounded-xl border border-indigo-600 bg-white py-3.5 text-sm font-semibold text-indigo-600 transition-all hover:bg-indigo-50 active:scale-[0.98]"
-          >
-            <FileEdit className="h-4 w-4" />
-            Ajukan Izin
-          </button>
-        </div>
-
-        {/* Hint messages CS */}
-        {selectedAttendanceMode !== 'cs' && (
-          <p className="mt-3 text-center text-[11px] text-slate-400">
-            ℹ️ Klik tombol <strong>"Pilih Mode CS"</strong> di atas untuk mengaktifkan tombol absensi kartu ini.
-          </p>
-        )}
-        {selectedAttendanceMode === 'cs' && !isQrScannedToday && !todayAttendance.isCheckedIn && (
-          <p className="mt-3 text-center text-[11px] text-indigo-700">
-            ⚠️ Pindai QR Code dan pastikan berada dalam radius lokasi kantor sebelum absen masuk.
-          </p>
-        )}
-        {selectedAttendanceMode === 'cs' && todayAttendance.isCheckedIn && !todayAttendance.isCheckedOut && (
-          <p className="mt-3 text-center text-[11px] text-indigo-700">
-            ℹ️ Target jam pulang CS {selectedCsShift === 'shift_1' ? 'Shift 1 adalah 15:00 WIB' : 'Shift 2 adalah 21:00 WIB'}.
+            ℹ️ Jangan lupa untuk melakukan absen pulang sebelum meninggalkan lokasi.
           </p>
         )}
       </div>
@@ -909,10 +748,12 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           if (!todayAttendance.isCheckedIn) {
             setIsProcessingCheckIn(true);
             try {
+              const mode = selectedShift === 'reguler' ? 'reguler' : 'cs';
+              const csShift = selectedShift === 'cs_shift_2' ? 'shift_2' : 'shift_1';
               const res = await performCheckIn(
                 scannedToken,
-                selectedAttendanceMode || 'reguler',
-                selectedCsShift
+                mode,
+                csShift
               );
               if (res.success) {
                 showToast('success', res.message);
