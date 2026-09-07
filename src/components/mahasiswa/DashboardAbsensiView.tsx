@@ -23,6 +23,7 @@ import {
   Check
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { playSuccessSound } from '../../lib/audio';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import { Badge } from '../common/Badge';
@@ -146,6 +147,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
     try {
       const res = await performCheckOut();
       if (res.success) {
+        playSuccessSound();
         showToast('success', res.message);
         try { confetti({ particleCount: 40, spread: 50, origin: { y: 0.6 } }); } catch { /* ignore */ }
       } else {
@@ -680,6 +682,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
                 csShift
               );
               if (res.success) {
+                playSuccessSound();
                 showToast('success', res.message);
                 try { confetti({ particleCount: 70, spread: 80, origin: { y: 0.55 } }); } catch { /* ignore */ }
               } else {
@@ -696,30 +699,37 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
         }}
       />
 
-      {/* Full-screen Blurred Loading Overlay */}
+      {/* Full-screen Blurred Loading Overlay (Frameless & Minimalis) */}
       {activeLoadingProcess && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-md animate-in fade-in duration-200">
-          <div className="relative mx-4 flex max-w-sm flex-col items-center rounded-3xl bg-white/95 dark:bg-slate-900/95 p-6 sm:p-8 text-center shadow-2xl border border-slate-100/80 dark:border-slate-800 backdrop-blur-xl animate-in zoom-in-95 duration-200">
-            <div className="relative flex h-16 w-16 items-center justify-center mb-4">
-              <div className="absolute inset-0 rounded-full bg-[#2F80ED]/15 animate-ping duration-1000" />
-              <div className="h-14 w-14 rounded-full border-4 border-[#2F80ED]/20 border-t-[#2F80ED] animate-spin" />
-              <div className="absolute flex h-8 w-8 items-center justify-center rounded-full bg-blue-50 dark:bg-blue-950/50 text-[#2F80ED]">
-                {activeLoadingProcess === 'check_in' ? <LogIn className="h-4 w-4" /> : <LogOut className="h-4 w-4" />}
-              </div>
-            </div>
-            <h3 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white">
-              {activeLoadingProcess === 'check_in' ? 'Memproses Absen Masuk...' : 'Memproses Absen Pulang...'}
-            </h3>
-            <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400 leading-relaxed max-w-[240px]">
-              {activeLoadingProcess === 'check_in'
-                ? 'Memvalidasi lokasi GPS & token QR Code magang Anda...'
-                : 'Menghitung total jam kerja dan menyimpan presensi Anda...'}
-            </p>
-            <div className="mt-5 flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-medium text-slate-600 dark:text-slate-300 border border-slate-200/60 dark:border-slate-700/60">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#2F80ED] animate-pulse" />
-              <span>Mohon tunggu sebentar</span>
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200 select-none p-6">
+          {/* Muter2 Sedikit Besar di Tengah */}
+          <div className="relative flex items-center justify-center mb-6">
+            <div className="absolute h-24 w-24 sm:h-32 sm:w-32 rounded-full bg-blue-500/20 blur-xl animate-pulse" />
+            <div className="h-20 w-20 sm:h-28 sm:w-28 rounded-full border-4 sm:border-[5px] border-white/20 border-t-[#2F80ED] animate-spin" />
+            <div className="absolute flex items-center justify-center">
+              {activeLoadingProcess === 'check_in' ? (
+                <LogIn className="h-8 w-8 sm:h-10 sm:w-10 text-white drop-shadow" />
+              ) : (
+                <LogOut className="h-8 w-8 sm:h-10 sm:w-10 text-white drop-shadow" />
+              )}
             </div>
           </div>
+
+          {/* Teks Minimalis Tanpa Box/Kolom */}
+          {activeLoadingProcess === 'check_in' ? (
+            <h3 className="text-lg sm:text-2xl font-bold text-white tracking-wide text-center drop-shadow-sm">
+              Memproses Absen Masuk...
+            </h3>
+          ) : (
+            <div className="text-center max-w-xs sm:max-w-md">
+              <h3 className="text-lg sm:text-2xl font-bold text-white tracking-wide drop-shadow-sm">
+                Memproses Absen Pulang...
+              </h3>
+              <p className="mt-2 text-xs sm:text-sm text-slate-300 font-normal leading-relaxed">
+                Menghitung total jam kerja dan menyimpan presensi Anda...
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>

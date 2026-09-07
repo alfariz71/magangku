@@ -44,26 +44,6 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
   const animFrameIdRef = useRef<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Play audio chime on successful scan
-  const playBeep = () => {
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(1760, audioCtx.currentTime + 0.15);
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.2);
-    } catch (e) {
-      console.log('Audio not supported', e);
-    }
-  };
-
   // Stop camera helper
   const stopCamera = () => {
     if (animFrameIdRef.current) {
@@ -107,7 +87,6 @@ export const CameraScannerModal: React.FC<CameraScannerModalProps> = ({
     setCapturedPhotoUrl(photoToSave);
 
     if (res.success) {
-      playBeep();
       setIsScanning(false);
       setIsScanSuccess(true);
       setErrorMessage(null);
