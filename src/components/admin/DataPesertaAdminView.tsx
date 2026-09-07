@@ -189,11 +189,19 @@ export const DataPesertaAdminView: React.FC = () => {
                     {/* Konsentrasi Magang */}
                     <td className="py-3.5 px-3">
                       {student.concentration && student.concentration.trim() && student.concentration.trim().toLowerCase() !== 'peserta magang' ? (
-                        <span className="inline-flex rounded-lg bg-blue-50 px-2.5 py-1 text-xs font-semibold text-[#2F80ED]">
-                          {student.concentration}
-                        </span>
+                        student.concentration.toLowerCase().includes('cs') || student.concentration.toLowerCase().includes('customer service') ? (
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 border border-indigo-200 px-2.5 py-1 text-xs font-semibold text-indigo-700">
+                            🎧 {student.concentration} (6 Hari)
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-xs font-semibold text-[#2F80ED]">
+                            💼 {student.concentration} (5 Hari)
+                          </span>
+                        )
                       ) : (
-                        <span className="text-slate-400 font-normal">-</span>
+                        <span className="inline-flex items-center gap-1 rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-1 text-xs font-normal text-slate-500">
+                          💼 Reguler (5 Hari)
+                        </span>
                       )}
                     </td>
 
@@ -314,9 +322,15 @@ export const DataPesertaAdminView: React.FC = () => {
                   <div>
                     <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Konsentrasi</span>
                     {student.concentration && student.concentration.trim() && student.concentration.trim().toLowerCase() !== 'peserta magang' ? (
-                      <span className="font-semibold text-[#2F80ED] line-clamp-1">{student.concentration}</span>
+                      student.concentration.toLowerCase().includes('cs') || student.concentration.toLowerCase().includes('customer service') ? (
+                        <span className="inline-flex items-center gap-1 font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded text-[10px] line-clamp-1">
+                          🎧 CS (6 Hari)
+                        </span>
+                      ) : (
+                        <span className="font-semibold text-[#2F80ED] line-clamp-1">{student.concentration}</span>
+                      )
                     ) : (
-                      <span className="text-slate-400 font-normal">-</span>
+                      <span className="text-slate-400 font-normal">Reguler</span>
                     )}
                   </div>
                 </div>
@@ -432,14 +446,35 @@ export const DataPesertaAdminView: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Konsentrasi Magang</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-slate-700">Konsentrasi / Divisi Magang</label>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setEditingStudent({ ...editingStudent, concentration: 'Customer Service' })}
+                      className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition cursor-pointer"
+                    >
+                      + Customer Service (6 Hari)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingStudent({ ...editingStudent, concentration: 'Reguler' })}
+                      className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition cursor-pointer"
+                    >
+                      + Reguler (5 Hari)
+                    </button>
+                  </div>
+                </div>
                 <input
                   type="text"
                   value={editingStudent.concentration || ''}
                   onChange={e => setEditingStudent({ ...editingStudent, concentration: e.target.value })}
-                  placeholder="Contoh: Frontend Engineering, Data Science"
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
+                  placeholder="Contoh: Customer Service, Frontend Engineering, Reguler"
+                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
                 />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  * Isi &quot;Customer Service&quot; atau &quot;CS&quot; untuk mengaktifkan skema kerja CS 6 hari &amp; opsi Shift 1/2 di HP mahasiswa.
+                </p>
               </div>
 
               <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">

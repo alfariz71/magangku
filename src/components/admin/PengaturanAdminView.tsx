@@ -7,6 +7,10 @@ export const PengaturanAdminView: React.FC = () => {
 
   const [workStartTime, setWorkStartTime] = useState(systemSettings.workStartTime || '08:00');
   const [workEndTime, setWorkEndTime] = useState(systemSettings.workEndTime || '17:00');
+  const [csShift1StartTime, setCsShift1StartTime] = useState(systemSettings.csShift1StartTime || '08:00');
+  const [csShift1EndTime, setCsShift1EndTime] = useState(systemSettings.csShift1EndTime || '15:00');
+  const [csShift2StartTime, setCsShift2StartTime] = useState(systemSettings.csShift2StartTime || '15:00');
+  const [csShift2EndTime, setCsShift2EndTime] = useState(systemSettings.csShift2EndTime || '21:00');
   const [lateToleranceMins, setLateToleranceMins] = useState(systemSettings.lateToleranceMins ?? 15);
   const [allowOvertime, setAllowOvertime] = useState(systemSettings.allowOvertime ?? true);
   const [requireSignatureOnReport, setRequireSignatureOnReport] = useState(systemSettings.requireSignatureOnReport ?? true);
@@ -16,6 +20,10 @@ export const PengaturanAdminView: React.FC = () => {
   useEffect(() => {
     setWorkStartTime(systemSettings.workStartTime);
     setWorkEndTime(systemSettings.workEndTime);
+    setCsShift1StartTime(systemSettings.csShift1StartTime || '08:00');
+    setCsShift1EndTime(systemSettings.csShift1EndTime || '15:00');
+    setCsShift2StartTime(systemSettings.csShift2StartTime || '15:00');
+    setCsShift2EndTime(systemSettings.csShift2EndTime || '21:00');
     setLateToleranceMins(systemSettings.lateToleranceMins);
     setAllowOvertime(systemSettings.allowOvertime);
     setRequireSignatureOnReport(systemSettings.requireSignatureOnReport);
@@ -26,6 +34,10 @@ export const PengaturanAdminView: React.FC = () => {
     updateSystemSettings({
       workStartTime,
       workEndTime,
+      csShift1StartTime,
+      csShift1EndTime,
+      csShift2StartTime,
+      csShift2EndTime,
       lateToleranceMins: Number(lateToleranceMins) || 0,
       allowOvertime,
       requireSignatureOnReport,
@@ -45,7 +57,7 @@ export const PengaturanAdminView: React.FC = () => {
       <div>
         <h2 className="text-2xl font-bold text-[#183B66]">Pengaturan Sistem & Audit Log</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Konfigurasi jam kerja operasional, toleransi keterlambatan, dan riwayat audit trail keamanan
+          Konfigurasi jam kerja operasional (Reguler &amp; CS Shift), toleransi keterlambatan, dan riwayat audit trail keamanan
         </p>
       </div>
 
@@ -62,35 +74,98 @@ export const PengaturanAdminView: React.FC = () => {
         <div className="lg:col-span-6 space-y-4">
           <div className="rounded-[16px] border border-slate-100 bg-white p-6 shadow-sm">
             <h3 className="text-base font-bold text-[#183B66] border-b border-slate-100 pb-3 mb-4">
-              Kebijakan Waktu Presensi
+              Kebijakan Waktu Presensi &amp; Shift Kerja
             </h3>
 
-            <form onSubmit={handleSaveSettings} className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Jam Masuk Standar</label>
-                  <input
-                    type="time"
-                    value={workStartTime}
-                    onChange={e => setWorkStartTime(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
-                  />
+            <form onSubmit={handleSaveSettings} className="space-y-5">
+              {/* 1. Skema Reguler */}
+              <div className="rounded-xl border border-blue-100 bg-blue-50/40 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#183B66]">💼 Skema 1: Reguler (5 Hari: Sen – Jum)</span>
+                  <span className="text-[10px] bg-blue-100 text-[#2F80ED] px-2 py-0.5 rounded font-semibold">8 Jam Kerja</span>
                 </div>
-
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Jam Pulang Standar</label>
-                  <input
-                    type="time"
-                    value={workEndTime}
-                    onChange={e => setWorkEndTime(e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jam Masuk</label>
+                    <input
+                      type="time"
+                      value={workStartTime}
+                      onChange={e => setWorkStartTime(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jam Pulang</label>
+                    <input
+                      type="time"
+                      value={workEndTime}
+                      onChange={e => setWorkEndTime(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 
+              {/* 2. Skema CS Shift 1 */}
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-950">🎧 Skema 2: CS Shift 1 (6 Hari: Sen – Sab)</span>
+                  <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-semibold">6 Jam Kerja</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jam Masuk (Pagi)</label>
+                    <input
+                      type="time"
+                      value={csShift1StartTime}
+                      onChange={e => setCsShift1StartTime(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jam Pulang</label>
+                    <input
+                      type="time"
+                      value={csShift1EndTime}
+                      onChange={e => setCsShift1EndTime(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Skema CS Shift 2 */}
+              <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-indigo-950">🎧 Skema 3: CS Shift 2 (6 Hari: Sen – Sab)</span>
+                  <span className="text-[10px] bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded font-semibold">6 Jam Kerja</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jam Masuk (Sore)</label>
+                    <input
+                      type="time"
+                      value={csShift2StartTime}
+                      onChange={e => setCsShift2StartTime(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">Jam Pulang (Malam)</label>
+                    <input
+                      type="time"
+                      value={csShift2EndTime}
+                      onChange={e => setCsShift2EndTime(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white p-2 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Toleransi Keterlambatan */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Toleransi Keterlambatan (Menit)
+                  Toleransi Keterlambatan Semua Shift (Menit)
                 </label>
                 <input
                   type="number"
@@ -98,17 +173,9 @@ export const PengaturanAdminView: React.FC = () => {
                   onChange={e => setLateToleranceMins(Number(e.target.value))}
                   className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
                 />
-                {(() => {
-                  const [h, m] = (workStartTime || '08:00').split(':').map(Number);
-                  const total = (h * 60 + (m || 0)) + (Number(lateToleranceMins) || 0);
-                  const cutoffH = String(Math.floor(total / 60) % 24).padStart(2, '0');
-                  const cutoffM = String(total % 60).padStart(2, '0');
-                  return (
-                    <p className="text-[11px] text-[#2F80ED] font-semibold mt-1">
-                      💡 Batas akhir kehadiran tepat waktu: <strong>{cutoffH}:{cutoffM} WIB</strong> (absen lewat dari jam ini otomatis berstatus 'Terlambat').
-                    </p>
-                  );
-                })()}
+                <p className="text-[11px] text-slate-500 mt-1">
+                  💡 Contoh: Jika toleransi 15 menit, batas masuk Reguler &amp; CS 1 adalah <strong>08:15 WIB</strong>, dan CS 2 adalah <strong>15:15 WIB</strong>.
+                </p>
               </div>
 
               <div className="space-y-2 pt-2 border-t border-slate-100">

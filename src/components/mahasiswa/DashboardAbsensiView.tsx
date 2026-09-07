@@ -55,11 +55,18 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
   const [filterStatus, setFilterStatus] = useState<string>('Semua');
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  // Check apakah mahasiswa terdaftar dengan konsentrasi CS
+  const isCsStudent = Boolean(
+    currentUser?.concentration &&
+    (currentUser.concentration.toLowerCase().includes('cs') ||
+     currentUser.concentration.toLowerCase().includes('customer service'))
+  );
+
   // Shift option: 'reguler' | 'cs_shift_1' | 'cs_shift_2'
   type ShiftOption = 'reguler' | 'cs_shift_1' | 'cs_shift_2';
   const [selectedShift, setSelectedShift] = useState<ShiftOption>('reguler');
 
-  // Auto-sync selected shift if today's attendance is already recorded
+  // Auto-sync selected shift: jika sudah absen ikuti catatan, jika belum dan CS auto-detect jam, jika bukan CS selalu reguler
   useEffect(() => {
     if (todayAttendance.isCheckedIn && todayAttendance.notes) {
       if (todayAttendance.notes.includes('CS')) {
@@ -71,8 +78,22 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
       } else {
         setSelectedShift('reguler');
       }
+    } else if (isCsStudent) {
+      try {
+        const jktHourStr = new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta', hour: 'numeric', hour12: false });
+        const currentH = parseInt(jktHourStr, 10);
+        if (currentH >= 13) {
+          setSelectedShift('cs_shift_2');
+        } else {
+          setSelectedShift('cs_shift_1');
+        }
+      } catch {
+        setSelectedShift('cs_shift_1');
+      }
+    } else {
+      setSelectedShift('reguler');
     }
-  }, [todayAttendance.isCheckedIn, todayAttendance.notes]);
+  }, [todayAttendance.isCheckedIn, todayAttendance.notes, isCsStudent]);
 
   // Start GPS watch when dashboard mounts, stop when unmounts
   useEffect(() => {
@@ -264,60 +285,47 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3.5 border-b border-slate-100">
           <div className="flex items-center justify-between sm:justify-start gap-2">
             <h3 className="text-base font-bold text-[#183B66]">Presensi Kehadiran</h3>
-            {todayAttendance.isCheckedIn && (
+            {isCsStudent && todayAttendance.isCheckedIn && (
               <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-md">
                 🔒 Shift Terkunci
               </span>
             )}
           </div>
 
-          {/* Segmented Control / Pill Switcher */}
-          <div className="grid grid-cols-3 w-full sm:w-auto p-1 rounded-xl bg-slate-200/70 dark:bg-slate-900 border border-slate-300/60 dark:border-slate-800">
-            {/* Opsi 1: Reguler */}
-            <button
-              type="button"
-              disabled={todayAttendance.isCheckedIn}
-              onClick={() => setSelectedShift('reguler')}
-              className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
-                selectedShift === 'reguler'
-                  ? 'bg-[#2F80ED] text-white shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300/40 dark:hover:bg-slate-800/60'
-              } ${todayAttendance.isCheckedIn ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
-            >
-              <Briefcase className="h-3.5 w-3.5 shrink-0" />
-              <span>Reguler</span>
-            </button>
+          {/* Segmented Control / Pill Switcher (HANYA MUNCUL JIKA KONSENTRASI CS) */}
+          {isCsStudent && (
+            <div className="grid grid-cols-2 w-full sm:w-auto p-1 rounded-xl bg-slate-200/70 dark:bg-slate-900 border border-slate-300/60 dark:border-slate-800">
+              {/* Opsi 1: CS Shift 1 */}
+              <button
+                type="button"
+                disabled={todayAttendance.isCheckedIn}
+                onClick={() => setSelectedShift('cs_shift_1')}
+                className={`flex items-center justify-center gap-1.5 py-1.5 px-3.5 rounded-lg text-xs font-semibold transition-all ${
+                  selectedShift === 'cs_shift_1'
+                    ? 'bg-[#2F80ED] text-white shadow-xs font-bold'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300/40 dark:hover:bg-slate-800/60'
+                } ${todayAttendance.isCheckedIn ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
+              >
+                <Headphones className="h-3.5 w-3.5 shrink-0" />
+                <span>CS Shift 1</span>
+              </button>
 
-            {/* Opsi 2: CS Shift 1 */}
-            <button
-              type="button"
-              disabled={todayAttendance.isCheckedIn}
-              onClick={() => setSelectedShift('cs_shift_1')}
-              className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
-                selectedShift === 'cs_shift_1'
-                  ? 'bg-[#2F80ED] text-white shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300/40 dark:hover:bg-slate-800/60'
-              } ${todayAttendance.isCheckedIn ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
-            >
-              <Headphones className="h-3.5 w-3.5 shrink-0" />
-              <span>CS 1</span>
-            </button>
-
-            {/* Opsi 3: CS Shift 2 */}
-            <button
-              type="button"
-              disabled={todayAttendance.isCheckedIn}
-              onClick={() => setSelectedShift('cs_shift_2')}
-              className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
-                selectedShift === 'cs_shift_2'
-                  ? 'bg-[#2F80ED] text-white shadow-xs font-bold'
-                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300/40 dark:hover:bg-slate-800/60'
-              } ${todayAttendance.isCheckedIn ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
-            >
-              <Headphones className="h-3.5 w-3.5 shrink-0" />
-              <span>CS 2</span>
-            </button>
-          </div>
+              {/* Opsi 2: CS Shift 2 */}
+              <button
+                type="button"
+                disabled={todayAttendance.isCheckedIn}
+                onClick={() => setSelectedShift('cs_shift_2')}
+                className={`flex items-center justify-center gap-1.5 py-1.5 px-3.5 rounded-lg text-xs font-semibold transition-all ${
+                  selectedShift === 'cs_shift_2'
+                    ? 'bg-[#2F80ED] text-white shadow-xs font-bold'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300/40 dark:hover:bg-slate-800/60'
+                } ${todayAttendance.isCheckedIn ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
+              >
+                <Headphones className="h-3.5 w-3.5 shrink-0" />
+                <span>CS Shift 2</span>
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Sub-label Jadwal Aktif */}
@@ -325,15 +333,17 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           <div className="flex items-center gap-2">
             <Clock className="h-3.5 w-3.5 text-[#2F80ED] dark:text-blue-400 shrink-0" />
             <span className="text-slate-700 dark:text-slate-200">
-              Shift Aktif: <strong className="text-[#2F80ED] dark:text-blue-400 font-bold">
-                {selectedShift === 'reguler' && 'Magang Reguler (08:00 – 17:00 WIB)'}
-                {selectedShift === 'cs_shift_1' && 'CS – Shift 1 (08:00 – 15:00 WIB)'}
-                {selectedShift === 'cs_shift_2' && 'CS – Shift 2 (15:00 – 21:00 WIB)'}
+              Jadwal Kerja: <strong className="text-[#2F80ED] dark:text-blue-400 font-bold">
+                {!isCsStudent
+                  ? 'Magang Reguler (08:00 – 17:00 WIB)'
+                  : selectedShift === 'cs_shift_1'
+                  ? 'CS – Shift 1 (08:00 – 15:00 WIB)'
+                  : 'CS – Shift 2 (15:00 – 21:00 WIB)'}
               </strong>
             </span>
           </div>
           <span className="text-[11px] font-semibold text-[#2F80ED] dark:text-blue-400 bg-white/80 dark:bg-slate-800/80 px-2 py-0.5 rounded-md border border-blue-200/50 dark:border-blue-500/30">
-            {selectedShift === 'cs_shift_2' ? 'Batas Masuk: 15:00 WIB' : 'Batas Masuk: 08:00 WIB'}
+            {isCsStudent && selectedShift === 'cs_shift_2' ? 'Batas Masuk: 15:00 WIB' : 'Batas Masuk: 08:00 WIB'}
           </span>
         </div>
 
@@ -636,7 +646,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           if (!todayAttendance.isCheckedIn) {
             setIsProcessingCheckIn(true);
             try {
-              const mode = selectedShift === 'reguler' ? 'reguler' : 'cs';
+              const mode = isCsStudent ? 'cs' : 'reguler';
               const csShift = selectedShift === 'cs_shift_2' ? 'shift_2' : 'shift_1';
               const res = await performCheckIn(
                 scannedToken,

@@ -22,6 +22,7 @@ export const AbsensiAdminView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState('Semua');
   const [filterUniversity, setFilterUniversity] = useState('Semua');
+  const [filterShift, setFilterShift] = useState('Semua');
   
   // Correction Modal States
   const [editingRecord, setEditingRecord] = useState<AttendanceRecord | null>(null);
@@ -88,7 +89,22 @@ export const AbsensiAdminView: React.FC = () => {
     const matchStatus = filterStatus === 'Semua' || a.status.toLowerCase() === filterStatus.toLowerCase();
     const matchUniv = filterUniversity === 'Semua' || a.university === filterUniversity;
 
-    return matchQuery && matchStatus && matchUniv;
+    const matchShift = () => {
+      if (filterShift === 'Semua') return true;
+      const notes = a.notes || '';
+      if (filterShift === 'Reguler') {
+        return !notes || notes.toLowerCase().includes('reguler');
+      }
+      if (filterShift === 'CS - Shift 1') {
+        return notes.includes('Shift 1');
+      }
+      if (filterShift === 'CS - Shift 2') {
+        return notes.includes('Shift 2');
+      }
+      return true;
+    };
+
+    return matchQuery && matchStatus && matchUniv && matchShift();
   });
 
   // Get today's date string in 'sv-SE' format (YYYY-MM-DD)
@@ -202,6 +218,17 @@ export const AbsensiAdminView: React.FC = () => {
             </select>
 
             <select
+              value={filterShift}
+              onChange={(e) => setFilterShift(e.target.value)}
+              className="rounded-xl border border-slate-200 bg-slate-50 py-2.5 px-3 text-xs text-slate-700 focus:border-[#2F80ED] focus:bg-white focus:outline-none"
+            >
+              <option value="Semua">Semua Shift</option>
+              <option value="Reguler">Reguler (5 Hari)</option>
+              <option value="CS - Shift 1">CS - Shift 1 (08:00 - 15:00)</option>
+              <option value="CS - Shift 2">CS - Shift 2 (15:00 - 21:00)</option>
+            </select>
+
+            <select
               value={filterUniversity}
               onChange={(e) => setFilterUniversity(e.target.value)}
               className="rounded-xl border border-slate-200 bg-slate-50 py-2.5 px-3 text-xs text-slate-700 focus:border-[#2F80ED] focus:bg-white focus:outline-none"
@@ -289,8 +316,27 @@ export const AbsensiAdminView: React.FC = () => {
                         >
                           {/* Mahasiswa */}
                           <td className="py-3.5 px-4">
-                            <p className="font-bold text-slate-900">{item.studentName}</p>
-                            <p className="text-[11px] text-slate-400">{item.studentNim} • {item.university}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-bold text-slate-900">{item.studentName}</span>
+                              {item.notes?.includes('Shift 1') ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] font-semibold text-indigo-700 border border-indigo-200">
+                                  🎧 CS Shift 1
+                                </span>
+                              ) : item.notes?.includes('Shift 2') ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-purple-50 px-2 py-0.5 text-[10px] font-semibold text-purple-700 border border-purple-200">
+                                  🎧 CS Shift 2
+                                </span>
+                              ) : item.notes?.includes('CS') ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold text-blue-700 border border-blue-200">
+                                  🎧 CS
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 border border-slate-200">
+                                  💼 Reguler
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-slate-400 mt-0.5">{item.studentNim} • {item.university}</p>
                           </td>
 
                           {/* Masuk */}
@@ -441,8 +487,27 @@ export const AbsensiAdminView: React.FC = () => {
                         {/* Student Name & Status */}
                         <div className="flex items-start justify-between gap-2">
                           <div className="truncate">
-                            <p className="font-bold text-slate-900 text-xs truncate">{item.studentName}</p>
-                            <p className="text-[10px] text-slate-400 font-mono">{item.studentNim || '-'}</p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-bold text-slate-900 text-xs truncate">{item.studentName}</p>
+                              {item.notes?.includes('Shift 1') ? (
+                                <span className="inline-flex items-center rounded-full bg-indigo-50 px-1.5 py-0.2 text-[9px] font-semibold text-indigo-700 border border-indigo-200">
+                                  🎧 CS 1
+                                </span>
+                              ) : item.notes?.includes('Shift 2') ? (
+                                <span className="inline-flex items-center rounded-full bg-purple-50 px-1.5 py-0.2 text-[9px] font-semibold text-purple-700 border border-purple-200">
+                                  🎧 CS 2
+                                </span>
+                              ) : item.notes?.includes('CS') ? (
+                                <span className="inline-flex items-center rounded-full bg-blue-50 px-1.5 py-0.2 text-[9px] font-semibold text-blue-700 border border-blue-200">
+                                  🎧 CS
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center rounded-full bg-slate-100 px-1.5 py-0.2 text-[9px] font-semibold text-slate-600 border border-slate-200">
+                                  💼 Reguler
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-mono mt-0.5">{item.studentNim || '-'}</p>
                             {item.university && (
                               <p className="text-[10px] text-slate-500 truncate">{item.university}</p>
                             )}

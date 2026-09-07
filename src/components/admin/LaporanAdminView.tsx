@@ -88,6 +88,13 @@ export const LaporanAdminView: React.FC = () => {
     }
   };
 
+  // Helper cek apakah mahasiswa merupakan divisi Customer Service (CS 6 Hari Kerja)
+  const isCsStudent = (userId?: string, studentName?: string, notes?: string) => {
+    if (notes && /cs/i.test(notes)) return true;
+    const s = students.find(st => st.id === userId || st.name === studentName);
+    return Boolean(s?.concentration && /cs|customer\s*service/i.test(s.concentration));
+  };
+
   // Grouping Aktivitas: Tanggal (Terbaru -> Terlama) -> Mahasiswa (A -> Z) -> Aktivitas
   const groupedActivitiesByDay = React.useMemo(() => {
     const dateMap = new Map<string, {
@@ -202,6 +209,8 @@ export const LaporanAdminView: React.FC = () => {
         totalHours: string;
         status: string;
         correctedByAdmin?: boolean;
+        shift: string;
+        isCs: boolean;
       }[];
     }>();
 
@@ -232,6 +241,14 @@ export const LaporanAdminView: React.FC = () => {
         displayTotalHours = hNum > 0 ? formatHours(hNum) : (a.totalHours.includes('jam') ? a.totalHours : `${a.totalHours} jam`);
       }
 
+      const isCs = isCsStudent(a.userId, a.studentName, a.notes);
+      let shiftLabel = 'Reguler (08:00 - 17:00)';
+      if (a.notes) {
+        shiftLabel = a.notes;
+      } else if (isCs) {
+        shiftLabel = 'Customer Service';
+      }
+
       dateMap.get(dateKey)!.records.push({
         id: a.id,
         userId: a.userId,
@@ -241,7 +258,9 @@ export const LaporanAdminView: React.FC = () => {
         checkOutTime: a.checkOutTime ? (a.checkOutTime.includes('WIB') ? a.checkOutTime : `${a.checkOutTime} WIB`) : '-',
         totalHours: displayTotalHours,
         status: a.status,
-        correctedByAdmin: a.correctedByAdmin
+        correctedByAdmin: a.correctedByAdmin,
+        shift: shiftLabel,
+        isCs
       });
     });
 
@@ -251,9 +270,9 @@ export const LaporanAdminView: React.FC = () => {
       ...day,
       records: day.records.sort((a, b) => a.studentName.localeCompare(b.studentName, 'id'))
     }));
-  }, [filteredAttendances]);
+  }, [filteredAttendances, students]);
 
-  // Grouping Mingguan: Blok Minggu (Terbaru -> Terlama) -> Mahasiswa (A -> Z) -> Matriks Sen-Jum
+  // Grouping Mingguan: Blok Minggu (Terbaru -> Terlama) -> Mahasiswa (A -> Z) -> Matriks Sen-Sab (Reguler 5 Hari vs CS 6 Hari)
   const groupedWeeklyAttendances = React.useMemo(() => {
     const todayJakarta = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 
@@ -264,19 +283,19 @@ export const LaporanAdminView: React.FC = () => {
       const monday = new Date(d);
       monday.setDate(d.getDate() + diffToMonday);
 
-      const friday = new Date(monday);
-      friday.setDate(monday.getDate() + 4);
+      const saturday = new Date(monday);
+      saturday.setDate(monday.getDate() + 5);
 
       const pad = (n: number) => String(n).padStart(2, '0');
       const toKey = (dt: Date) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 
       const mondayKey = toKey(monday);
       const fMon = monday.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-      const fFri = friday.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+      const fSat = saturday.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
 
       const daysKeys: { [dayIdx: number]: string } = {};
       let weekHolidayCount = 0;
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 6; i++) {
         const dt = new Date(monday);
         dt.setDate(monday.getDate() + i);
         const k = toKey(dt);
@@ -284,10 +303,9 @@ export const LaporanAdminView: React.FC = () => {
         if (isIndonesianHoliday(k)) weekHolidayCount++;
       }
 
-      const effectiveWeekDays = 5 - weekHolidayCount;
       const weekLabel = weekHolidayCount > 0
-        ? `Minggu (${fMon} – ${fFri} — ${effectiveWeekDays} Hari Kerja, ${weekHolidayCount} Libur Nasional)`
-        : `Minggu (${fMon} – ${fFri} — 5 Hari Kerja)`;
+        ? `Minggu (${fMon} – ${fSat} — ${weekHolidayCount} Libur Nasional)`
+        : `Minggu (${fMon} – ${fSat})`;
 
       return {
         weekKey: mondayKey,
@@ -346,6 +364,9 @@ export const LaporanAdminView: React.FC = () => {
       });
 
       const students = Array.from(studentMap.values()).map(s => {
+        const isCs = isCsStudent(s.userId, s.studentName) || Object.values(s.dayRecords).some(r => r.notes && /cs/i.test(r.notes));
+        const skema = isCs ? 'CS (6 Hari)' : 'Reguler (5 Hari)';
+
         const getStatusCode = (dateKey: string, rec?: (typeof filteredAttendances)[0]) => {
           if (rec) {
             switch (rec.status) {
@@ -393,27 +414,38 @@ export const LaporanAdminView: React.FC = () => {
         const rab = getStatusCode(week.daysKeys[2], s.dayRecords[week.daysKeys[2]]);
         const kam = getStatusCode(week.daysKeys[3], s.dayRecords[week.daysKeys[3]]);
         const jum = getStatusCode(week.daysKeys[4], s.dayRecords[week.daysKeys[4]]);
+        
+        let sab;
+        if (!isCs) {
+          sab = {
+            code: 'OFF',
+            color: 'text-slate-400 dark:text-slate-500 font-normal bg-slate-100 dark:bg-slate-800 rounded px-1',
+            full: 'Libur Rutin Reguler (5 Hari Kerja)'
+          };
+        } else {
+          sab = getStatusCode(week.daysKeys[5], s.dayRecords[week.daysKeys[5]]);
+        }
 
-        const daysList = [sen, sel, rab, kam, jum];
+        const daysList = isCs ? [sen, sel, rab, kam, jum, sab] : [sen, sel, rab, kam, jum];
         const daysPresent = daysList.filter(d => d.code === 'H' || d.code === 'T').length;
-        const workingDaysCount = daysList.filter(d => d.code !== 'L').length;
+        const workingDaysCount = daysList.filter(d => d.code !== 'L' && d.code !== 'OFF').length;
 
         return {
           userId: s.userId,
           studentName: s.studentName,
           studentNim: s.studentNim,
+          skema,
+          isCs,
           sen,
           sel,
           rab,
           kam,
           jum,
+          sab,
           totalHoursFormatted: formatHours(s.totalHoursNum),
-          kehadiran: workingDaysCount < 5 
-            ? `${daysPresent} / ${workingDaysCount} Hari`
-            : `${daysPresent} / 5 Hari`
+          kehadiran: `${daysPresent} / ${workingDaysCount} Hari`
         };
       }).sort((a, b) => a.studentName.localeCompare(b.studentName, 'id'));
-
 
       return {
         weekKey: week.weekKey,
@@ -421,17 +453,19 @@ export const LaporanAdminView: React.FC = () => {
         students
       };
     });
-  }, [filteredAttendances, leaveRequests]);
+  }, [filteredAttendances, leaveRequests, students]);
 
-  // Grouping Bulanan: Bulan (Terbaru -> Terlama) -> Mahasiswa (A -> Z) -> Akumulasi Hari Kerja (Sen-Jum)
+  // Grouping Bulanan: Bulan (Terbaru -> Terlama) -> Mahasiswa (A -> Z) -> Akumulasi Hari Kerja (Reguler 5 Hari vs CS 6 Hari)
   const groupedMonthlyAttendances = React.useMemo(() => {
     const now = new Date();
 
     const monthMap = new Map<string, {
       monthKey: string;
       label: string;
-      workingDays: string[];
-      totalWorkingDaysInMonth: number;
+      regulerWorkingDays: string[];
+      csWorkingDays: string[];
+      totalRegulerDaysInMonth: number;
+      totalCsDaysInMonth: number;
       isCurrentMonth: boolean;
       records: typeof filteredAttendances;
     }>();
@@ -448,44 +482,55 @@ export const LaporanAdminView: React.FC = () => {
         const isCurrentMonth = now.getFullYear() === year && now.getMonth() === monthIndex;
         const maxDay = isCurrentMonth ? Math.min(daysInMonth, now.getDate()) : daysInMonth;
 
-        // Kumpulkan hari kerja resmi (Senin - Jumat, BUKAN Sabtu/Minggu dan BUKAN Tanggal Merah)
-        const workingDays: string[] = [];
+        const regulerWorkingDays: string[] = [];
+        const csWorkingDays: string[] = [];
         for (let day = 1; day <= maxDay; day++) {
           const dt = new Date(year, monthIndex, day);
-          const dayOfWeek = dt.getDay(); // 0 is Sun, 6 is Sat -> Libur!
+          const dayOfWeek = dt.getDay(); // 0 is Sun, 6 is Sat
           const pad = (n: number) => String(n).padStart(2, '0');
           const dateKey = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
 
-          if (dayOfWeek !== 0 && dayOfWeek !== 6 && !isIndonesianHoliday(dateKey)) {
-            workingDays.push(dateKey);
+          if (dayOfWeek !== 0 && !isIndonesianHoliday(dateKey)) {
+            csWorkingDays.push(dateKey); // CS: Senin - Sabtu
+            if (dayOfWeek !== 6) {
+              regulerWorkingDays.push(dateKey); // Reguler: Senin - Jumat
+            }
           }
         }
 
-        let totalWorkingDaysInMonth = 0;
+        let totalRegulerDaysInMonth = 0;
+        let totalCsDaysInMonth = 0;
         let totalHolidaysInMonth = 0;
         for (let day = 1; day <= daysInMonth; day++) {
           const dt = new Date(year, monthIndex, day);
           const pad = (n: number) => String(n).padStart(2, '0');
           const dateKey = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
-          if (dt.getDay() !== 0 && dt.getDay() !== 6) {
+          const dayOfWeek = dt.getDay();
+
+          if (dayOfWeek !== 0) {
             if (isIndonesianHoliday(dateKey)) {
               totalHolidaysInMonth++;
             } else {
-              totalWorkingDaysInMonth++;
+              totalCsDaysInMonth++;
+              if (dayOfWeek !== 6) {
+                totalRegulerDaysInMonth++;
+              }
             }
           }
         }
 
         const holidayNote = totalHolidaysInMonth > 0 ? ` & ${totalHolidaysInMonth} Libur Nasional` : '';
         const mLabel = isCurrentMonth
-          ? `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (${workingDays.length} Hari Kerja Berjalan — Libur: Sabtu, Minggu${holidayNote})`
-          : `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (${totalWorkingDaysInMonth} Hari Kerja — Libur: Sabtu, Minggu${holidayNote})`;
+          ? `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (Reguler: ${regulerWorkingDays.length} Hari, CS: ${csWorkingDays.length} Hari Berjalan${holidayNote})`
+          : `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (Reguler: ${totalRegulerDaysInMonth} Hari, CS: ${totalCsDaysInMonth} Hari${holidayNote})`;
 
         monthMap.set(mKey, {
           monthKey: mKey,
           label: mLabel,
-          workingDays,
-          totalWorkingDaysInMonth,
+          regulerWorkingDays,
+          csWorkingDays,
+          totalRegulerDaysInMonth,
+          totalCsDaysInMonth,
           isCurrentMonth,
           records: []
         });
@@ -521,14 +566,18 @@ export const LaporanAdminView: React.FC = () => {
       });
 
       const students = Array.from(studentMap.values()).map(s => {
+        const isCs = isCsStudent(s.userId, s.studentName) || Object.values(s.dayRecords).some(r => r.notes && /cs/i.test(r.notes));
+        const skema = isCs ? 'CS (6 Hari)' : 'Reguler (5 Hari)';
+        const studentWorkingDays = isCs ? m.csWorkingDays : m.regulerWorkingDays;
+
         let hadir = 0;
         let terlambat = 0;
         let izin = 0;
         let sakit = 0;
         let alpha = 0;
 
-        // Evaluasi kehadiran berdasarkan Hari Kerja (Senin s/d Jumat, Sabtu & Minggu Libur)
-        m.workingDays.forEach(wDate => {
+        // Evaluasi kehadiran berdasarkan Hari Kerja masing-masing skema
+        studentWorkingDays.forEach(wDate => {
           const rec = s.dayRecords[wDate];
           if (rec) {
             if (rec.status === 'Hadir') hadir++;
@@ -556,16 +605,16 @@ export const LaporanAdminView: React.FC = () => {
           }
         });
 
-        // Hitung juga jika ada kehadiran lembur di akhir pekan
+        // Hitung juga jika ada kehadiran di luar hari kerja standar
         Object.entries(s.dayRecords).forEach(([dateStr, rec]) => {
-          if (!m.workingDays.includes(dateStr)) {
+          if (!studentWorkingDays.includes(dateStr)) {
             if (rec.status === 'Hadir') hadir++;
             else if (rec.status === 'Terlambat') terlambat++;
           }
         });
 
         // Persentase kehadiran dihitung dari total Hari Kerja yang telah dievaluasi
-        const totalEvaluated = Math.max(m.workingDays.length, hadir + terlambat + izin + sakit + alpha);
+        const totalEvaluated = Math.max(studentWorkingDays.length, hadir + terlambat + izin + sakit + alpha);
         const presence = hadir + terlambat;
         const percentage = totalEvaluated > 0 ? Math.min(100, Math.round((presence / totalEvaluated) * 100)) : 0;
 
@@ -573,6 +622,8 @@ export const LaporanAdminView: React.FC = () => {
           userId: s.userId,
           studentName: s.studentName,
           studentNim: s.studentNim,
+          skema,
+          isCs,
           hadir,
           terlambat,
           izin,
@@ -589,7 +640,7 @@ export const LaporanAdminView: React.FC = () => {
         students
       };
     });
-  }, [filteredAttendances, leaveRequests]);
+  }, [filteredAttendances, leaveRequests, students]);
 
   // Export to PDF
   const handleExportPDF = () => {
@@ -661,12 +712,12 @@ export const LaporanAdminView: React.FC = () => {
         3: { cellWidth: 42, halign: 'center' }
       };
     } else if (reportType === 'harian') {
-      head = [['No', 'Mahasiswa', 'Absen Masuk', 'Absen Pulang', 'Total Jam', 'Status']];
+      head = [['No', 'Mahasiswa', 'Tipe / Shift', 'Absen Masuk', 'Absen Pulang', 'Total Jam', 'Status']];
       groupedDailyAttendances.forEach(day => {
         rows.push([
           {
             content: day.fullDateLabel,
-            colSpan: 6,
+            colSpan: 7,
             styles: {
               fillColor: [241, 245, 249],
               textColor: [51, 65, 85],
@@ -680,6 +731,7 @@ export const LaporanAdminView: React.FC = () => {
           rows.push([
             { content: String(rIdx + 1), styles: { halign: 'center', valign: 'middle' } },
             { content: `${rec.studentName}\n(${rec.studentNim})`, styles: { valign: 'middle', fontStyle: 'bold' } },
+            { content: rec.shift, styles: { halign: 'center', valign: 'middle' } },
             { content: rec.checkInTime, styles: { halign: 'center', valign: 'middle' } },
             { content: rec.checkOutTime, styles: { halign: 'center', valign: 'middle' } },
             { content: rec.totalHours, styles: { halign: 'center', valign: 'middle' } },
@@ -688,20 +740,21 @@ export const LaporanAdminView: React.FC = () => {
         });
       });
       columnStyles = {
-        0: { cellWidth: 12, halign: 'center' },
-        1: { cellWidth: 50 },
-        2: { cellWidth: 30, halign: 'center' },
-        3: { cellWidth: 30, halign: 'center' },
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 46 },
+        2: { cellWidth: 32, halign: 'center' },
+        3: { cellWidth: 26, halign: 'center' },
         4: { cellWidth: 26, halign: 'center' },
-        5: { cellWidth: 30, halign: 'center' }
+        5: { cellWidth: 24, halign: 'center' },
+        6: { cellWidth: 26, halign: 'center' }
       };
     } else if (reportType === 'mingguan') {
-      head = [['No', 'Mahasiswa', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Total Jam', 'Kehadiran']];
+      head = [['No', 'Mahasiswa', 'Skema', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Total Jam', 'Kehadiran']];
       groupedWeeklyAttendances.forEach(week => {
         rows.push([
           {
             content: week.label,
-            colSpan: 9,
+            colSpan: 11,
             styles: {
               fillColor: [241, 245, 249],
               textColor: [51, 65, 85],
@@ -715,35 +768,39 @@ export const LaporanAdminView: React.FC = () => {
           rows.push([
             { content: String(sIdx + 1), styles: { halign: 'center', valign: 'middle' } },
             { content: `${s.studentName}\n(${s.studentNim})`, styles: { valign: 'middle', fontStyle: 'bold' } },
+            { content: s.skema, styles: { halign: 'center', valign: 'middle' } },
             { content: s.sen.code, styles: { halign: 'center', valign: 'middle' } },
             { content: s.sel.code, styles: { halign: 'center', valign: 'middle' } },
             { content: s.rab.code, styles: { halign: 'center', valign: 'middle' } },
             { content: s.kam.code, styles: { halign: 'center', valign: 'middle' } },
             { content: s.jum.code, styles: { halign: 'center', valign: 'middle' } },
+            { content: s.sab.code, styles: { halign: 'center', valign: 'middle' } },
             { content: s.totalHoursFormatted, styles: { halign: 'center', valign: 'middle' } },
             { content: s.kehadiran, styles: { halign: 'center', valign: 'middle' } }
           ]);
         });
       });
       columnStyles = {
-        0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: 46 },
-        2: { cellWidth: 14, halign: 'center' },
-        3: { cellWidth: 14, halign: 'center' },
-        4: { cellWidth: 14, halign: 'center' },
-        5: { cellWidth: 14, halign: 'center' },
-        6: { cellWidth: 14, halign: 'center' },
-        7: { cellWidth: 26, halign: 'center' },
-        8: { cellWidth: 28, halign: 'center' }
+        0: { cellWidth: 8, halign: 'center' },
+        1: { cellWidth: 38 },
+        2: { cellWidth: 24, halign: 'center' },
+        3: { cellWidth: 11, halign: 'center' },
+        4: { cellWidth: 11, halign: 'center' },
+        5: { cellWidth: 11, halign: 'center' },
+        6: { cellWidth: 11, halign: 'center' },
+        7: { cellWidth: 11, halign: 'center' },
+        8: { cellWidth: 11, halign: 'center' },
+        9: { cellWidth: 24, halign: 'center' },
+        10: { cellWidth: 26, halign: 'center' }
       };
     } else {
       // reportType === 'bulanan'
-      head = [['No', 'Mahasiswa', 'Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpha', 'Total Jam', '% Kehadiran']];
+      head = [['No', 'Mahasiswa', 'Skema', 'Hadir', 'Terlambat', 'Izin', 'Sakit', 'Alpha', 'Total Jam', '% Kehadiran']];
       groupedMonthlyAttendances.forEach(month => {
         rows.push([
           {
             content: month.label,
-            colSpan: 9,
+            colSpan: 10,
             styles: {
               fillColor: [241, 245, 249],
               textColor: [51, 65, 85],
@@ -757,6 +814,7 @@ export const LaporanAdminView: React.FC = () => {
           rows.push([
             { content: String(sIdx + 1), styles: { halign: 'center', valign: 'middle' } },
             { content: `${s.studentName}\n(${s.studentNim})`, styles: { valign: 'middle', fontStyle: 'bold' } },
+            { content: s.skema, styles: { halign: 'center', valign: 'middle' } },
             { content: String(s.hadir), styles: { halign: 'center', valign: 'middle' } },
             { content: String(s.terlambat), styles: { halign: 'center', valign: 'middle' } },
             { content: String(s.izin), styles: { halign: 'center', valign: 'middle' } },
@@ -768,15 +826,16 @@ export const LaporanAdminView: React.FC = () => {
         });
       });
       columnStyles = {
-        0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: 46 },
-        2: { cellWidth: 15, halign: 'center' },
-        3: { cellWidth: 18, halign: 'center' },
-        4: { cellWidth: 14, halign: 'center' },
-        5: { cellWidth: 14, halign: 'center' },
-        6: { cellWidth: 14, halign: 'center' },
-        7: { cellWidth: 24, halign: 'center' },
-        8: { cellWidth: 25, halign: 'center' }
+        0: { cellWidth: 8, halign: 'center' },
+        1: { cellWidth: 40 },
+        2: { cellWidth: 26, halign: 'center' },
+        3: { cellWidth: 14, halign: 'center' },
+        4: { cellWidth: 16, halign: 'center' },
+        5: { cellWidth: 13, halign: 'center' },
+        6: { cellWidth: 13, halign: 'center' },
+        7: { cellWidth: 13, halign: 'center' },
+        8: { cellWidth: 23, halign: 'center' },
+        9: { cellWidth: 24, halign: 'center' }
       };
     }
 
@@ -847,6 +906,7 @@ export const LaporanAdminView: React.FC = () => {
         dataToExport.push({
           'No': '',
           'Nama Mahasiswa': `--- ${day.fullDateLabel} ---`,
+          'Tipe / Shift': '',
           'Absen Masuk': '',
           'Absen Pulang': '',
           'Total Jam': '',
@@ -856,6 +916,7 @@ export const LaporanAdminView: React.FC = () => {
           dataToExport.push({
             'No': rIdx + 1,
             'Nama Mahasiswa': `${rec.studentName} (${rec.studentNim})`,
+            'Tipe / Shift': rec.shift,
             'Absen Masuk': rec.checkInTime,
             'Absen Pulang': rec.checkOutTime,
             'Total Jam': rec.totalHours,
@@ -869,11 +930,13 @@ export const LaporanAdminView: React.FC = () => {
         dataToExport.push({
           'No': '',
           'Nama Mahasiswa': `--- ${week.label} ---`,
+          'Skema / Divisi': '',
           'Senin': '',
           'Selasa': '',
           'Rabu': '',
           'Kamis': '',
           'Jumat': '',
+          'Sabtu': '',
           'Total Jam': '',
           'Kehadiran': ''
         });
@@ -881,11 +944,13 @@ export const LaporanAdminView: React.FC = () => {
           dataToExport.push({
             'No': sIdx + 1,
             'Nama Mahasiswa': `${s.studentName} (${s.studentNim})`,
+            'Skema / Divisi': s.skema,
             'Senin': s.sen.code,
             'Selasa': s.sel.code,
             'Rabu': s.rab.code,
             'Kamis': s.kam.code,
             'Jumat': s.jum.code,
+            'Sabtu': s.sab.code,
             'Total Jam': s.totalHoursFormatted,
             'Kehadiran': s.kehadiran
           });
@@ -898,6 +963,7 @@ export const LaporanAdminView: React.FC = () => {
         dataToExport.push({
           'No': '',
           'Nama Mahasiswa': `--- ${month.label} ---`,
+          'Skema / Divisi': '',
           'Hadir': '',
           'Terlambat': '',
           'Izin': '',
@@ -910,6 +976,7 @@ export const LaporanAdminView: React.FC = () => {
           dataToExport.push({
             'No': sIdx + 1,
             'Nama Mahasiswa': `${s.studentName} (${s.studentNim})`,
+            'Skema / Divisi': s.skema,
             'Hadir': s.hadir,
             'Terlambat': s.terlambat,
             'Izin': s.izin,
@@ -1138,17 +1205,18 @@ export const LaporanAdminView: React.FC = () => {
                 <thead>
                   <tr className="bg-[#183B66] text-white font-bold uppercase text-[11px] tracking-wide">
                     <th className="py-3 px-3 w-12 text-center border-r border-slate-700/60">No</th>
-                    <th className="py-3 px-4 w-64 border-r border-slate-700/60">Mahasiswa</th>
-                    <th className="py-3 px-4 w-32 text-center border-r border-slate-700/60">Absen Masuk</th>
-                    <th className="py-3 px-4 w-32 text-center border-r border-slate-700/60">Absen Pulang</th>
-                    <th className="py-3 px-4 w-28 text-center border-r border-slate-700/60">Total Jam</th>
-                    <th className="py-3 px-4 w-32 text-center">Status</th>
+                    <th className="py-3 px-4 w-56 border-r border-slate-700/60">Mahasiswa</th>
+                    <th className="py-3 px-3 w-36 text-center border-r border-slate-700/60">Tipe / Shift</th>
+                    <th className="py-3 px-4 w-28 text-center border-r border-slate-700/60">Absen Masuk</th>
+                    <th className="py-3 px-4 w-28 text-center border-r border-slate-700/60">Absen Pulang</th>
+                    <th className="py-3 px-4 w-24 text-center border-r border-slate-700/60">Total Jam</th>
+                    <th className="py-3 px-4 w-28 text-center">Status</th>
                   </tr>
                 </thead>
                 <tbody className="text-slate-700 dark:text-slate-300 font-medium">
                   {groupedDailyAttendances.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="py-8 text-center text-slate-400">
+                      <td colSpan={7} className="py-8 text-center text-slate-400">
                         Tidak ada data absensi harian sesuai filter
                       </td>
                     </tr>
@@ -1161,7 +1229,7 @@ export const LaporanAdminView: React.FC = () => {
                             ? 'bg-rose-50/90 border-rose-200 dark:bg-rose-950/40 dark:border-rose-900/60'
                             : 'bg-slate-100 border-slate-300 dark:bg-slate-800/80 dark:border-slate-700'
                         }`}>
-                          <td colSpan={6} className="py-2.5 px-4 text-center font-bold text-xs tracking-wide">
+                          <td colSpan={7} className="py-2.5 px-4 text-center font-bold text-xs tracking-wide">
                             <span className="text-slate-700 dark:text-slate-200">{day.fullDateLabel}</span>
                           </td>
                         </tr>
@@ -1177,6 +1245,19 @@ export const LaporanAdminView: React.FC = () => {
                             <td className="py-2.5 px-4 border-r border-slate-200 dark:border-slate-700">
                               <p className="font-bold text-slate-900 dark:text-slate-100">{rec.studentName}</p>
                               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">({rec.studentNim})</p>
+                            </td>
+                            <td className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                                rec.shift.includes('Shift 1')
+                                  ? 'bg-indigo-50 text-indigo-700 border border-indigo-200 dark:bg-indigo-950/40 dark:text-indigo-300'
+                                  : rec.shift.includes('Shift 2')
+                                  ? 'bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300'
+                                  : rec.shift.includes('CS')
+                                  ? 'bg-blue-50 text-[#2F80ED] border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300'
+                                  : 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                              }`}>
+                                {rec.shift}
+                              </span>
                             </td>
                             <td className="py-2.5 px-4 text-center text-slate-700 dark:text-slate-300 font-mono border-r border-slate-200 dark:border-slate-700">
                               {rec.checkInTime}
@@ -1216,12 +1297,14 @@ export const LaporanAdminView: React.FC = () => {
                 <thead>
                   <tr className="bg-[#183B66] text-white font-bold uppercase text-[11px] tracking-wide">
                     <th className="py-3 px-3 w-12 text-center border-r border-slate-700/60">No</th>
-                    <th className="py-3 px-4 w-56 border-r border-slate-700/60">Mahasiswa</th>
-                    <th className="py-3 px-2 w-16 text-center border-r border-slate-700/60">Sen</th>
-                    <th className="py-3 px-2 w-16 text-center border-r border-slate-700/60">Sel</th>
-                    <th className="py-3 px-2 w-16 text-center border-r border-slate-700/60">Rab</th>
-                    <th className="py-3 px-2 w-16 text-center border-r border-slate-700/60">Kam</th>
-                    <th className="py-3 px-2 w-16 text-center border-r border-slate-700/60">Jum</th>
+                    <th className="py-3 px-4 w-52 border-r border-slate-700/60">Mahasiswa</th>
+                    <th className="py-3 px-3 w-28 text-center border-r border-slate-700/60">Skema</th>
+                    <th className="py-3 px-2 w-14 text-center border-r border-slate-700/60">Sen</th>
+                    <th className="py-3 px-2 w-14 text-center border-r border-slate-700/60">Sel</th>
+                    <th className="py-3 px-2 w-14 text-center border-r border-slate-700/60">Rab</th>
+                    <th className="py-3 px-2 w-14 text-center border-r border-slate-700/60">Kam</th>
+                    <th className="py-3 px-2 w-14 text-center border-r border-slate-700/60">Jum</th>
+                    <th className="py-3 px-2 w-14 text-center border-r border-slate-700/60">Sab</th>
                     <th className="py-3 px-3 w-24 text-center border-r border-slate-700/60">Total Jam</th>
                     <th className="py-3 px-3 w-28 text-center">Kehadiran</th>
                   </tr>
@@ -1229,7 +1312,7 @@ export const LaporanAdminView: React.FC = () => {
                 <tbody className="text-slate-700 dark:text-slate-300 font-medium">
                   {groupedWeeklyAttendances.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-slate-400">
+                      <td colSpan={11} className="py-8 text-center text-slate-400">
                         Tidak ada data absensi mingguan sesuai filter
                       </td>
                     </tr>
@@ -1238,7 +1321,7 @@ export const LaporanAdminView: React.FC = () => {
                       <React.Fragment key={week.weekKey}>
                         {/* Baris Pembatas Minggu */}
                         <tr className="bg-slate-100 border-y border-slate-300 dark:bg-slate-800/80 dark:border-slate-700">
-                          <td colSpan={9} className="py-2.5 px-4 text-center font-bold text-slate-700 dark:text-slate-200 text-xs tracking-wide">
+                          <td colSpan={11} className="py-2.5 px-4 text-center font-bold text-slate-700 dark:text-slate-200 text-xs tracking-wide">
                             {week.label}
                           </td>
                         </tr>
@@ -1255,6 +1338,15 @@ export const LaporanAdminView: React.FC = () => {
                               <p className="font-bold text-slate-900 dark:text-slate-100">{student.studentName}</p>
                               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">({student.studentNim})</p>
                             </td>
+                            <td className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                                student.isCs
+                                  ? 'bg-blue-50 text-[#2F80ED] border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300'
+                                  : 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                              }`}>
+                                {student.skema}
+                              </span>
+                            </td>
                             <td className={`py-2.5 px-2 text-center ${student.sen.color} border-r border-slate-200 dark:border-slate-700`} title={`Senin: ${student.sen.full}`}>
                               {student.sen.code}
                             </td>
@@ -1269,6 +1361,9 @@ export const LaporanAdminView: React.FC = () => {
                             </td>
                             <td className={`py-2.5 px-2 text-center ${student.jum.color} border-r border-slate-200 dark:border-slate-700`} title={`Jumat: ${student.jum.full}`}>
                               {student.jum.code}
+                            </td>
+                            <td className={`py-2.5 px-2 text-center ${student.sab.color} border-r border-slate-200 dark:border-slate-700`} title={`Sabtu: ${student.sab.full}`}>
+                              {student.sab.code}
                             </td>
                             <td className="py-2.5 px-3 text-center font-mono text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
                               {student.totalHoursFormatted}
@@ -1291,6 +1386,7 @@ export const LaporanAdminView: React.FC = () => {
                 <span className="text-orange-700 dark:text-orange-400 font-semibold">S = Sakit</span>
                 <span className="text-red-700 dark:text-red-400 font-semibold">A = Alpha</span>
                 <span className="text-rose-600 dark:text-rose-400 font-semibold">L = Libur Nasional / Tanggal Merah</span>
+                <span className="text-slate-400 dark:text-slate-500 font-semibold">OFF = Libur Reguler (5 Hari)</span>
               </div>
             </div>
           ) : (
@@ -1300,12 +1396,13 @@ export const LaporanAdminView: React.FC = () => {
                 <thead>
                   <tr className="bg-[#183B66] text-white font-bold uppercase text-[11px] tracking-wide">
                     <th className="py-3 px-3 w-12 text-center border-r border-slate-700/60">No</th>
-                    <th className="py-3 px-4 w-60 border-r border-slate-700/60">Mahasiswa</th>
-                    <th className="py-3 px-3 w-20 text-center border-r border-slate-700/60">Hadir</th>
-                    <th className="py-3 px-3 w-20 text-center border-r border-slate-700/60">Terlambat</th>
-                    <th className="py-3 px-3 w-20 text-center border-r border-slate-700/60">Izin</th>
-                    <th className="py-3 px-3 w-20 text-center border-r border-slate-700/60">Sakit</th>
-                    <th className="py-3 px-3 w-20 text-center border-r border-slate-700/60">Alpha</th>
+                    <th className="py-3 px-4 w-56 border-r border-slate-700/60">Mahasiswa</th>
+                    <th className="py-3 px-3 w-28 text-center border-r border-slate-700/60">Skema</th>
+                    <th className="py-3 px-3 w-16 text-center border-r border-slate-700/60">Hadir</th>
+                    <th className="py-3 px-3 w-16 text-center border-r border-slate-700/60">Terlambat</th>
+                    <th className="py-3 px-3 w-16 text-center border-r border-slate-700/60">Izin</th>
+                    <th className="py-3 px-3 w-16 text-center border-r border-slate-700/60">Sakit</th>
+                    <th className="py-3 px-3 w-16 text-center border-r border-slate-700/60">Alpha</th>
                     <th className="py-3 px-3 w-24 text-center border-r border-slate-700/60">Total Jam</th>
                     <th className="py-3 px-3 w-28 text-center">% Kehadiran</th>
                   </tr>
@@ -1313,7 +1410,7 @@ export const LaporanAdminView: React.FC = () => {
                 <tbody className="text-slate-700 dark:text-slate-300 font-medium">
                   {groupedMonthlyAttendances.length === 0 ? (
                     <tr>
-                      <td colSpan={9} className="py-8 text-center text-slate-400">
+                      <td colSpan={10} className="py-8 text-center text-slate-400">
                         Tidak ada data absensi bulanan sesuai filter
                       </td>
                     </tr>
@@ -1322,7 +1419,7 @@ export const LaporanAdminView: React.FC = () => {
                       <React.Fragment key={month.monthKey}>
                         {/* Baris Pembatas Bulan */}
                         <tr className="bg-slate-100 border-y border-slate-300 dark:bg-slate-800/80 dark:border-slate-700">
-                          <td colSpan={9} className="py-2.5 px-4 text-center font-bold text-slate-700 dark:text-slate-200 text-xs tracking-wide">
+                          <td colSpan={10} className="py-2.5 px-4 text-center font-bold text-slate-700 dark:text-slate-200 text-xs tracking-wide">
                             {month.label}
                           </td>
                         </tr>
@@ -1338,6 +1435,15 @@ export const LaporanAdminView: React.FC = () => {
                             <td className="py-2.5 px-4 border-r border-slate-200 dark:border-slate-700">
                               <p className="font-bold text-slate-900 dark:text-slate-100">{student.studentName}</p>
                               <p className="text-[11px] text-slate-500 dark:text-slate-400 font-mono mt-0.5">({student.studentNim})</p>
+                            </td>
+                            <td className="py-2.5 px-3 text-center border-r border-slate-200 dark:border-slate-700">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-semibold ${
+                                student.isCs
+                                  ? 'bg-blue-50 text-[#2F80ED] border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300'
+                                  : 'bg-slate-100 text-slate-600 border border-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                              }`}>
+                                {student.skema}
+                              </span>
                             </td>
                             <td className="py-2.5 px-3 text-center text-emerald-700 dark:text-emerald-400 font-bold border-r border-slate-200 dark:border-slate-700">
                               {student.hadir}

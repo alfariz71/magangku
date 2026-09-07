@@ -133,6 +133,10 @@ interface DataContextType {
 export interface SystemSettings {
   workStartTime: string;
   workEndTime: string;
+  csShift1StartTime?: string;
+  csShift1EndTime?: string;
+  csShift2StartTime?: string;
+  csShift2EndTime?: string;
   lateToleranceMins: number;
   allowOvertime: boolean;
   requireSignatureOnReport: boolean;
@@ -141,6 +145,10 @@ export interface SystemSettings {
 const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   workStartTime: '08:00',
   workEndTime: '17:00',
+  csShift1StartTime: '08:00',
+  csShift1EndTime: '15:00',
+  csShift2StartTime: '15:00',
+  csShift2EndTime: '21:00',
   lateToleranceMins: 15,
   allowOvertime: true,
   requireSignatureOnReport: true,
@@ -862,26 +870,31 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const now = new Date();
     const jakartaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
     
-    // Tentukan jam patokan masuk berdasarkan mode & shift
+    // Tentukan jam patokan masuk berdasarkan mode & shift dari systemSettings
     let targetStartHour = 8;
     let targetStartMinute = 0;
     let shiftNotes = 'Reguler (08:00 - 17:00)';
 
     if (mode === 'cs') {
       if (csShift === 'shift_2') {
-        targetStartHour = 15;
-        targetStartMinute = 0;
-        shiftNotes = 'CS - Shift 2 (15:00 - 21:00)';
+        const [h, m] = (systemSettings.csShift2StartTime || '15:00').split(':').map(Number);
+        targetStartHour = h;
+        targetStartMinute = m || 0;
+        const endStr = systemSettings.csShift2EndTime || '21:00';
+        shiftNotes = `CS - Shift 2 (${systemSettings.csShift2StartTime || '15:00'} - ${endStr})`;
       } else {
-        targetStartHour = 8;
-        targetStartMinute = 0;
-        shiftNotes = 'CS - Shift 1 (08:00 - 15:00)';
+        const [h, m] = (systemSettings.csShift1StartTime || '08:00').split(':').map(Number);
+        targetStartHour = h;
+        targetStartMinute = m || 0;
+        const endStr = systemSettings.csShift1EndTime || '15:00';
+        shiftNotes = `CS - Shift 1 (${systemSettings.csShift1StartTime || '08:00'} - ${endStr})`;
       }
     } else {
       const [startH, startM] = (systemSettings.workStartTime || '08:00').split(':').map(Number);
       targetStartHour = startH;
       targetStartMinute = startM || 0;
-      shiftNotes = 'Reguler (08:00 - 17:00)';
+      const endStr = systemSettings.workEndTime || '17:00';
+      shiftNotes = `Reguler (${systemSettings.workStartTime || '08:00'} - ${endStr})`;
     }
 
     const cutoffMinutes = (targetStartHour * 60 + targetStartMinute) + (systemSettings.lateToleranceMins || 0);
