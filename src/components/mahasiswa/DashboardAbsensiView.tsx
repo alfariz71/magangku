@@ -16,7 +16,11 @@ import {
   RefreshCw,
   AlertTriangle,
   ShieldCheck,
-  Navigation
+  Navigation,
+  Headphones,
+  Briefcase,
+  Circle,
+  Check
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../../context/AuthContext';
@@ -51,6 +55,29 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
   const [filterStatus, setFilterStatus] = useState<string>('Semua');
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  // Mode selection: 'reguler' | 'cs' | null (Wajib pilih salah satu card sebelum absen)
+  const [selectedAttendanceMode, setSelectedAttendanceMode] = useState<'reguler' | 'cs' | null>(null);
+  const [selectedCsShift, setSelectedCsShift] = useState<'shift_1' | 'shift_2'>('shift_1');
+
+  const isCsAttendanceToday = todayAttendance.notes?.includes('CS') ?? false;
+  const isRegulerAttendanceToday = todayAttendance.notes?.includes('Reguler') ?? false;
+
+  // Auto-sync active card selection if today's attendance is already recorded
+  useEffect(() => {
+    if (todayAttendance.isCheckedIn) {
+      if (todayAttendance.notes?.includes('CS')) {
+        setSelectedAttendanceMode('cs');
+        if (todayAttendance.notes?.includes('Shift 2')) {
+          setSelectedCsShift('shift_2');
+        } else {
+          setSelectedCsShift('shift_1');
+        }
+      } else {
+        setSelectedAttendanceMode('reguler');
+      }
+    }
+  }, [todayAttendance.isCheckedIn, todayAttendance.notes]);
+
   // Start GPS watch when dashboard mounts, stop when unmounts
   useEffect(() => {
     startGpsWatch();
@@ -77,14 +104,20 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
     setFeedbackToast({ type, message });
   };
 
-  // Check-In (Buka Scanner QR langsung)
-  const handleCheckInClick = () => {
+  // Check-In (Validasi card terpilih lalu buka Scanner QR)
+  const handleCheckInClick = (mode: 'reguler' | 'cs') => {
+    if (selectedAttendanceMode !== mode) {
+      setSelectedAttendanceMode(mode);
+    }
     if (todayAttendance.isCheckedIn) return;
     setIsScannerOpen(true);
   };
 
   // Check-Out (Cukup klik & validasi GPS tanpa scan QR)
-  const handleCheckOutClick = async () => {
+  const handleCheckOutClick = async (mode: 'reguler' | 'cs') => {
+    if (selectedAttendanceMode !== mode) {
+      setSelectedAttendanceMode(mode);
+    }
     if (!todayAttendance.isCheckedIn) {
       showToast('error', 'Anda belum melakukan absen masuk hari ini.');
       return;
@@ -233,9 +266,79 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
         </div>
       </div>
 
-      {/* Main Attendance Card */}
-      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-        <h3 className="text-base font-bold text-[#183B66] mb-5">Absensi Hari Ini</h3>
+      {/* Mode Selection Prompt Banner */}
+      {!selectedAttendanceMode && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-blue-200 bg-blue-50/70 p-4 shadow-sm animate-in fade-in duration-300">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white shadow-sm">
+              <Info className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-blue-900">Pilih Mode Absensi Hari Ini</p>
+              <p className="text-xs text-blue-700">
+                Silakan centang/pilih salah satu kartu di bawah ini: <strong>Mode Reguler</strong> (08:00 - 17:00) atau <strong>Mode CS</strong> (Shift 1 / Shift 2) untuk mengaktifkan tombol absensi Anda.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* CARD 1: ABSENSI MAGANG REGULER (08:00 - 17:00 WIB) */}
+      {/* ============================================================ */}
+      <div
+        className={`rounded-2xl transition-all duration-300 ${
+          selectedAttendanceMode === 'reguler'
+            ? 'border-2 border-[#2F80ED] bg-white p-6 shadow-md ring-4 ring-blue-50'
+            : 'border border-slate-200 bg-white/75 p-6 shadow-sm opacity-85 hover:border-slate-300'
+        }`}
+      >
+        {/* Header Card 1 */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                selectedAttendanceMode === 'reguler'
+                  ? 'bg-[#2F80ED] text-white shadow-sm shadow-blue-500/30'
+                  : 'bg-slate-100 text-slate-500'
+              }`}
+            >
+              <Briefcase className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-[#183B66]">Absensi Magang Reguler</h3>
+                <span className="rounded-full bg-blue-100 px-2.5 py-0.5 text-[11px] font-semibold text-blue-700">
+                  08:00 – 17:00 WIB
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">Untuk peserta magang jam kerja standar non-shift</p>
+            </div>
+          </div>
+
+          {/* Selector Button */}
+          <button
+            type="button"
+            onClick={() => setSelectedAttendanceMode(selectedAttendanceMode === 'reguler' ? null : 'reguler')}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
+              selectedAttendanceMode === 'reguler'
+                ? 'bg-[#2F80ED] text-white shadow-sm shadow-blue-500/25 ring-2 ring-blue-200'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            {selectedAttendanceMode === 'reguler' ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 text-white" />
+                <span>Mode Reguler Dipilih ✓</span>
+              </>
+            ) : (
+              <>
+                <Circle className="h-4 w-4 text-slate-400" />
+                <span>Pilih Mode Reguler</span>
+              </>
+            )}
+          </button>
+        </div>
 
         {/* Today Summary */}
         <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-2xl bg-slate-50/70 p-4 text-center mb-6">
@@ -259,17 +362,22 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           </div>
         </div>
 
-        {/* Status Hari Ini */}
-        {todayAttendance.status && (
+        {/* Status Hari Ini - Card 1 */}
+        {todayAttendance.isCheckedIn && isCsAttendanceToday ? (
+          <div className="mb-4 flex items-center gap-2 rounded-xl p-3 text-xs font-semibold bg-indigo-50 text-indigo-800 border border-indigo-200">
+            <Info className="h-4 w-4 shrink-0 text-indigo-600" />
+            <span>Presensi hari ini tercatat pada <strong>Mode Customer Service ({todayAttendance.notes || 'CS'})</strong>. Silakan gunakan kartu CS di bawah.</span>
+          </div>
+        ) : todayAttendance.status ? (
           <div className={`mb-4 flex items-center gap-2 rounded-xl p-3 text-xs font-semibold ${
             todayAttendance.status === 'Hadir' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
             todayAttendance.status === 'Terlambat' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
             'bg-amber-50 text-amber-700 border border-amber-200'
           }`}>
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            Status hari ini: <strong>{todayAttendance.status}</strong>
+            Status hari ini: <strong>{todayAttendance.status}</strong> (Reguler)
           </div>
-        )}
+        ) : null}
 
         {/* GPS Status Live */}
         <div className={`mb-6 flex items-center justify-between gap-3 rounded-xl border p-3.5 ${gpsDisplay.bg} ${gpsDisplay.border}`}>
@@ -297,10 +405,12 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           {/* Absen Masuk */}
           <button
             type="button"
-            onClick={handleCheckInClick}
-            disabled={todayAttendance.isCheckedIn || isProcessingCheckIn}
+            onClick={() => handleCheckInClick('reguler')}
+            disabled={selectedAttendanceMode !== 'reguler' || todayAttendance.isCheckedIn || isProcessingCheckIn}
             className={`flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold shadow-md transition-all ${
-              todayAttendance.isCheckedIn
+              selectedAttendanceMode !== 'reguler'
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
+                : todayAttendance.isCheckedIn
                 ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
                 : isProcessingCheckIn
                 ? 'bg-blue-400 text-white shadow-none cursor-wait'
@@ -328,10 +438,12 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           {/* Absen Pulang */}
           <button
             type="button"
-            onClick={handleCheckOutClick}
-            disabled={!todayAttendance.isCheckedIn || todayAttendance.isCheckedOut}
+            onClick={() => handleCheckOutClick('reguler')}
+            disabled={selectedAttendanceMode !== 'reguler' || !todayAttendance.isCheckedIn || todayAttendance.isCheckedOut}
             className={`flex items-center justify-center gap-2 rounded-xl border py-3.5 text-sm font-semibold transition-all ${
-              todayAttendance.isCheckedOut
+              selectedAttendanceMode !== 'reguler'
+                ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                : todayAttendance.isCheckedOut
                 ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
                 : !todayAttendance.isCheckedIn
                 ? 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed'
@@ -354,19 +466,272 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
         </div>
 
         {/* Hint messages */}
-        {!isQrScannedToday && !todayAttendance.isCheckedIn && (
+        {selectedAttendanceMode !== 'reguler' && (
+          <p className="mt-3 text-center text-[11px] text-slate-400">
+            ℹ️ Klik tombol <strong>"Pilih Mode Reguler"</strong> di atas untuk mengaktifkan tombol absensi kartu ini.
+          </p>
+        )}
+        {selectedAttendanceMode === 'reguler' && !isQrScannedToday && !todayAttendance.isCheckedIn && (
           <p className="mt-3 text-center text-[11px] text-amber-600">
             ⚠️ Pindai QR Code dan pastikan berada dalam radius lokasi sebelum absen masuk.
           </p>
         )}
-        {gpsState.status === 'permission_denied' && (
-          <p className="mt-3 text-center text-[11px] text-rose-600">
-            ❌ Izin lokasi diperlukan. Klik ikon 🔒 di address bar browser → Lokasi → Izinkan.
+        {selectedAttendanceMode === 'reguler' && todayAttendance.isCheckedIn && !todayAttendance.isCheckedOut && (
+          <p className="mt-3 text-center text-[11px] text-blue-600">
+            ℹ️ Jadwal pulang Reguler: 17:00 WIB. Jangan lupa absen pulang sebelum meninggalkan lokasi.
           </p>
         )}
-        {todayAttendance.isCheckedIn && !todayAttendance.isCheckedOut && (
-          <p className="mt-3 text-center text-[11px] text-blue-600">
-            ℹ️ Jadwal pulang: 17:00 WIB. Jangan lupa absen pulang sebelum meninggalkan lokasi.
+      </div>
+
+      {/* ============================================================ */}
+      {/* CARD 2: ABSENSI KHUSUS CUSTOMER SERVICE (CS) */}
+      {/* ============================================================ */}
+      <div
+        className={`rounded-2xl transition-all duration-300 ${
+          selectedAttendanceMode === 'cs'
+            ? 'border-2 border-indigo-600 bg-white p-6 shadow-md ring-4 ring-indigo-50'
+            : 'border border-slate-200 bg-white/75 p-6 shadow-sm opacity-85 hover:border-slate-300'
+        }`}
+      >
+        {/* Header Card 2 */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-4 border-b border-slate-100">
+          <div className="flex items-center gap-3">
+            <div
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                selectedAttendanceMode === 'cs'
+                  ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/30'
+                  : 'bg-slate-100 text-slate-500'
+              }`}
+            >
+              <Headphones className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-base font-bold text-[#183B66]">Absensi Customer Service (CS)</h3>
+                <span className="rounded-full bg-indigo-100 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-700">
+                  Khusus Petugas CS
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">Tersedia 2 pilihan shift kerja operasional CS</p>
+            </div>
+          </div>
+
+          {/* Selector Button */}
+          <button
+            type="button"
+            onClick={() => setSelectedAttendanceMode(selectedAttendanceMode === 'cs' ? null : 'cs')}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2 text-xs font-semibold transition-all ${
+              selectedAttendanceMode === 'cs'
+                ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-500/25 ring-2 ring-indigo-200'
+                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            {selectedAttendanceMode === 'cs' ? (
+              <>
+                <CheckCircle2 className="h-4 w-4 text-white" />
+                <span>Mode CS Dipilih ✓</span>
+              </>
+            ) : (
+              <>
+                <Circle className="h-4 w-4 text-slate-400" />
+                <span>Pilih Mode CS</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* CS Shift Switcher */}
+        <div className="mb-6 rounded-2xl bg-indigo-50/60 p-4 border border-indigo-100">
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-xs font-bold text-indigo-900">Pilih Shift Kerja Hari Ini:</span>
+            <span className="text-[11px] text-indigo-600 font-medium">
+              {selectedCsShift === 'shift_1' ? 'Shift 1: Pagi - Sore' : 'Shift 2: Siang - Malam'}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {/* Shift 1 Pill */}
+            <button
+              type="button"
+              onClick={() => setSelectedCsShift('shift_1')}
+              className={`flex items-center justify-between rounded-xl px-4 py-3 text-left transition-all ${
+                selectedCsShift === 'shift_1'
+                  ? 'bg-white border-2 border-indigo-600 shadow-sm text-indigo-950 ring-2 ring-indigo-200/50'
+                  : 'bg-white/70 border border-indigo-100 text-slate-600 hover:bg-white'
+              }`}
+            >
+              <div>
+                <p className="text-xs font-bold">Shift 1 (Pagi)</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">08:00 – 15:00 WIB</p>
+              </div>
+              <div className={`h-5 w-5 rounded-full flex items-center justify-center border ${
+                selectedCsShift === 'shift_1' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300'
+              }`}>
+                {selectedCsShift === 'shift_1' && <Check className="h-3 w-3 stroke-[3]" />}
+              </div>
+            </button>
+
+            {/* Shift 2 Pill */}
+            <button
+              type="button"
+              onClick={() => setSelectedCsShift('shift_2')}
+              className={`flex items-center justify-between rounded-xl px-4 py-3 text-left transition-all ${
+                selectedCsShift === 'shift_2'
+                  ? 'bg-white border-2 border-indigo-600 shadow-sm text-indigo-950 ring-2 ring-indigo-200/50'
+                  : 'bg-white/70 border border-indigo-100 text-slate-600 hover:bg-white'
+              }`}
+            >
+              <div>
+                <p className="text-xs font-bold">Shift 2 (Sore/Malam)</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">15:00 – 21:00 WIB</p>
+              </div>
+              <div className={`h-5 w-5 rounded-full flex items-center justify-center border ${
+                selectedCsShift === 'shift_2' ? 'border-indigo-600 bg-indigo-600 text-white' : 'border-slate-300'
+              }`}>
+                {selectedCsShift === 'shift_2' && <Check className="h-3 w-3 stroke-[3]" />}
+              </div>
+            </button>
+          </div>
+        </div>
+
+        {/* Today Summary CS */}
+        <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-2xl bg-slate-50/70 p-4 text-center mb-6">
+          <div className="px-2">
+            <span className="text-xs text-slate-500">Absen Masuk CS</span>
+            <p className="text-lg font-bold text-indigo-600 mt-1">
+              {todayAttendance.checkIn || '—'}
+            </p>
+          </div>
+          <div className="px-2">
+            <span className="text-xs text-slate-500">Absen Pulang CS</span>
+            <p className="text-lg font-bold text-indigo-600 mt-1">
+              {todayAttendance.checkOut || '—'}
+            </p>
+          </div>
+          <div className="px-2">
+            <span className="text-xs text-slate-500">Target Shift</span>
+            <p className="text-xs font-bold text-indigo-700 mt-2">
+              {selectedCsShift === 'shift_1' ? '08:00 - 15:00' : '15:00 - 21:00'}
+            </p>
+          </div>
+        </div>
+
+        {/* Status Hari Ini - Card 2 CS */}
+        {todayAttendance.isCheckedIn && isRegulerAttendanceToday ? (
+          <div className="mb-4 flex items-center gap-2 rounded-xl p-3 text-xs font-semibold bg-blue-50 text-blue-800 border border-blue-200">
+            <Info className="h-4 w-4 shrink-0 text-blue-600" />
+            <span>Presensi hari ini tercatat pada <strong>Mode Magang Reguler</strong>. Silakan gunakan kartu Reguler di atas.</span>
+          </div>
+        ) : todayAttendance.status && (isCsAttendanceToday || selectedAttendanceMode === 'cs') ? (
+          <div className={`mb-4 flex items-center gap-2 rounded-xl p-3 text-xs font-semibold ${
+            todayAttendance.status === 'Hadir' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+            todayAttendance.status === 'Terlambat' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+            'bg-amber-50 text-amber-700 border border-amber-200'
+          }`}>
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            Status CS hari ini: <strong>{todayAttendance.status}</strong> ({todayAttendance.notes || (selectedCsShift === 'shift_1' ? 'Shift 1: 08:00 - 15:00' : 'Shift 2: 15:00 - 21:00')})
+          </div>
+        ) : null}
+
+        {/* GPS Status Live */}
+        <div className={`mb-6 flex items-center justify-between gap-3 rounded-xl border p-3.5 ${gpsDisplay.bg} ${gpsDisplay.border}`}>
+          <div className="flex items-center gap-2.5">
+            {gpsDisplay.icon}
+            <div>
+              <p className={`text-xs font-semibold ${gpsDisplay.color}`}>{gpsDisplay.label}</p>
+              {gpsState.lastUpdated && (
+                <p className="text-[10px] text-slate-400 mt-0.5">Diperbarui: {gpsState.lastUpdated}</p>
+              )}
+            </div>
+          </div>
+          {(gpsState.status === 'permission_denied' || gpsState.status === 'unavailable' || gpsState.status === 'low_accuracy') && (
+            <button
+              onClick={retryGps}
+              className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              <RefreshCw className="h-3 w-3" /> Coba Lagi
+            </button>
+          )}
+        </div>
+
+        {/* Action Buttons CS */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          {/* Absen Masuk CS */}
+          <button
+            type="button"
+            onClick={() => handleCheckInClick('cs')}
+            disabled={selectedAttendanceMode !== 'cs' || todayAttendance.isCheckedIn || isProcessingCheckIn}
+            className={`flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold shadow-md transition-all ${
+              selectedAttendanceMode !== 'cs'
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
+                : todayAttendance.isCheckedIn
+                ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
+                : isProcessingCheckIn
+                ? 'bg-indigo-400 text-white shadow-none cursor-wait'
+                : 'bg-indigo-600 text-white shadow-indigo-500/25 hover:bg-indigo-700 active:scale-[0.98]'
+            }`}
+          >
+            {isProcessingCheckIn ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                <span>Menyimpan Absensi CS...</span>
+              </>
+            ) : todayAttendance.isCheckedIn ? (
+              <>
+                <LogIn className="h-4 w-4" />
+                <span>Sudah Absen Masuk ✓</span>
+              </>
+            ) : (
+              <>
+                <LogIn className="h-4 w-4" />
+                <span>Absen Masuk CS ({selectedCsShift === 'shift_1' ? 'Shift 1' : 'Shift 2'})</span>
+              </>
+            )}
+          </button>
+
+          {/* Absen Pulang CS */}
+          <button
+            type="button"
+            onClick={() => handleCheckOutClick('cs')}
+            disabled={selectedAttendanceMode !== 'cs' || !todayAttendance.isCheckedIn || todayAttendance.isCheckedOut}
+            className={`flex items-center justify-center gap-2 rounded-xl border py-3.5 text-sm font-semibold transition-all ${
+              selectedAttendanceMode !== 'cs'
+                ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                : todayAttendance.isCheckedOut
+                ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
+                : !todayAttendance.isCheckedIn
+                ? 'border-slate-200 bg-slate-50 text-slate-300 cursor-not-allowed'
+                : 'border-[#EB5757] bg-white text-[#EB5757] hover:bg-rose-50 shadow-sm active:scale-[0.98]'
+            }`}
+          >
+            <LogOut className="h-4 w-4" />
+            {todayAttendance.isCheckedOut ? 'Sudah Absen Pulang ✓' : 'Absen Pulang CS'}
+          </button>
+
+          {/* Input Izin */}
+          <button
+            type="button"
+            onClick={onNavigateToIzin}
+            className="flex items-center justify-center gap-2 rounded-xl border border-indigo-600 bg-white py-3.5 text-sm font-semibold text-indigo-600 transition-all hover:bg-indigo-50 active:scale-[0.98]"
+          >
+            <FileEdit className="h-4 w-4" />
+            Ajukan Izin
+          </button>
+        </div>
+
+        {/* Hint messages CS */}
+        {selectedAttendanceMode !== 'cs' && (
+          <p className="mt-3 text-center text-[11px] text-slate-400">
+            ℹ️ Klik tombol <strong>"Pilih Mode CS"</strong> di atas untuk mengaktifkan tombol absensi kartu ini.
+          </p>
+        )}
+        {selectedAttendanceMode === 'cs' && !isQrScannedToday && !todayAttendance.isCheckedIn && (
+          <p className="mt-3 text-center text-[11px] text-indigo-700">
+            ⚠️ Pindai QR Code dan pastikan berada dalam radius lokasi kantor sebelum absen masuk.
+          </p>
+        )}
+        {selectedAttendanceMode === 'cs' && todayAttendance.isCheckedIn && !todayAttendance.isCheckedOut && (
+          <p className="mt-3 text-center text-[11px] text-indigo-700">
+            ℹ️ Target jam pulang CS {selectedCsShift === 'shift_1' ? 'Shift 1 adalah 15:00 WIB' : 'Shift 2 adalah 21:00 WIB'}.
           </p>
         )}
       </div>
@@ -407,6 +772,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
               <tr className="border-b border-slate-100 text-slate-600 font-bold">
                 <th className="pb-3 pr-4">Tanggal</th>
                 <th className="pb-3 px-4">Hari</th>
+                <th className="pb-3 px-4">Tipe / Shift</th>
                 <th className="pb-3 px-4">Absen Masuk</th>
                 <th className="pb-3 px-4">Absen Pulang</th>
                 <th className="pb-3 px-4">Total Jam</th>
@@ -416,7 +782,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
             <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center">
+                  <td colSpan={7} className="py-10 text-center">
                     <MapPin className="mx-auto mb-2 h-8 w-8 text-slate-300" />
                     <p className="text-slate-400 text-sm">Belum ada data riwayat absensi</p>
                     <p className="text-slate-300 text-xs mt-1">Riwayat akan muncul setelah Anda melakukan absensi</p>
@@ -427,6 +793,19 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
                   <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-3.5 pr-4 text-slate-900 font-semibold">{item.date}</td>
                     <td className="py-3.5 px-4 text-slate-600">{item.dayName}</td>
+                    <td className="py-3.5 px-4">
+                      {item.notes?.includes('CS') ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2.5 py-0.5 text-[10px] font-semibold text-indigo-700">
+                          <Headphones className="h-3 w-3" />
+                          {item.notes}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                          <Briefcase className="h-3 w-3" />
+                          {item.notes || 'Reguler'}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3.5 px-4 text-slate-800">{item.checkInTime || '—'}</td>
                     <td className="py-3.5 px-4 text-slate-800">{item.checkOutTime || '—'}</td>
                     <td className="py-3.5 px-4 text-slate-800">{item.totalHours || '—'}</td>
@@ -484,6 +863,22 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
                   </div>
                 </div>
 
+                {/* Mobile Shift Tag */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-slate-400">Shift:</span>
+                  {item.notes?.includes('CS') ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-200 px-2 py-0.5 text-[10px] font-semibold text-indigo-700">
+                      <Headphones className="h-3 w-3" />
+                      {item.notes}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                      <Briefcase className="h-3 w-3" />
+                      {item.notes || 'Reguler'}
+                    </span>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-3 gap-2 bg-slate-50/80 rounded-lg p-2.5 text-center">
                   <div>
                     <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Masuk</span>
@@ -514,7 +909,11 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           if (!todayAttendance.isCheckedIn) {
             setIsProcessingCheckIn(true);
             try {
-              const res = await performCheckIn(scannedToken);
+              const res = await performCheckIn(
+                scannedToken,
+                selectedAttendanceMode || 'reguler',
+                selectedCsShift
+              );
               if (res.success) {
                 showToast('success', res.message);
                 try { confetti({ particleCount: 70, spread: 80, origin: { y: 0.55 } }); } catch { /* ignore */ }
