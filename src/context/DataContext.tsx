@@ -51,10 +51,15 @@ interface DataContextType {
     isCheckedIn: boolean;
     isCheckedOut: boolean;
     status: AttendanceStatus | null;
+    notes?: string | null;
   };
   attendanceStats: { hadir: number; terlambat: number; izin: number; alpha: number };
   isAttendanceLoading: boolean;
-  performCheckIn: (explicitToken?: string) => Promise<{ success: boolean; message: string }>;
+  performCheckIn: (
+    explicitToken?: string,
+    mode?: 'reguler' | 'cs',
+    csShift?: 'shift_1' | 'shift_2'
+  ) => Promise<{ success: boolean; message: string }>;
   performCheckOut: () => Promise<{ success: boolean; message: string }>;
   adminCorrectAttendance: (id: string, checkIn: string, checkOut: string, status: AttendanceStatus, reason: string) => Promise<void>;
   deleteAttendance: (id: string) => Promise<boolean>;
@@ -483,7 +488,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     totalHours: todayRecord?.totalHours || null,
     isCheckedIn: !!todayRecord?.checkInTime,
     isCheckedOut: !!todayRecord?.checkOutTime,
-    status: todayRecord?.status || null
+    status: todayRecord?.status || null,
+    notes: todayRecord?.notes || null
   };
 
   const attendanceStats = {
@@ -533,6 +539,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           // Set active QR config dari lokasi aktif
           if (activeLoc && qrMap[activeLoc.id]) {
             setQrConfig(prev => ({ ...prev, currentToken: qrMap[activeLoc.id] }));
+          } else if (activeLoc && (!qrData || qrData.length === 0)) {
+            generateQrForLocation(activeLoc.id, activeLoc.name);
           }
         }
       }
@@ -620,8 +628,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           token: newToken,
           expires_at: expiresAt,
           is_active: true,
-          created_by: currentUser?.id,
-          used_by: []
+          created_by: currentUser?.id || null
         })
         .select()
         .single();
@@ -831,7 +838,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const retryGps = useCallback(() => { stopGpsWatch(); startGpsWatch(); }, [stopGpsWatch, startGpsWatch]);
 
   // ---- CHECK IN / OUT ----
-  const performCheckIn = async (explicitToken?: string): Promise<{ success: boolean; message: string }> => {
+  const performCheckIn = async (
+    explicitToken?: string,
+    mode: 'reguler' | 'cs' = 'reguler',
+    csShift: 'shift_1' | 'shift_2' = 'shift_1'
+  ): Promise<{ success: boolean; message: string }> => {
     if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
     const officeName = gpsState.nearestLocationName || qrConfig.officeName || 'kantor';
     const radius = gpsState.targetRadiusMeters || qrConfig.radiusMeters || 50;
@@ -851,9 +862,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const now = new Date();
     const jakartaTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Jakarta' }));
     
-    // Hitung toleransi keterlambatan dinamis dari pengaturan admin
-    const [startH, startM] = (systemSettings.workStartTime || '08:00').split(':').map(Number);
-    const cutoffMinutes = (startH * 60 + (startM || 0)) + (systemSettings.lateToleranceMins || 0);
+    // Tentukan jam patokan masuk berdasarkan mode & shift
+    let targetStartHour = 8;
+    let targetStartMinute = 0;
+    let shiftNotes = 'Reguler (08:00 - 17:00)';
+
+    if (mode === 'cs') {
+      if (csShift === 'shift_2') {
+        targetStartHour = 15;
+        targetStartMinute = 0;
+        shiftNotes = 'CS - Shift 2 (15:00 - 21:00)';
+      } else {
+        targetStartHour = 8;
+        targetStartMinute = 0;
+        shiftNotes = 'CS - Shift 1 (08:00 - 15:00)';
+      }
+    } else {
+      const [startH, startM] = (systemSettings.workStartTime || '08:00').split(':').map(Number);
+      targetStartHour = startH;
+      targetStartMinute = startM || 0;
+      shiftNotes = 'Reguler (08:00 - 17:00)';
+    }
+
+    const cutoffMinutes = (targetStartHour * 60 + targetStartMinute) + (systemSettings.lateToleranceMins || 0);
     const currentMinutes = jakartaTime.getHours() * 60 + jakartaTime.getMinutes();
     const isLate = currentMinutes > cutoffMinutes;
     const status: AttendanceStatus = isLate ? 'Terlambat' : 'Hadir';
@@ -874,6 +905,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       date: todayStr,
       check_in_time: now.toISOString(),
       status,
+      notes: shiftNotes,
       check_in_lat: gpsState.latitude,
       check_in_lon: gpsState.longitude,
       check_in_accuracy: gpsState.accuracy,
@@ -889,9 +921,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { success: false, message: `Gagal menyimpan absensi: ${error.message}` };
     }
 
-    await addAuditLog('Absen Masuk', 'Absensi', `Absen masuk di ${officeName} pukul ${getTimeJakarta()} | Jarak: ${gpsState.distanceMeters}m`);
+    await addAuditLog('Absen Masuk', 'Absensi', `Absen masuk [${shiftNotes}] di ${officeName} pukul ${getTimeJakarta()} | Status: ${status} | Jarak: ${gpsState.distanceMeters}m`);
     await refreshAttendances();
-    return { success: true, message: `Absen Masuk Berhasil di ${officeName}! Status: ${status}. Waktu: ${getTimeJakarta()}.` };
+    return { success: true, message: `Absen Masuk [${shiftNotes}] Berhasil di ${officeName}! Status: ${status}. Waktu: ${getTimeJakarta()}.` };
   };
 
   const performCheckOut = async (): Promise<{ success: boolean; message: string }> => {

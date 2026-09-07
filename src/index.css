@@ -228,7 +228,14 @@ html.dark .bg-blue-50\/50,
 html.dark .bg-blue-50\/60,
 html.dark .bg-blue-50\/70,
 html.dark .bg-blue-50\/80,
-html.dark .bg-blue-50\/90 {
+html.dark .bg-blue-50\/90,
+html.dark .bg-\[\#EBF3FE\],
+html.dark .bg-indigo-50,
+html.dark .bg-indigo-50\/50,
+html.dark .bg-indigo-50\/60,
+html.dark .bg-indigo-50\/70,
+html.dark .bg-indigo-50\/80,
+html.dark .bg-indigo-100 {
   background-color: rgba(47, 128, 237, 0.15) !important;
 }
 
@@ -337,6 +344,12 @@ html.dark .text-blue-700,
 html.dark .text-blue-800,
 html.dark .text-blue-600,
 html.dark .text-blue-500,
+html.dark .text-indigo-950,
+html.dark .text-indigo-900,
+html.dark .text-indigo-800,
+html.dark .text-indigo-700,
+html.dark .text-indigo-600,
+html.dark .text-indigo-500,
 html.dark .text-\[\#2F80ED\],
 html.dark [class*="text-[#2F80ED]"] {
   color: #60A5FA !important; /* blue-400: biru muda terang */
@@ -402,7 +415,9 @@ html.dark .border-purple-200 {
 }
 
 html.dark .border-blue-200,
-html.dark .border-blue-100 {
+html.dark .border-blue-100,
+html.dark .border-indigo-200,
+html.dark .border-indigo-100 {
   border-color: rgba(96, 165, 250, 0.35) !important;
 }
 

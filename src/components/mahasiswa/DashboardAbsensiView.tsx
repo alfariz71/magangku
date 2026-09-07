@@ -16,7 +16,11 @@ import {
   RefreshCw,
   AlertTriangle,
   ShieldCheck,
-  Navigation
+  Navigation,
+  Headphones,
+  Briefcase,
+  Circle,
+  Check
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useAuth } from '../../context/AuthContext';
@@ -51,6 +55,25 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
   const [filterStatus, setFilterStatus] = useState<string>('Semua');
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  // Shift option: 'reguler' | 'cs_shift_1' | 'cs_shift_2'
+  type ShiftOption = 'reguler' | 'cs_shift_1' | 'cs_shift_2';
+  const [selectedShift, setSelectedShift] = useState<ShiftOption>('reguler');
+
+  // Auto-sync selected shift if today's attendance is already recorded
+  useEffect(() => {
+    if (todayAttendance.isCheckedIn && todayAttendance.notes) {
+      if (todayAttendance.notes.includes('CS')) {
+        if (todayAttendance.notes.includes('Shift 2')) {
+          setSelectedShift('cs_shift_2');
+        } else {
+          setSelectedShift('cs_shift_1');
+        }
+      } else {
+        setSelectedShift('reguler');
+      }
+    }
+  }, [todayAttendance.isCheckedIn, todayAttendance.notes]);
+
   // Start GPS watch when dashboard mounts, stop when unmounts
   useEffect(() => {
     startGpsWatch();
@@ -77,7 +100,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
     setFeedbackToast({ type, message });
   };
 
-  // Check-In (Buka Scanner QR langsung)
+  // Check-In (Buka Scanner QR)
   const handleCheckInClick = () => {
     if (todayAttendance.isCheckedIn) return;
     setIsScannerOpen(true);
@@ -159,16 +182,16 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2">
+      <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-2xl font-bold text-[#183B66]">
+          <h2 className="text-lg sm:text-2xl font-bold text-[#183B66]">
             Selamat datang, {currentUser?.name?.split(' ')[0] || 'Peserta'} 👋
           </h2>
-          <p className="mt-1 text-sm text-slate-500">{todayStr}</p>
+          <p className="text-xs sm:text-sm text-slate-500">{todayStr}</p>
         </div>
-        <div className="text-right">
-          <p className="text-2xl font-bold text-[#2F80ED] tabular-nums">{timeStr} WIB</p>
-          <p className="text-xs text-slate-400 mt-0.5">Waktu Jakarta</p>
+        <div className="text-right shrink-0">
+          <p className="text-lg sm:text-2xl font-bold text-[#2F80ED] tabular-nums leading-tight">{timeStr}</p>
+          <p className="text-[10px] sm:text-xs text-slate-400">WIB (Jakarta)</p>
         </div>
       </div>
 
@@ -193,87 +216,166 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
         </div>
       )}
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EBF3FE] text-[#2F80ED]">
-            <Calendar className="h-5 w-5" />
+      {/* Stat Cards - 1 Baris Kompak di Layar HP */}
+      <div className="grid grid-cols-4 gap-2 sm:gap-4">
+        <div className="flex flex-col sm:flex-row items-center sm:gap-3 rounded-xl sm:rounded-2xl border border-slate-100 bg-white p-2.5 sm:p-4 shadow-xs sm:shadow-sm text-center sm:text-left">
+          <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-[#EBF3FE] text-[#2F80ED] mb-1 sm:mb-0">
+            <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Hadir</p>
-            <p className="text-xl font-bold text-[#2F80ED] leading-none mt-0.5">{attendanceStats.hadir}</p>
+            <p className="text-[10px] sm:text-xs font-medium text-slate-500">Hadir</p>
+            <p className="text-base sm:text-xl font-bold text-[#2F80ED] leading-none mt-0.5">{attendanceStats.hadir}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FEF0EE] text-[#EB5757]">
-            <Clock className="h-5 w-5" />
+        <div className="flex flex-col sm:flex-row items-center sm:gap-3 rounded-xl sm:rounded-2xl border border-slate-100 bg-white p-2.5 sm:p-4 shadow-xs sm:shadow-sm text-center sm:text-left">
+          <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-[#FEF0EE] text-[#EB5757] mb-1 sm:mb-0">
+            <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Terlambat</p>
-            <p className="text-xl font-bold text-[#EB5757] leading-none mt-0.5">{attendanceStats.terlambat}</p>
+            <p className="text-[10px] sm:text-xs font-medium text-slate-500">Telat</p>
+            <p className="text-base sm:text-xl font-bold text-[#EB5757] leading-none mt-0.5">{attendanceStats.terlambat}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#FEF8E8] text-[#F2994A]">
-            <Info className="h-5 w-5" />
+        <div className="flex flex-col sm:flex-row items-center sm:gap-3 rounded-xl sm:rounded-2xl border border-slate-100 bg-white p-2.5 sm:p-4 shadow-xs sm:shadow-sm text-center sm:text-left">
+          <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-[#FEF8E8] text-[#F2994A] mb-1 sm:mb-0">
+            <Info className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Izin/Sakit</p>
-            <p className="text-xl font-bold text-[#F2994A] leading-none mt-0.5">{attendanceStats.izin}</p>
+            <p className="text-[10px] sm:text-xs font-medium text-slate-500">Izin</p>
+            <p className="text-base sm:text-xl font-bold text-[#F2994A] leading-none mt-0.5">{attendanceStats.izin}</p>
           </div>
         </div>
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500">
-            <XCircle className="h-5 w-5" />
+        <div className="flex flex-col sm:flex-row items-center sm:gap-3 rounded-xl sm:rounded-2xl border border-slate-100 bg-white p-2.5 sm:p-4 shadow-xs sm:shadow-sm text-center sm:text-left">
+          <div className="flex h-8 w-8 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-500 mb-1 sm:mb-0">
+            <XCircle className="h-4 w-4 sm:h-5 sm:w-5" />
           </div>
           <div>
-            <p className="text-xs font-medium text-slate-500">Alpha</p>
-            <p className="text-xl font-bold text-slate-600 leading-none mt-0.5">{attendanceStats.alpha}</p>
+            <p className="text-[10px] sm:text-xs font-medium text-slate-500">Alpha</p>
+            <p className="text-base sm:text-xl font-bold text-slate-600 leading-none mt-0.5">{attendanceStats.alpha}</p>
           </div>
         </div>
       </div>
 
-      {/* Main Attendance Card */}
-      <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-        <h3 className="text-base font-bold text-[#183B66] mb-5">Absensi Hari Ini</h3>
+      {/* ============================================================ */}
+      {/* KARTU PRESENSI MINIMALIS (REGULER, CS SHIFT 1, CS SHIFT 2) */}
+      {/* ============================================================ */}
+      <div className="rounded-2xl border border-slate-100 bg-white p-4 sm:p-6 shadow-sm transition-all">
+        {/* Header & Segmented Shift Switcher */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3.5 border-b border-slate-100">
+          <div className="flex items-center justify-between sm:justify-start gap-2">
+            <h3 className="text-base font-bold text-[#183B66]">Presensi Kehadiran</h3>
+            {todayAttendance.isCheckedIn && (
+              <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200/60 px-2 py-0.5 rounded-md">
+                🔒 Shift Terkunci
+              </span>
+            )}
+          </div>
 
-        {/* Today Summary */}
-        <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-2xl bg-slate-50/70 p-4 text-center mb-6">
-          <div className="px-2">
-            <span className="text-xs text-slate-500">Absen Masuk</span>
-            <p className="text-lg font-bold text-[#2F80ED] mt-1">
+          {/* Segmented Control / Pill Switcher */}
+          <div className="grid grid-cols-3 w-full sm:w-auto p-1 rounded-xl bg-slate-200/70 dark:bg-slate-900 border border-slate-300/60 dark:border-slate-800">
+            {/* Opsi 1: Reguler */}
+            <button
+              type="button"
+              disabled={todayAttendance.isCheckedIn}
+              onClick={() => setSelectedShift('reguler')}
+              className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                selectedShift === 'reguler'
+                  ? 'bg-[#2F80ED] text-white shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300/40 dark:hover:bg-slate-800/60'
+              } ${todayAttendance.isCheckedIn ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
+            >
+              <Briefcase className="h-3.5 w-3.5 shrink-0" />
+              <span>Reguler</span>
+            </button>
+
+            {/* Opsi 2: CS Shift 1 */}
+            <button
+              type="button"
+              disabled={todayAttendance.isCheckedIn}
+              onClick={() => setSelectedShift('cs_shift_1')}
+              className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                selectedShift === 'cs_shift_1'
+                  ? 'bg-[#2F80ED] text-white shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300/40 dark:hover:bg-slate-800/60'
+              } ${todayAttendance.isCheckedIn ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
+            >
+              <Headphones className="h-3.5 w-3.5 shrink-0" />
+              <span>CS 1</span>
+            </button>
+
+            {/* Opsi 3: CS Shift 2 */}
+            <button
+              type="button"
+              disabled={todayAttendance.isCheckedIn}
+              onClick={() => setSelectedShift('cs_shift_2')}
+              className={`flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                selectedShift === 'cs_shift_2'
+                  ? 'bg-[#2F80ED] text-white shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-300/40 dark:hover:bg-slate-800/60'
+              } ${todayAttendance.isCheckedIn ? 'cursor-not-allowed opacity-80' : 'cursor-pointer'}`}
+            >
+              <Headphones className="h-3.5 w-3.5 shrink-0" />
+              <span>CS 2</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Sub-label Jadwal Aktif */}
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs mb-4 px-3 py-2 rounded-xl bg-blue-50/60 dark:bg-blue-500/10 border border-blue-100/80 dark:border-blue-500/20">
+          <div className="flex items-center gap-2">
+            <Clock className="h-3.5 w-3.5 text-[#2F80ED] dark:text-blue-400 shrink-0" />
+            <span className="text-slate-700 dark:text-slate-200">
+              Shift Aktif: <strong className="text-[#2F80ED] dark:text-blue-400 font-bold">
+                {selectedShift === 'reguler' && 'Magang Reguler (08:00 – 17:00 WIB)'}
+                {selectedShift === 'cs_shift_1' && 'CS – Shift 1 (08:00 – 15:00 WIB)'}
+                {selectedShift === 'cs_shift_2' && 'CS – Shift 2 (15:00 – 21:00 WIB)'}
+              </strong>
+            </span>
+          </div>
+          <span className="text-[11px] font-semibold text-[#2F80ED] dark:text-blue-400 bg-white/80 dark:bg-slate-800/80 px-2 py-0.5 rounded-md border border-blue-200/50 dark:border-blue-500/30">
+            {selectedShift === 'cs_shift_2' ? 'Batas Masuk: 15:00 WIB' : 'Batas Masuk: 08:00 WIB'}
+          </span>
+        </div>
+
+        {/* Ringkasan Hari Ini (Absen Masuk, Absen Pulang, Total Jam) */}
+        <div className="grid grid-cols-3 divide-x divide-slate-100 rounded-xl bg-slate-50/70 p-3 sm:p-3.5 text-center mb-4">
+          <div className="px-1 sm:px-2">
+            <span className="text-[11px] text-slate-500">Absen Masuk</span>
+            <p className="text-base sm:text-lg font-bold text-[#2F80ED] mt-0.5">
               {todayAttendance.checkIn || '—'}
             </p>
           </div>
-          <div className="px-2">
-            <span className="text-xs text-slate-500">Absen Pulang</span>
-            <p className="text-lg font-bold text-[#2F80ED] mt-1">
+          <div className="px-1 sm:px-2">
+            <span className="text-[11px] text-slate-500">Absen Pulang</span>
+            <p className="text-base sm:text-lg font-bold text-[#2F80ED] mt-0.5">
               {todayAttendance.checkOut || '—'}
             </p>
           </div>
-          <div className="px-2">
-            <span className="text-xs text-slate-500">Total Jam Kerja</span>
-            <p className="text-lg font-bold text-[#2F80ED] mt-1">
+          <div className="px-1 sm:px-2">
+            <span className="text-[11px] text-slate-500">Total Jam</span>
+            <p className="text-base sm:text-lg font-bold text-[#2F80ED] mt-0.5">
               {todayAttendance.totalHours || '—'}
             </p>
           </div>
         </div>
 
-        {/* Status Hari Ini */}
+        {/* Status Hari Ini Banner (Hanya muncul jika sudah ada status) */}
         {todayAttendance.status && (
-          <div className={`mb-4 flex items-center gap-2 rounded-xl p-3 text-xs font-semibold ${
+          <div className={`mb-4 flex items-center gap-2 rounded-xl p-2.5 text-xs font-semibold ${
             todayAttendance.status === 'Hadir' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
             todayAttendance.status === 'Terlambat' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
             'bg-amber-50 text-amber-700 border border-amber-200'
           }`}>
             <CheckCircle2 className="h-4 w-4 shrink-0" />
-            Status hari ini: <strong>{todayAttendance.status}</strong>
+            <span>
+              Status Hari Ini: <strong>{todayAttendance.status}</strong> {todayAttendance.notes ? `(${todayAttendance.notes})` : ''}
+            </span>
           </div>
         )}
 
-        {/* GPS Status Live */}
-        <div className={`mb-6 flex items-center justify-between gap-3 rounded-xl border p-3.5 ${gpsDisplay.bg} ${gpsDisplay.border}`}>
-          <div className="flex items-center gap-2.5">
+        {/* GPS Status Live (Kompak & Elegan) */}
+        <div className={`mb-4 flex items-center justify-between gap-3 rounded-xl border p-2.5 sm:p-3 ${gpsDisplay.bg} ${gpsDisplay.border}`}>
+          <div className="flex items-center gap-2">
             {gpsDisplay.icon}
             <div>
               <p className={`text-xs font-semibold ${gpsDisplay.color}`}>{gpsDisplay.label}</p>
@@ -285,21 +387,21 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           {(gpsState.status === 'permission_denied' || gpsState.status === 'unavailable' || gpsState.status === 'low_accuracy') && (
             <button
               onClick={retryGps}
-              className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
+              className="flex shrink-0 items-center gap-1 rounded-lg border border-slate-300 bg-white px-2 py-1 text-[10px] font-semibold text-slate-600 hover:bg-slate-50"
             >
               <RefreshCw className="h-3 w-3" /> Coba Lagi
             </button>
           )}
         </div>
 
-        {/* Action Buttons */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {/* Action Buttons (3 Kolom Responsif) */}
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
           {/* Absen Masuk */}
           <button
             type="button"
             onClick={handleCheckInClick}
             disabled={todayAttendance.isCheckedIn || isProcessingCheckIn}
-            className={`flex items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold shadow-md transition-all ${
+            className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold shadow-md transition-all ${
               todayAttendance.isCheckedIn
                 ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
                 : isProcessingCheckIn
@@ -310,12 +412,12 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
             {isProcessingCheckIn ? (
               <>
                 <RefreshCw className="h-4 w-4 animate-spin" />
-                <span>Menyimpan Absensi...</span>
+                <span>Menyimpan...</span>
               </>
             ) : todayAttendance.isCheckedIn ? (
               <>
                 <LogIn className="h-4 w-4" />
-                <span>Sudah Absen Masuk ✓</span>
+                <span>Sudah Masuk ✓</span>
               </>
             ) : (
               <>
@@ -330,7 +432,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
             type="button"
             onClick={handleCheckOutClick}
             disabled={!todayAttendance.isCheckedIn || todayAttendance.isCheckedOut}
-            className={`flex items-center justify-center gap-2 rounded-xl border py-3.5 text-sm font-semibold transition-all ${
+            className={`flex items-center justify-center gap-2 rounded-xl border py-3 text-sm font-semibold transition-all ${
               todayAttendance.isCheckedOut
                 ? 'border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed'
                 : !todayAttendance.isCheckedIn
@@ -339,34 +441,24 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
             }`}
           >
             <LogOut className="h-4 w-4" />
-            {todayAttendance.isCheckedOut ? 'Sudah Absen Pulang ✓' : 'Absen Pulang'}
+            {todayAttendance.isCheckedOut ? 'Sudah Pulang ✓' : 'Absen Pulang'}
           </button>
 
           {/* Input Izin */}
           <button
             type="button"
             onClick={onNavigateToIzin}
-            className="flex items-center justify-center gap-2 rounded-xl border border-[#2F80ED] bg-white py-3.5 text-sm font-semibold text-[#2F80ED] transition-all hover:bg-blue-50 active:scale-[0.98]"
+            className="flex items-center justify-center gap-2 rounded-xl border border-[#2F80ED] bg-white py-3 text-sm font-semibold text-[#2F80ED] transition-all hover:bg-blue-50 active:scale-[0.98]"
           >
             <FileEdit className="h-4 w-4" />
             Ajukan Izin
           </button>
         </div>
 
-        {/* Hint messages */}
+        {/* Hint pesan mini 1 baris */}
         {!isQrScannedToday && !todayAttendance.isCheckedIn && (
-          <p className="mt-3 text-center text-[11px] text-amber-600">
-            ⚠️ Pindai QR Code dan pastikan berada dalam radius lokasi sebelum absen masuk.
-          </p>
-        )}
-        {gpsState.status === 'permission_denied' && (
-          <p className="mt-3 text-center text-[11px] text-rose-600">
-            ❌ Izin lokasi diperlukan. Klik ikon 🔒 di address bar browser → Lokasi → Izinkan.
-          </p>
-        )}
-        {todayAttendance.isCheckedIn && !todayAttendance.isCheckedOut && (
-          <p className="mt-3 text-center text-[11px] text-blue-600">
-            ℹ️ Jadwal pulang: 17:00 WIB. Jangan lupa absen pulang sebelum meninggalkan lokasi.
+          <p className="mt-2 text-center text-[11px] text-amber-600">
+            ⚠️ Pindai QR Code di kantor untuk absen masuk.
           </p>
         )}
       </div>
@@ -407,6 +499,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
               <tr className="border-b border-slate-100 text-slate-600 font-bold">
                 <th className="pb-3 pr-4">Tanggal</th>
                 <th className="pb-3 px-4">Hari</th>
+                <th className="pb-3 px-4">Tipe / Shift</th>
                 <th className="pb-3 px-4">Absen Masuk</th>
                 <th className="pb-3 px-4">Absen Pulang</th>
                 <th className="pb-3 px-4">Total Jam</th>
@@ -416,7 +509,7 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
             <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
               {filteredRecords.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-10 text-center">
+                  <td colSpan={7} className="py-10 text-center">
                     <MapPin className="mx-auto mb-2 h-8 w-8 text-slate-300" />
                     <p className="text-slate-400 text-sm">Belum ada data riwayat absensi</p>
                     <p className="text-slate-300 text-xs mt-1">Riwayat akan muncul setelah Anda melakukan absensi</p>
@@ -427,6 +520,19 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
                   <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                     <td className="py-3.5 pr-4 text-slate-900 font-semibold">{item.date}</td>
                     <td className="py-3.5 px-4 text-slate-600">{item.dayName}</td>
+                    <td className="py-3.5 px-4">
+                      {item.notes?.includes('CS') ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                          <Headphones className="h-3 w-3" />
+                          {item.notes}
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2.5 py-0.5 text-[10px] font-semibold text-blue-700">
+                          <Briefcase className="h-3 w-3" />
+                          {item.notes || 'Reguler'}
+                        </span>
+                      )}
+                    </td>
                     <td className="py-3.5 px-4 text-slate-800">{item.checkInTime || '—'}</td>
                     <td className="py-3.5 px-4 text-slate-800">{item.checkOutTime || '—'}</td>
                     <td className="py-3.5 px-4 text-slate-800">{item.totalHours || '—'}</td>
@@ -484,6 +590,22 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
                   </div>
                 </div>
 
+                {/* Mobile Shift Tag */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] text-slate-400">Shift:</span>
+                  {item.notes?.includes('CS') ? (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                      <Headphones className="h-3 w-3" />
+                      {item.notes}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+                      <Briefcase className="h-3 w-3" />
+                      {item.notes || 'Reguler'}
+                    </span>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-3 gap-2 bg-slate-50/80 rounded-lg p-2.5 text-center">
                   <div>
                     <span className="block text-[10px] text-slate-400 font-medium mb-0.5">Masuk</span>
@@ -514,7 +636,13 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           if (!todayAttendance.isCheckedIn) {
             setIsProcessingCheckIn(true);
             try {
-              const res = await performCheckIn(scannedToken);
+              const mode = selectedShift === 'reguler' ? 'reguler' : 'cs';
+              const csShift = selectedShift === 'cs_shift_2' ? 'shift_2' : 'shift_1';
+              const res = await performCheckIn(
+                scannedToken,
+                mode,
+                csShift
+              );
               if (res.success) {
                 showToast('success', res.message);
                 try { confetti({ particleCount: 70, spread: 80, origin: { y: 0.55 } }); } catch { /* ignore */ }
