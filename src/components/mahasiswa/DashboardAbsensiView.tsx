@@ -45,7 +45,8 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
     stopGpsWatch,
     retryGps,
     isQrScannedToday,
-    qrConfig
+    qrConfig,
+    systemSettings
   } = useData();
 
   const [isScannerOpen, setIsScannerOpen] = useState(false);
@@ -335,15 +336,19 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
             <span className="text-slate-700 dark:text-slate-200">
               Jadwal Kerja: <strong className="text-[#2F80ED] dark:text-blue-400 font-bold">
                 {!isCsStudent
-                  ? 'Magang Reguler (08:00 – 17:00 WIB)'
+                  ? `Magang Reguler (${systemSettings?.workStartTime || '08:00'} – ${systemSettings?.workEndTime || '17:00'} WIB)`
                   : selectedShift === 'cs_shift_1'
-                  ? 'CS – Shift 1 (08:00 – 15:00 WIB)'
-                  : 'CS – Shift 2 (15:00 – 21:00 WIB)'}
+                  ? `CS – Shift 1 (${systemSettings?.csShift1StartTime || '08:00'} – ${systemSettings?.csShift1EndTime || '15:00'} WIB)`
+                  : `CS – Shift 2 (${systemSettings?.csShift2StartTime || '15:00'} – ${systemSettings?.csShift2EndTime || '21:00'} WIB)`}
               </strong>
             </span>
           </div>
           <span className="text-[11px] font-semibold text-[#2F80ED] dark:text-blue-400 bg-white/80 dark:bg-slate-800/80 px-2 py-0.5 rounded-md border border-blue-200/50 dark:border-blue-500/30">
-            {isCsStudent && selectedShift === 'cs_shift_2' ? 'Batas Masuk: 15:00 WIB' : 'Batas Masuk: 08:00 WIB'}
+            {isCsStudent && selectedShift === 'cs_shift_2'
+              ? `Batas Masuk: ${systemSettings?.csShift2StartTime || '15:00'} WIB`
+              : isCsStudent
+              ? `Batas Masuk: ${systemSettings?.csShift1StartTime || '08:00'} WIB`
+              : `Batas Masuk: ${systemSettings?.workStartTime || '08:00'} WIB`}
           </span>
         </div>
 

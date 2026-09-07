@@ -384,82 +384,82 @@ export const DataPesertaAdminView: React.FC = () => {
       {editingStudent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs" onClick={() => setEditingStudent(null)} />
-          <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl border border-slate-100 animate-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-bold text-[#183B66]">Edit Data Peserta Magang</h3>
-              <button onClick={() => setEditingStudent(null)} className="rounded-lg p-1 text-slate-400 hover:text-slate-600">
+          <div className="relative z-10 w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 p-6 shadow-2xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-[#183B66] dark:text-white">Edit Data Peserta Magang</h3>
+              <button onClick={() => setEditingStudent(null)} className="rounded-lg p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             <form onSubmit={handleUpdateStudent} className="mt-4 space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">Nama Lengkap</label>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Nama Lengkap</label>
                 <input
                   type="text"
                   value={editingStudent.name}
                   onChange={e => setEditingStudent({ ...editingStudent, name: e.target.value })}
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">NIM</label>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">NIM</label>
                   <input
                     type="text"
                     value={editingStudent.nim || ''}
                     onChange={e => setEditingStudent({ ...editingStudent, nim: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Telepon</label>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Telepon</label>
                   <input
                     type="text"
                     value={editingStudent.phone || ''}
                     onChange={e => setEditingStudent({ ...editingStudent, phone: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Universitas</label>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Universitas</label>
                   <input
                     type="text"
                     value={editingStudent.university || ''}
                     onChange={e => setEditingStudent({ ...editingStudent, university: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">Jurusan</label>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200 mb-1">Jurusan</label>
                   <input
                     type="text"
                     value={editingStudent.major || ''}
                     onChange={e => setEditingStudent({ ...editingStudent, major: e.target.value })}
-                    className="w-full rounded-xl border border-slate-200 p-2.5 text-xs"
+                    className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                   />
                 </div>
               </div>
 
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="block text-xs font-semibold text-slate-700">Konsentrasi / Divisi Magang</label>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-200">Konsentrasi / Divisi Magang</label>
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => setEditingStudent({ ...editingStudent, concentration: 'Customer Service' })}
-                      className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200 hover:bg-indigo-100 transition cursor-pointer"
+                      className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/80 hover:bg-indigo-100 dark:hover:bg-indigo-900/60 transition cursor-pointer"
                     >
                       + Customer Service (6 Hari)
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditingStudent({ ...editingStudent, concentration: 'Reguler' })}
-                      className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition cursor-pointer"
+                      className="text-[10px] px-2 py-0.5 rounded-md font-semibold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80 hover:bg-blue-100 dark:hover:bg-blue-900/60 transition cursor-pointer"
                     >
                       + Reguler (5 Hari)
                     </button>
@@ -470,24 +470,24 @@ export const DataPesertaAdminView: React.FC = () => {
                   value={editingStudent.concentration || ''}
                   onChange={e => setEditingStudent({ ...editingStudent, concentration: e.target.value })}
                   placeholder="Contoh: Customer Service, Frontend Engineering, Reguler"
-                  className="w-full rounded-xl border border-slate-200 p-2.5 text-xs text-slate-800 focus:border-[#2F80ED] focus:outline-none"
+                  className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0F172A] p-2.5 text-xs text-slate-800 dark:text-slate-100 focus:border-[#2F80ED] focus:outline-none transition-colors"
                 />
-                <p className="text-[10px] text-slate-400 mt-1">
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1">
                   * Isi &quot;Customer Service&quot; atau &quot;CS&quot; untuk mengaktifkan skema kerja CS 6 hari &amp; opsi Shift 1/2 di HP mahasiswa.
                 </p>
               </div>
 
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
                 <button
                   type="button"
                   onClick={() => setEditingStudent(null)}
-                  className="rounded-xl border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-700"
+                  className="rounded-xl border border-slate-300 dark:border-slate-700 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-[#2F80ED] px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-blue-600"
+                  className="rounded-xl bg-[#2F80ED] px-5 py-2 text-xs font-semibold text-white shadow-md hover:bg-blue-600 transition cursor-pointer"
                 >
                   Simpan Perubahan
                 </button>

@@ -6,14 +6,46 @@ import { uploadToCloudinary, isVideoUrl } from '../../lib/cloudinary';
 import { ActivityRecord } from '../../types';
 
 export const AktivitasMagangView: React.FC = () => {
-  const { activities, addActivity, updateActivity, deleteActivity } = useData();
+  const { activities, addActivity, updateActivity, deleteActivity, todayAttendance, systemSettings } = useData();
   const { currentUser } = useAuth();
+
+  const isCsStudent = Boolean(
+    currentUser?.concentration &&
+    (currentUser.concentration.toLowerCase().includes('cs') ||
+     currentUser.concentration.toLowerCase().includes('customer service'))
+  );
+
+  const getDefaultShiftTime = () => {
+    if (todayAttendance?.notes) {
+      if (todayAttendance.notes.includes('Shift 2')) {
+        return `${systemSettings?.csShift2StartTime || '15:00'} - ${systemSettings?.csShift2EndTime || '21:00'} WIB`;
+      }
+      if (todayAttendance.notes.includes('Shift 1')) {
+        return `${systemSettings?.csShift1StartTime || '08:00'} - ${systemSettings?.csShift1EndTime || '15:00'} WIB`;
+      }
+      if (todayAttendance.notes.includes('Reguler')) {
+        return `${systemSettings?.workStartTime || '08:00'} - ${systemSettings?.workEndTime || '17:00'} WIB`;
+      }
+    }
+    if (isCsStudent) {
+      try {
+        const jktH = parseInt(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jakarta', hour: 'numeric', hour12: false }), 10);
+        if (jktH >= 13) {
+          return `${systemSettings?.csShift2StartTime || '15:00'} - ${systemSettings?.csShift2EndTime || '21:00'} WIB`;
+        }
+        return `${systemSettings?.csShift1StartTime || '08:00'} - ${systemSettings?.csShift1EndTime || '15:00'} WIB`;
+      } catch {
+        return `${systemSettings?.csShift1StartTime || '08:00'} - ${systemSettings?.csShift1EndTime || '15:00'} WIB`;
+      }
+    }
+    return `${systemSettings?.workStartTime || '08:00'} - ${systemSettings?.workEndTime || '17:00'} WIB`;
+  };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [date, setDate] = useState(new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }));
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [time, setTime] = useState('08:00 - 17:00 WIB');
+  const [time, setTime] = useState(getDefaultShiftTime);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState(false);
 
@@ -284,7 +316,7 @@ export const AktivitasMagangView: React.FC = () => {
         description: docDesc,
         activityDate: docDate || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }),
         attachmentUrl: mediaUrl,
-        time: '08:00 - 17:00 WIB',
+        time: getDefaultShiftTime(),
         createdAt: new Date().toISOString()
       });
       setShowDocModal(false);
@@ -313,7 +345,10 @@ export const AktivitasMagangView: React.FC = () => {
 
         <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 sm:gap-3">
           <button
-            onClick={() => setIsModalOpen(true)}
+            onClick={() => {
+              setTime(getDefaultShiftTime());
+              setIsModalOpen(true);
+            }}
             className="flex-1 sm:flex-none flex items-center justify-center gap-2 rounded-xl bg-[#2F80ED] px-4 py-2.5 text-xs font-semibold text-white hover:bg-blue-600 transition shadow-md shadow-blue-500/20"
           >
             <Plus className="h-4 w-4" />
