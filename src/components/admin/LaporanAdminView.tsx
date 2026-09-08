@@ -295,46 +295,74 @@ export const LaporanAdminView: React.FC = () => {
       const toKey = (dt: Date) => `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
 
       const mondayKey = toKey(monday);
-      const fMon = monday.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-      const fSat = saturday.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+      const fSatMonthYear = saturday.toLocaleDateString('id-ID', { month: 'short', year: 'numeric' });
 
       const daysKeys: { [dayIdx: number]: string } = {};
+      const dayDates: { [dayIdx: number]: string } = {};
       let weekHolidayCount = 0;
       for (let i = 0; i < 6; i++) {
         const dt = new Date(monday);
         dt.setDate(monday.getDate() + i);
         const k = toKey(dt);
         daysKeys[i] = k;
+        dayDates[i] = pad(dt.getDate());
         if (isIndonesianHoliday(k)) weekHolidayCount++;
       }
 
-      const weekLabel = weekHolidayCount > 0
-        ? `Minggu (${fMon} – ${fSat} — ${weekHolidayCount} Libur Nasional)`
-        : `Minggu (${fMon} – ${fSat})`;
+      // Cek apakah ini minggu yang sedang berjalan (Minggu Ini)
+      const nowD = new Date(todayJakarta + 'T00:00:00');
+      const nowDayOfWeek = nowD.getDay();
+      const nowDiffToMonday = nowDayOfWeek === 0 ? -6 : 1 - nowDayOfWeek;
+      const nowMonday = new Date(nowD);
+      nowMonday.setDate(nowD.getDate() + nowDiffToMonday);
+      const currentMondayKey = toKey(nowMonday);
+      const isCurrentWeek = mondayKey === currentMondayKey;
+
+      const weekTitle = '(Periode';
+      const datesFormatted = `${dayDates[0]} | ${dayDates[1]} | ${dayDates[2]} | ${dayDates[3]} | ${dayDates[4]} | ${dayDates[5]} ${fSatMonthYear}`;
+      const holidayNote = weekHolidayCount > 0 ? ` — ${weekHolidayCount} Libur Nasional` : '';
+
+      const weekLabel = `(Periode ${datesFormatted}${holidayNote})`;
 
       return {
         weekKey: mondayKey,
         label: weekLabel,
-        daysKeys
+        weekTitle,
+        isCurrentWeek,
+        monthYearLabel: fSatMonthYear,
+        dayDates,
+        daysKeys,
+        weekHolidayCount
       };
     };
 
     const weekMap = new Map<string, {
       weekKey: string;
       label: string;
+      weekTitle: string;
+      isCurrentWeek: boolean;
+      monthYearLabel: string;
+      dayDates: { [dayIdx: number]: string };
       daysKeys: { [dayIdx: number]: string };
+      weekHolidayCount: number;
       records: typeof filteredAttendances;
     }>();
 
     filteredAttendances.forEach(a => {
       if (!a.date) return;
-      const { weekKey, label, daysKeys } = getWeekRange(a.date);
+      const weekInfo = getWeekRange(a.date);
+      const { weekKey } = weekInfo;
 
       if (!weekMap.has(weekKey)) {
         weekMap.set(weekKey, {
           weekKey,
-          label,
-          daysKeys,
+          label: weekInfo.label,
+          weekTitle: weekInfo.weekTitle,
+          isCurrentWeek: weekInfo.isCurrentWeek,
+          monthYearLabel: weekInfo.monthYearLabel,
+          dayDates: weekInfo.dayDates,
+          daysKeys: weekInfo.daysKeys,
+          weekHolidayCount: weekInfo.weekHolidayCount,
           records: []
         });
       }
@@ -398,24 +426,26 @@ export const LaporanAdminView: React.FC = () => {
             };
           }
 
-          // 2. Jika bukan hari libur dan tanggal hari kerja sudah berlalu / hari ini:
-          if (dateKey <= todayJakarta) {
-            // Cek apakah ada pengajuan izin/sakit yang disetujui
-            const leave = leaveRequests.find(l => 
-              l.userId === s.userId && 
-              l.status === 'Disetujui' &&
-              l.startDate <= dateKey && dateKey <= l.endDate
-            );
-            if (leave) {
-              if (leave.leaveType?.toLowerCase().includes('sakit')) {
-                return { code: 'S', color: 'text-orange-700 font-bold', full: 'Sakit' };
-              }
-              return { code: 'I', color: 'text-amber-700 font-bold', full: 'Izin' };
+          // 2. Cek apakah ada pengajuan izin/sakit yang disetujui
+          const leave = leaveRequests.find(l => 
+            l.userId === s.userId && 
+            l.status === 'Disetujui' &&
+            l.startDate <= dateKey && dateKey <= l.endDate
+          );
+          if (leave) {
+            if (leave.leaveType?.toLowerCase().includes('sakit')) {
+              return { code: 'S', color: 'text-orange-700 font-bold', full: 'Sakit' };
             }
+            return { code: 'I', color: 'text-amber-700 font-bold', full: 'Izin' };
+          }
+
+          // 3. Jika hari kerja sudah BERLALU (sebelum hari ini) dan tidak hadir -> ALPHA (A)
+          if (dateKey < todayJakarta) {
             return { code: 'A', color: 'text-red-700 font-bold', full: 'Alpha' };
           }
 
-          return { code: '-', color: 'text-slate-400 font-normal', full: 'Belum berlangsung' };
+          // 4. Jika HARI INI (todayJakarta) belum absen, atau hari MASA DEPAN -> STRIP (-)
+          return { code: '-', color: 'text-slate-400 font-normal', full: dateKey === todayJakarta ? 'Belum Absen' : 'Belum berlangsung' };
         };
 
         const sen = getStatusCode(week.daysKeys[0], s.dayRecords[week.daysKeys[0]]);
@@ -459,6 +489,12 @@ export const LaporanAdminView: React.FC = () => {
       return {
         weekKey: week.weekKey,
         label: week.label,
+        weekTitle: week.weekTitle,
+        isCurrentWeek: week.isCurrentWeek,
+        monthYearLabel: week.monthYearLabel,
+        dayDates: week.dayDates,
+        daysKeys: week.daysKeys,
+        weekHolidayCount: week.weekHolidayCount,
         students
       };
     });
@@ -467,6 +503,7 @@ export const LaporanAdminView: React.FC = () => {
   // Grouping Bulanan: Bulan (Terbaru -> Terlama) -> Mahasiswa (A -> Z) -> Akumulasi Hari Kerja (Reguler 5 Hari vs CS 6 Hari)
   const groupedMonthlyAttendances = React.useMemo(() => {
     const now = new Date();
+    const todayJakarta = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 
     const monthMap = new Map<string, {
       monthKey: string;
@@ -624,8 +661,8 @@ export const LaporanAdminView: React.FC = () => {
               } else {
                 izin++;
               }
-            } else {
-              // Tidak hadir di hari kerja tanpa keterangan = Alpha!
+            } else if (wDate < todayJakarta) {
+              // Tidak hadir di hari kerja yang sudah berlalu tanpa keterangan = Alpha!
               alpha++;
             }
           }
@@ -1345,11 +1382,63 @@ export const LaporanAdminView: React.FC = () => {
                   ) : (
                     groupedWeeklyAttendances.map(week => (
                       <React.Fragment key={week.weekKey}>
-                        {/* Baris Pembatas Minggu */}
-                        <tr className="bg-slate-100 border-y border-slate-300 dark:bg-slate-800/80 dark:border-slate-700">
-                          <td colSpan={11} className="py-2.5 px-4 text-center font-bold text-slate-700 dark:text-slate-200 text-xs tracking-wide">
-                            {week.label}
+                        {/* Baris Pembatas Minggu Tengah Sejajar */}
+                        <tr className="bg-slate-100/90 border-y border-slate-300 dark:bg-slate-800/80 dark:border-slate-700 text-xs select-none">
+                          {/* Col 1 & 2: NO & Mahasiswa */}
+                          <td colSpan={2} className="py-2.5 px-3"></td>
+
+                          {/* Col 3: Di bawah SKEMA -> "(Periode" */}
+                          <td className="py-2.5 px-3 text-right font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                            <span>(Periode</span>
                           </td>
+
+                          {/* Col 4: SEN */}
+                          <td className="py-2.5 px-0 text-center font-bold font-mono text-slate-700 dark:text-slate-200 relative" title={`Senin, ${week.daysKeys[0]}`}>
+                            <span>{week.dayDates[0]}</span>
+                            <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3 w-[1px] bg-slate-400/40 dark:bg-slate-500/40 pointer-events-none"></span>
+                          </td>
+
+                          {/* Col 5: SEL */}
+                          <td className="py-2.5 px-0 text-center font-bold font-mono text-slate-700 dark:text-slate-200 relative" title={`Selasa, ${week.daysKeys[1]}`}>
+                            <span>{week.dayDates[1]}</span>
+                            <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3 w-[1px] bg-slate-400/40 dark:bg-slate-500/40 pointer-events-none"></span>
+                          </td>
+
+                          {/* Col 6: RAB */}
+                          <td className="py-2.5 px-0 text-center font-bold font-mono text-slate-700 dark:text-slate-200 relative" title={`Rabu, ${week.daysKeys[2]}`}>
+                            <span>{week.dayDates[2]}</span>
+                            <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3 w-[1px] bg-slate-400/40 dark:bg-slate-500/40 pointer-events-none"></span>
+                          </td>
+
+                          {/* Col 7: KAM */}
+                          <td className="py-2.5 px-0 text-center font-bold font-mono text-slate-700 dark:text-slate-200 relative" title={`Kamis, ${week.daysKeys[3]}`}>
+                            <span>{week.dayDates[3]}</span>
+                            <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3 w-[1px] bg-slate-400/40 dark:bg-slate-500/40 pointer-events-none"></span>
+                          </td>
+
+                          {/* Col 8: JUM */}
+                          <td className="py-2.5 px-0 text-center font-bold font-mono text-slate-700 dark:text-slate-200 relative" title={`Jumat, ${week.daysKeys[4]}`}>
+                            <span>{week.dayDates[4]}</span>
+                            <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3 w-[1px] bg-slate-400/40 dark:bg-slate-500/40 pointer-events-none"></span>
+                          </td>
+
+                          {/* Col 9: SAB */}
+                          <td className="py-2.5 px-0 text-center font-bold font-mono text-slate-700 dark:text-slate-200 relative" title={`Sabtu, ${week.daysKeys[5]}`}>
+                            <span>{week.dayDates[5]}</span>
+                          </td>
+
+                          {/* Col 10: Di bawah TOTAL JAM -> "Sep 2026)" */}
+                          <td className="py-2.5 px-3 text-left font-bold text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                            <span>{week.monthYearLabel})</span>
+                            {week.weekHolidayCount > 0 && (
+                              <span className="ml-1.5 text-[10px] font-semibold text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/60 px-1 py-0.5 rounded border border-rose-200 dark:border-rose-900/50">
+                                {week.weekHolidayCount} Libur
+                              </span>
+                            )}
+                          </td>
+
+                          {/* Col 11: KEHADIRAN */}
+                          <td className="py-2.5 px-3"></td>
                         </tr>
 
                         {week.students.map((student, sIdx) => (

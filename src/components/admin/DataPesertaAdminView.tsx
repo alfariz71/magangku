@@ -57,7 +57,6 @@ export const DataPesertaAdminView: React.FC = () => {
   const filteredStudents = students.filter(s => {
     const nameLower = s.name.toLowerCase();
     if (nameLower.includes('administrator') || nameLower === 'admin') return false;
-    if (s.role === 'admin' && s.email !== 'ikhsanfadil047103@gmail.com' && !nameLower.includes('ikhsan')) return false;
     const matchQuery = 
       s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (s.nim && s.nim.toLowerCase().includes(searchQuery.toLowerCase())) ||
@@ -188,21 +187,11 @@ export const DataPesertaAdminView: React.FC = () => {
 
                     {/* Konsentrasi Magang */}
                     <td className="py-3.5 px-3">
-                      {student.concentration && student.concentration.trim() && student.concentration.trim().toLowerCase() !== 'peserta magang' ? (
-                        student.concentration.toLowerCase().includes('cs') || student.concentration.toLowerCase().includes('customer service') ? (
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-indigo-50 border border-indigo-200 px-2.5 py-1 text-xs font-semibold text-indigo-700">
-                            🎧 {student.concentration} (6 Hari)
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-xs font-semibold text-[#2F80ED]">
-                            💼 {student.concentration} (5 Hari)
-                          </span>
-                        )
-                      ) : (
-                        <span className="inline-flex items-center gap-1 rounded-lg bg-slate-50 border border-slate-200 px-2.5 py-1 text-xs font-normal text-slate-500">
-                          💼 Reguler (5 Hari)
-                        </span>
-                      )}
+                      <p className="text-xs text-slate-800 font-medium">
+                        {student.concentration && student.concentration.trim() && student.concentration.trim().toLowerCase() !== 'peserta magang'
+                          ? student.concentration.trim()
+                          : '-'}
+                      </p>
                     </td>
 
                     {/* Periode */}

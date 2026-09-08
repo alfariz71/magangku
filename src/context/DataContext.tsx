@@ -1521,26 +1521,35 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Filter agar:
         // 1. Akun Administrator murni (Administrator MagangKu) TIDAK masuk ke daftar mahasiswa magang.
         // 2. Seluruh mahasiswa magang (role = user) dimasukkan.
-        // 3. Akun superadmin Ikhsan (ikhsanfadil047103@gmail.com) TETAP dimasukkan layaknya peserta magang.
+        // 3. Akun Fadil (meskipun role di DB adalah 'admin') TETAP dimasukkan dinamis layaknya peserta magang normal.
         const filtered = data.filter((p: Record<string, unknown>) => {
           const fullName = ((p.full_name as string) || '').toLowerCase().trim();
+          const nim = ((p.nim as string) || '').trim();
           
-          // Kecualikan akun Administrator sistem
+          // Kecualikan akun Administrator sistem murni
           if (fullName.includes('administrator') || fullName === 'admin') {
             return false;
           }
 
-          // Masukkan seluruh mahasiswa magang normal
+          // Masukkan seluruh mahasiswa magang normal (role = user)
           if (p.role === 'user') {
             return true;
           }
 
-          // Masukkan akun superadmin Ikhsan meskipun role di DB adalah 'admin'
+          // Masukkan akun yang memiliki data mahasiswa magang (NIM)
+          // Meskipun akun Fadil memiliki role admin di database, Fadil memiliki profil NIM mahasiswa
+          if (nim.length > 0) {
+            return true;
+          }
+
+          // Fallback jika profil cocok dengan akun Fadil
           if (
-            fullName.includes('ikhsan') ||
-            fullName.includes('fadil') ||
             (savedRootId && p.id === savedRootId) ||
-            (currentUser?.id && p.id === currentUser.id && ROOT_EMAILS.includes(currentUser.email?.toLowerCase().trim() || ''))
+            (currentUser?.id && p.id === currentUser.id && ROOT_EMAILS.includes(currentUser.email?.toLowerCase().trim() || '')) ||
+            fullName.includes('fadhil') ||
+            fullName.includes('fadil') ||
+            fullName.includes('ikhsan') ||
+            fullName.includes('alfariz')
           ) {
             return true;
           }
