@@ -180,6 +180,16 @@ function getTodayJakarta(): string {
 function getTimeJakarta(): string {
   return new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' }) + ' WIB';
 }
+export function parseSafeDate(dateStr: unknown): Date | null {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  let s = dateStr.trim();
+  // Tangani format timezone offset tanpa menit dari database (misal +07 menjadi +07:00)
+  if (/[+-]\d{2}$/.test(s)) {
+    s = s + ':00';
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
 
 // ============================================================
 // Provider
@@ -420,15 +430,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
     const dayName = dayNames[new Date(dateStr + 'T00:00:00').getDay()];
 
-    const checkInFormatted = r.check_in_time ? new Date(r.check_in_time as string).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : null;
-    const checkOutFormatted = r.check_out_time ? new Date(r.check_out_time as string).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : null;
+    const inDateParsed = parseSafeDate(r.check_in_time);
+    const outDateParsed = parseSafeDate(r.check_out_time);
+
+    const checkInFormatted = inDateParsed ? inDateParsed.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : null;
+    const checkOutFormatted = outDateParsed ? outDateParsed.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Jakarta' }) + ' WIB' : null;
 
     let computedTotalHours = r.total_hours as string | null;
     let finalCheckOutFormatted = checkOutFormatted;
 
     if (r.check_in_time && r.check_out_time) {
-      const inTime = new Date(r.check_in_time as string).getTime();
-      const outTime = new Date(r.check_out_time as string).getTime();
+      const inTime = inDateParsed?.getTime() ?? NaN;
+      const outTime = outDateParsed?.getTime() ?? NaN;
       if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
         const diffMinutes = Math.round((outTime - inTime) / 60000);
         const hours = Math.floor(diffMinutes / 60);
@@ -444,7 +457,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (isPastDay) {
         const defaultCloseTime = systemSettings.workEndTime || '17:00';
         finalCheckOutFormatted = `${defaultCloseTime} WIB (Otomatis)`;
-        const inDate = new Date(r.check_in_time as string);
+        const inDate = inDateParsed || new Date(r.check_in_time as string);
         const defaultOutDate = new Date(`${dateStr}T${defaultCloseTime}:00+07:00`);
         const inTime = inDate.getTime();
         const outTime = defaultOutDate.getTime();
@@ -982,7 +995,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const checkInIso = currentRecord?.check_in_time;
     let totalHoursStr = '0 jam 0 menit';
     if (checkInIso) {
-      const inTime = new Date(checkInIso).getTime();
+      const inTime = parseSafeDate(checkInIso)?.getTime() ?? NaN;
       const outTime = now.getTime();
       if (!isNaN(inTime) && outTime >= inTime) {
         const totalMinutes = Math.round((outTime - inTime) / 60000);

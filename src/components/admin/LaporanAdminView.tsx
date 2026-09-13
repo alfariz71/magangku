@@ -9,7 +9,7 @@ import { isIndonesianHoliday, getIndonesianHolidayName } from '../../lib/holiday
 export const LaporanAdminView: React.FC = () => {
   const { attendances, leaveRequests, activities, students } = useData();
 
-  const userStudents = students.filter(s => s.role === 'user');
+  const userStudents = students;
 
   const [reportType, setReportType] = useState<'harian' | 'mingguan' | 'bulanan' | 'izin' | 'aktivitas'>('harian');
   const [selectedStudent, setSelectedStudent] = useState('Semua');
