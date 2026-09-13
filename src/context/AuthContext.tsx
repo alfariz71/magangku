@@ -42,6 +42,7 @@ interface AuthContextType {
   register: (data: RegisterData) => Promise<{ success: boolean; message?: string }>;
   updateCurrentUser: (updatedData: Partial<User>) => Promise<{ success: boolean; message?: string }>;
   switchRole: (role: UserRole) => void;
+  refreshCurrentUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -323,10 +324,47 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isRootUser = Boolean(currentUser?.email && ROOT_EMAILS.includes(currentUser.email.toLowerCase().trim()));
 
   // Switch role: exclusively functional for root user
-  const switchRole = (newRole: UserRole) => {
+  const switchRole = async (newRole: UserRole) => {
     if (currentUser && isRootUser) {
       localStorage.setItem('magangku_root_active_role', newRole);
+      try {
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('*')
+          .eq('id', currentUser.id)
+          .maybeSingle();
+        if (profile) {
+          const freshUser = mapProfileToUser(currentUser.id, profile, currentUser.email);
+          freshUser.role = newRole;
+          setCurrentUser(freshUser);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to sync profile on switchRole:', err);
+      }
       setCurrentUser(prev => prev ? { ...prev, role: newRole } : prev);
+    }
+  };
+
+  // Re-fetch current user profile from Supabase to keep status (Aktif/Nonaktif) in sync
+  const refreshCurrentUser = async () => {
+    if (!currentUser?.id) return;
+    try {
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('*')
+        .eq('id', currentUser.id)
+        .maybeSingle();
+      if (profile) {
+        const currentActiveRole = currentUser.role;
+        const freshUser = mapProfileToUser(currentUser.id, profile, currentUser.email);
+        if (isRootUser && currentActiveRole) {
+          freshUser.role = currentActiveRole;
+        }
+        setCurrentUser(freshUser);
+      }
+    } catch (err) {
+      console.error('Failed to refresh currentUser:', err);
     }
   };
 
@@ -345,7 +383,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         logout,
         register,
         updateCurrentUser,
-        switchRole
+        switchRole,
+        refreshCurrentUser
       }}
     >
       {children}

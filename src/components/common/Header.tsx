@@ -400,6 +400,17 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
                     <Shield className="h-3 w-3" />
                     {role === 'admin' ? 'Administrator' : `NIM: ${currentUser?.nim || '-'}`}
                   </span>
+                  {role === 'user' && (
+                    <span className={`inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[10px] font-bold ${
+                      currentUser?.status === 'Nonaktif'
+                        ? 'bg-rose-50 border border-rose-200 text-rose-600'
+                        : currentUser?.status === 'Selesai'
+                        ? 'bg-blue-50 border border-blue-200 text-blue-600'
+                        : 'bg-emerald-50 border border-emerald-200 text-[#27AE60]'
+                    }`}>
+                      Status: {currentUser?.status || 'Aktif'}
+                    </span>
+                  )}
                   {isRootUser && (
                     <span className="inline-flex items-center gap-1 rounded-md bg-amber-50 border border-amber-200 px-2 py-0.5 text-[10px] font-bold text-amber-700">
                       ⚡ Root Superadmin

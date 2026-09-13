@@ -125,12 +125,24 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
 
   // Check-In (Buka Scanner QR)
   const handleCheckInClick = () => {
+    if (currentUser?.status === 'Nonaktif') {
+      showToast('error', 'Akun Anda berstatus Nonaktif. Anda tidak dapat melakukan absensi.');
+      return;
+    }
+    if (currentUser?.status === 'Selesai') {
+      showToast('error', 'Periode magang Anda telah selesai.');
+      return;
+    }
     if (todayAttendance.isCheckedIn) return;
     setIsScannerOpen(true);
   };
 
   // Check-Out (Cukup klik & validasi GPS tanpa scan QR)
   const handleCheckOutClick = async () => {
+    if (currentUser?.status === 'Nonaktif') {
+      showToast('error', 'Akun Anda berstatus Nonaktif. Anda tidak dapat melakukan absensi.');
+      return;
+    }
     if (!todayAttendance.isCheckedIn) {
       showToast('error', 'Anda belum melakukan absen masuk hari ini.');
       return;
@@ -452,15 +464,26 @@ export const DashboardAbsensiView: React.FC<DashboardAbsensiViewProps> = ({ onNa
           )}
         </div>
 
+        {/* Status Nonaktif Alert Banner */}
+        {currentUser?.status === 'Nonaktif' && (
+          <div className="mb-4 flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-rose-500" />
+            <div>
+              <p className="font-bold text-sm text-rose-800 dark:text-rose-200">Status Akun: Nonaktif</p>
+              <p className="text-xs text-rose-600 dark:text-rose-300 mt-0.5">Akun Anda saat ini sedang dinonaktifkan oleh Administrator. Anda tidak dapat melakukan absensi.</p>
+            </div>
+          </div>
+        )}
+
         {/* Action Buttons (3 Kolom Responsif) */}
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
           {/* Absen Masuk */}
           <button
             type="button"
             onClick={handleCheckInClick}
-            disabled={todayAttendance.isCheckedIn || !!activeLoadingProcess}
+            disabled={todayAttendance.isCheckedIn || !!activeLoadingProcess || currentUser?.status === 'Nonaktif'}
             className={`flex items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold shadow-md transition-all ${
-              todayAttendance.isCheckedIn
+              todayAttendance.isCheckedIn || currentUser?.status === 'Nonaktif'
                 ? 'bg-slate-100 text-slate-400 border border-slate-200 shadow-none cursor-not-allowed'
                 : activeLoadingProcess === 'check_in'
                 ? 'bg-blue-400 text-white shadow-none cursor-wait'

@@ -258,9 +258,19 @@ export const DataDiriView: React.FC<DataDiriViewProps> = ({ onSuccess }) => {
               <span className="inline-flex items-center rounded-full bg-blue-50 px-2.5 py-0.5 text-xs font-medium text-[#2F80ED]">
                 {formData.university}
               </span>
-              <span className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-[#27AE60]">
-                Status: Aktif
-              </span>
+              {currentUser?.status === 'Nonaktif' ? (
+                <span className="inline-flex items-center rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 px-2.5 py-0.5 text-xs font-semibold text-rose-600 dark:text-rose-400">
+                  Status: Nonaktif
+                </span>
+              ) : currentUser?.status === 'Selesai' ? (
+                <span className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 px-2.5 py-0.5 text-xs font-semibold text-blue-600 dark:text-blue-400">
+                  Status: Selesai
+                </span>
+              ) : (
+                <span className="inline-flex items-center rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 px-2.5 py-0.5 text-xs font-semibold text-[#27AE60] dark:text-emerald-400">
+                  Status: Aktif
+                </span>
+              )}
             </div>
           </div>
         </div>

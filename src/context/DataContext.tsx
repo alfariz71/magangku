@@ -185,7 +185,7 @@ function getTimeJakarta(): string {
 // Provider
 // ============================================================
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser } = useAuth();
+  const { currentUser, refreshCurrentUser } = useAuth();
 
   // ---- State ----
   const [attendances, setAttendances] = useState<AttendanceRecord[]>([]);
@@ -856,6 +856,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     csShift: 'shift_1' | 'shift_2' = 'shift_1'
   ): Promise<{ success: boolean; message: string }> => {
     if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
+    if (currentUser.status === 'Nonaktif') {
+      return { success: false, message: 'Akun Anda saat ini berstatus Nonaktif. Silakan hubungi Administrator atau Pembimbing.' };
+    }
+    if (currentUser.status === 'Selesai') {
+      return { success: false, message: 'Periode magang Anda telah selesai. Anda tidak dapat melakukan absensi.' };
+    }
     const officeName = gpsState.nearestLocationName || qrConfig.officeName || 'kantor';
     const radius = gpsState.targetRadiusMeters || qrConfig.radiusMeters || 50;
 
@@ -955,6 +961,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const performCheckOut = async (): Promise<{ success: boolean; message: string }> => {
     if (!currentUser?.id) return { success: false, message: 'Silakan login terlebih dahulu.' };
+    if (currentUser.status === 'Nonaktif') {
+      return { success: false, message: 'Akun Anda saat ini berstatus Nonaktif. Hubungi Administrator.' };
+    }
     const officeName = gpsState.nearestLocationName || qrConfig.officeName || 'kantor';
     if (gpsState.status !== 'in_range') return { success: false, message: `Pastikan berada di ${officeName} untuk absen pulang.` };
     if (!todayRecord) return { success: false, message: 'Belum ada data absen masuk hari ini.' };
@@ -1618,6 +1627,9 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const nextStatus = student.status === 'Aktif' ? 'Nonaktif' : 'Aktif';
     await supabase.from('user_profiles').update({ status: nextStatus }).eq('id', id);
     await refreshStudents();
+    if (currentUser?.id === id && refreshCurrentUser) {
+      await refreshCurrentUser();
+    }
   };
 
   // ---- AUDIT LOGS ----
