@@ -89,8 +89,10 @@ export const LaporanAdminView: React.FC = () => {
   };
 
   // Tanggal dimulainya skema Customer Service (CS 6 Hari Kerja).
-  // Sebelum tanggal ini (1 - 5 September 2026), seluruh peserta masih berstatus Magang Reguler (5 Hari Kerja, Sabtu libur).
   const CS_START_DATE = '2026-09-07';
+  // Tanggal efektif dimulainya kewajiban shift hari Sabtu bagi peserta CS (14 September 2026 / Sabtu 19 September).
+  // Pada minggu 7 - 12 September 2026, shift Sabtu belum berlaku sehingga dihitung 5 hari kerja (Sabtu OFF).
+  const CS_SATURDAY_START_DATE = '2026-09-14';
 
   // Helper cek apakah mahasiswa merupakan divisi Customer Service (CS 6 Hari Kerja)
   const isCsStudent = (userId?: string, studentName?: string, notes?: string, dateStr?: string) => {
@@ -455,17 +457,18 @@ export const LaporanAdminView: React.FC = () => {
         const jum = getStatusCode(week.daysKeys[4], s.dayRecords[week.daysKeys[4]]);
         
         let sab;
-        if (!isCs) {
+        if (!isCs || week.daysKeys[5] < CS_SATURDAY_START_DATE) {
           sab = {
             code: 'OFF',
             color: 'text-slate-400 dark:text-slate-500 font-normal bg-slate-100 dark:bg-slate-800 rounded px-1',
-            full: 'Libur Rutin Reguler (5 Hari Kerja)'
+            full: !isCs ? 'Libur Rutin Reguler (5 Hari Kerja)' : 'Shift Sabtu Belum Berlaku (Transisi)'
           };
         } else {
           sab = getStatusCode(week.daysKeys[5], s.dayRecords[week.daysKeys[5]]);
         }
 
-        const daysList = isCs ? [sen, sel, rab, kam, jum, sab] : [sen, sel, rab, kam, jum];
+        const isSaturdayWorkday = isCs && week.daysKeys[5] >= CS_SATURDAY_START_DATE;
+        const daysList = isSaturdayWorkday ? [sen, sel, rab, kam, jum, sab] : [sen, sel, rab, kam, jum];
         const daysPresent = daysList.filter(d => d.code === 'H' || d.code === 'T').length;
         const workingDaysCount = daysList.filter(d => d.code !== 'L' && d.code !== 'OFF').length;
 
@@ -544,9 +547,9 @@ export const LaporanAdminView: React.FC = () => {
           }
 
           // Hari kerja CS:
-          // Sebelum CS_START_DATE (1 - 6 September 2026), seluruh peserta masih skema Reguler (Sabtu libur).
-          // Mulai CS_START_DATE (7 September 2026), peserta CS bekerja 6 hari (Senin - Sabtu).
-          if (dateKey < CS_START_DATE) {
+          // Sebelum CS_SATURDAY_START_DATE (sebelum 14 September 2026), shift Sabtu belum berlaku sehingga Sabtu masih libur (5 hari kerja).
+          // Mulai 14 September 2026 (Sabtu 19 September), peserta CS bekerja 6 hari (Senin - Sabtu).
+          if (dateKey < CS_SATURDAY_START_DATE) {
             if (dayOfWeek !== 6) {
               csWorkingDays.push(dateKey);
             }
@@ -572,7 +575,7 @@ export const LaporanAdminView: React.FC = () => {
             if (dayOfWeek !== 6) {
               totalRegulerDaysInMonth++;
             }
-            if (dateKey < CS_START_DATE) {
+            if (dateKey < CS_SATURDAY_START_DATE) {
               if (dayOfWeek !== 6) {
                 totalCsDaysInMonth++;
               }
