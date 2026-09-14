@@ -1277,11 +1277,27 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const attStatus: AttendanceStatus = target.leaveType.includes('Sakit') ? 'Sakit' : 'Izin';
       const start = new Date(target.startDate + 'T00:00:00');
       const end = new Date(target.endDate + 'T00:00:00');
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        // Lewati hari libur operasional: Sabtu (6) dan Minggu (0)
-        if (d.getDay() === 0 || d.getDay() === 6) continue;
 
+      // Cek apakah mahasiswa merupakan divisi Customer Service (CS 6 Hari Kerja)
+      const targetStudent = students.find(s => s.id === target.userId);
+      const isCs = targetStudent && (
+        (targetStudent.concentration && (targetStudent.concentration.toLowerCase().includes('cs') || targetStudent.concentration.toLowerCase().includes('customer service'))) ||
+        (targetStudent.position && (targetStudent.position.toLowerCase().includes('cs') || targetStudent.position.toLowerCase().includes('customer service')))
+      );
+
+      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+        const dayOfWeek = d.getDay();
         const dateStr = d.toLocaleDateString('sv-SE');
+
+        // Untuk Reguler: Sabtu (6) dan Minggu (0) selalu libur rutin (dilewati).
+        // Untuk CS: Mulai 14 September 2026, shift akhir pekan berlaku, sehingga hari izin di akhir pekan dicatat ke absensi.
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        if (isWeekend) {
+          if (!isCs || dateStr < '2026-09-14') {
+            continue;
+          }
+        }
+
         await supabase.from('attendance_records').upsert({
           user_id: target.userId,
           date: dateStr,

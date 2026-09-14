@@ -9,7 +9,10 @@ import { isIndonesianHoliday, getIndonesianHolidayName } from '../../lib/holiday
 export const LaporanAdminView: React.FC = () => {
   const { attendances, leaveRequests, activities, students } = useData();
 
-  const userStudents = students;
+  // Hanya mahasiswa dengan status Aktif yang diproses dan ditampilkan dalam laporan
+  const userStudents = React.useMemo(() => {
+    return students.filter(s => (s.status || 'Aktif') === 'Aktif');
+  }, [students]);
 
   const [reportType, setReportType] = useState<'harian' | 'mingguan' | 'bulanan' | 'izin' | 'aktivitas'>('harian');
   const [selectedStudent, setSelectedStudent] = useState('Semua');
@@ -38,10 +41,13 @@ export const LaporanAdminView: React.FC = () => {
     }
   };
 
-  // Filtered Data
+  // Filtered Data (hanya data milik mahasiswa berstatus Aktif)
   const filteredAttendances = attendances.filter(a => {
     if (selectedStudent !== 'Semua') {
       if (a.userId !== selectedStudent && a.studentName !== selectedStudent) return false;
+    } else {
+      const isStudentActive = userStudents.some(s => s.id === a.userId || s.name === a.studentName);
+      if (!isStudentActive) return false;
     }
     if (!matchesMonth(a.date)) return false;
     return true;
@@ -50,6 +56,9 @@ export const LaporanAdminView: React.FC = () => {
   const filteredLeaveRequests = leaveRequests.filter(r => {
     if (selectedStudent !== 'Semua') {
       if (r.userId !== selectedStudent && r.studentName !== selectedStudent) return false;
+    } else {
+      const isStudentActive = userStudents.some(s => s.id === r.userId || s.name === r.studentName);
+      if (!isStudentActive) return false;
     }
     if (!matchesMonth(r.startDate || r.requestDate)) return false;
     return true;
@@ -58,6 +67,9 @@ export const LaporanAdminView: React.FC = () => {
   const filteredActivities = activities.filter(a => {
     if (selectedStudent !== 'Semua') {
       if (a.userId !== selectedStudent && a.studentName !== selectedStudent) return false;
+    } else {
+      const isStudentActive = userStudents.some(s => s.id === a.userId || s.name === a.studentName);
+      if (!isStudentActive) return false;
     }
     if (!matchesMonth(a.activityDate || a.date)) return false;
     return true;
@@ -96,10 +108,17 @@ export const LaporanAdminView: React.FC = () => {
 
   // Helper cek apakah mahasiswa merupakan divisi Customer Service (CS 6 Hari Kerja)
   const isCsStudent = (userId?: string, studentName?: string, notes?: string, dateStr?: string) => {
-    if (notes && /cs/i.test(notes)) return true;
     if (dateStr && dateStr < CS_START_DATE) return false;
-    const s = students.find(st => st.id === userId || st.name === studentName);
-    return Boolean(s?.concentration && /cs|customer\s*service/i.test(s.concentration));
+    const s = students.find(st => (userId && st.id === userId) || (studentName && st.name === studentName));
+    if (s) {
+      const conc = (s.concentration || '').toLowerCase();
+      const pos = (s.position || '').toLowerCase();
+      if (conc || pos) {
+        return conc.includes('cs') || conc.includes('customer service') || pos.includes('cs') || pos.includes('customer service');
+      }
+    }
+    if (notes && /cs/i.test(notes)) return true;
+    return false;
   };
 
   // Grouping Aktivitas: Tanggal (Terbaru -> Terlama) -> Mahasiswa (A -> Z) -> Aktivitas
@@ -302,7 +321,8 @@ export const LaporanAdminView: React.FC = () => {
       const daysKeys: { [dayIdx: number]: string } = {};
       const dayDates: { [dayIdx: number]: string } = {};
       let weekHolidayCount = 0;
-      for (let i = 0; i < 6; i++) {
+      // Loop 0 s/d 6 (Senin s/d Minggu)
+      for (let i = 0; i < 7; i++) {
         const dt = new Date(monday);
         dt.setDate(monday.getDate() + i);
         const k = toKey(dt);
@@ -320,8 +340,9 @@ export const LaporanAdminView: React.FC = () => {
       const currentMondayKey = toKey(nowMonday);
       const isCurrentWeek = mondayKey === currentMondayKey;
 
+      const sabMinDateLabel = `${dayDates[5]}/${dayDates[6]}`;
       const weekTitle = '(Periode';
-      const datesFormatted = `${dayDates[0]} | ${dayDates[1]} | ${dayDates[2]} | ${dayDates[3]} | ${dayDates[4]} | ${dayDates[5]} ${fSatMonthYear}`;
+      const datesFormatted = `${dayDates[0]} | ${dayDates[1]} | ${dayDates[2]} | ${dayDates[3]} | ${dayDates[4]} | ${sabMinDateLabel} ${fSatMonthYear}`;
       const holidayNote = weekHolidayCount > 0 ? ` — ${weekHolidayCount} Libur Nasional` : '';
 
       const weekLabel = `(Periode ${datesFormatted}${holidayNote})`;
@@ -334,6 +355,7 @@ export const LaporanAdminView: React.FC = () => {
         monthYearLabel: fSatMonthYear,
         dayDates,
         daysKeys,
+        sabMinDateLabel,
         weekHolidayCount
       };
     };
@@ -346,9 +368,29 @@ export const LaporanAdminView: React.FC = () => {
       monthYearLabel: string;
       dayDates: { [dayIdx: number]: string };
       daysKeys: { [dayIdx: number]: string };
+      sabMinDateLabel: string;
       weekHolidayCount: number;
       records: typeof filteredAttendances;
     }>();
+
+    // 1. Pastikan minggu yang sedang berjalan (Current Week) selalu ada di weekMap jika cocok dengan filter bulan
+    if (matchesMonth(todayJakarta)) {
+      const currentWeekInfo = getWeekRange(todayJakarta);
+      if (!weekMap.has(currentWeekInfo.weekKey)) {
+        weekMap.set(currentWeekInfo.weekKey, {
+          weekKey: currentWeekInfo.weekKey,
+          label: currentWeekInfo.label,
+          weekTitle: currentWeekInfo.weekTitle,
+          isCurrentWeek: currentWeekInfo.isCurrentWeek,
+          monthYearLabel: currentWeekInfo.monthYearLabel,
+          dayDates: currentWeekInfo.dayDates,
+          daysKeys: currentWeekInfo.daysKeys,
+          sabMinDateLabel: currentWeekInfo.sabMinDateLabel,
+          weekHolidayCount: currentWeekInfo.weekHolidayCount,
+          records: []
+        });
+      }
+    }
 
     filteredAttendances.forEach(a => {
       if (!a.date) return;
@@ -364,6 +406,7 @@ export const LaporanAdminView: React.FC = () => {
           monthYearLabel: weekInfo.monthYearLabel,
           dayDates: weekInfo.dayDates,
           daysKeys: weekInfo.daysKeys,
+          sabMinDateLabel: weekInfo.sabMinDateLabel,
           weekHolidayCount: weekInfo.weekHolidayCount,
           records: []
         });
@@ -382,20 +425,63 @@ export const LaporanAdminView: React.FC = () => {
         totalHoursNum: number;
       }>();
 
+      // Inisialisasi seluruh mahasiswa aktif agar namanya SELALU muncul di tabel mingguan
+      // meskipun belum melakukan absensi pada minggu ini (ditampilkan dengan tanda '-')
+      const targetStudents = selectedStudent === 'Semua'
+        ? userStudents
+        : userStudents.filter(st => st.id === selectedStudent || st.name === selectedStudent);
+
+      targetStudents.forEach(st => {
+        // Skip jika mahasiswa belum mulai magang sebelum minggu ini berakhir (hanya jika ada startDate)
+        if (st.startDate && week.daysKeys[5] < st.startDate) return;
+        // Skip jika masa magang mahasiswa sudah selesai sebelum minggu ini dimulai (hanya jika ada endDate)
+        if (st.endDate && week.daysKeys[0] > st.endDate) return;
+
+        const sKey = st.id || st.name;
+        studentMap.set(sKey, {
+          userId: st.id,
+          studentName: st.name,
+          studentNim: st.nim || '-',
+          dayRecords: {},
+          totalHoursNum: 0
+        });
+      });
+
       week.records.forEach(r => {
-        const sKey = r.userId || r.studentName;
+        let sKey = r.userId;
         if (!studentMap.has(sKey)) {
-          studentMap.set(sKey, {
-            userId: r.userId,
-            studentName: r.studentName,
-            studentNim: r.studentNim,
-            dayRecords: {},
-            totalHoursNum: 0
+          const foundKey = Array.from(studentMap.keys()).find(k => {
+            const item = studentMap.get(k);
+            return (item?.userId && r.userId && item.userId === r.userId) ||
+                   (item?.studentName && r.studentName && item.studentName.toLowerCase().trim() === r.studentName.toLowerCase().trim());
           });
+          if (foundKey) {
+            sKey = foundKey;
+          } else {
+            // Hanya masukkan jika mahasiswa berstatus Aktif
+            const isActive = userStudents.some(st => st.id === r.userId || st.name === r.studentName);
+            if (!isActive) return;
+
+            sKey = r.userId || r.studentName;
+            studentMap.set(sKey, {
+              userId: r.userId,
+              studentName: r.studentName,
+              studentNim: r.studentNim || '-',
+              dayRecords: {},
+              totalHoursNum: 0
+            });
+          }
         }
-        const sData = studentMap.get(sKey)!;
+        const sData = studentMap.get(sKey);
+        if (!sData) return;
         sData.dayRecords[r.date] = r;
         sData.totalHoursNum += parseHours(r.totalHours, r.checkOutTime);
+        if ((!sData.studentNim || sData.studentNim === '-') && r.studentNim) {
+          sData.studentNim = r.studentNim;
+        }
+        if (!sData.userId && r.userId) {
+          sData.userId = r.userId;
+        }
       });
 
       const students = Array.from(studentMap.values()).map(s => {
@@ -456,19 +542,62 @@ export const LaporanAdminView: React.FC = () => {
         const kam = getStatusCode(week.daysKeys[3], s.dayRecords[week.daysKeys[3]]);
         const jum = getStatusCode(week.daysKeys[4], s.dayRecords[week.daysKeys[4]]);
         
-        let sab;
+        let sabMin;
         if (!isCs || week.daysKeys[5] < CS_SATURDAY_START_DATE) {
-          sab = {
+          sabMin = {
             code: 'OFF',
             color: 'text-slate-400 dark:text-slate-500 font-normal bg-slate-100 dark:bg-slate-800 rounded px-1',
-            full: !isCs ? 'Libur Rutin Reguler (5 Hari Kerja)' : 'Shift Sabtu Belum Berlaku (Transisi)'
+            full: !isCs ? 'Libur Rutin Reguler (5 Hari Kerja)' : 'Shift Akhir Pekan Belum Berlaku (Transisi)'
           };
         } else {
-          sab = getStatusCode(week.daysKeys[5], s.dayRecords[week.daysKeys[5]]);
+          // Logika gabungan akhir pekan (Sabtu atau Minggu) khusus CS
+          const satKey = week.daysKeys[5];
+          const sunKey = week.daysKeys[6];
+          const satRec = s.dayRecords[satKey];
+          const sunRec = s.dayRecords[sunKey];
+
+          if (satRec?.status === 'Hadir' || sunRec?.status === 'Hadir') {
+            const whichDay = (satRec?.status === 'Hadir' && sunRec?.status === 'Hadir')
+              ? 'Hadir (Sabtu & Minggu)'
+              : satRec?.status === 'Hadir' ? 'Hadir (Sabtu)' : 'Hadir (Minggu)';
+            sabMin = { code: 'H', color: 'text-emerald-700 font-bold', full: whichDay };
+          } else if (satRec?.status === 'Terlambat' || sunRec?.status === 'Terlambat') {
+            const whichDay = (satRec?.status === 'Terlambat' && sunRec?.status === 'Terlambat')
+              ? 'Terlambat (Sabtu & Minggu)'
+              : satRec?.status === 'Terlambat' ? 'Terlambat (Sabtu)' : 'Terlambat (Minggu)';
+            sabMin = { code: 'T', color: 'text-rose-700 font-bold', full: whichDay };
+          } else if (satRec?.status === 'Izin' || sunRec?.status === 'Izin') {
+            sabMin = { code: 'I', color: 'text-amber-700 font-bold', full: 'Izin' };
+          } else if (satRec?.status === 'Sakit' || sunRec?.status === 'Sakit') {
+            sabMin = { code: 'S', color: 'text-orange-700 font-bold', full: 'Sakit' };
+          } else {
+            // Cek apakah ada pengajuan izin/sakit yang disetujui pada Sabtu atau Minggu
+            const leave = leaveRequests.find(l => 
+              l.userId === s.userId && 
+              l.status === 'Disetujui' &&
+              ((l.startDate <= satKey && satKey <= l.endDate) || (l.startDate <= sunKey && sunKey <= l.endDate))
+            );
+            if (leave) {
+              if (leave.leaveType?.toLowerCase().includes('sakit')) {
+                sabMin = { code: 'S', color: 'text-orange-700 font-bold', full: 'Sakit' };
+              } else {
+                sabMin = { code: 'I', color: 'text-amber-700 font-bold', full: 'Izin' };
+              }
+            } else if (isIndonesianHoliday(satKey) && isIndonesianHoliday(sunKey)) {
+              sabMin = { code: 'L', color: 'text-rose-600 dark:text-rose-400 font-bold bg-rose-50 dark:bg-rose-950/40 rounded px-1', full: 'Libur Nasional' };
+            } else if (todayJakarta > sunKey) {
+              // Jika akhir pekan telah berlalu (hari Minggu lewat) dan tidak ada absensi di Sabtu maupun Minggu -> ALPHA (A)
+              sabMin = { code: 'A', color: 'text-red-700 font-bold', full: 'Alpha (Tidak hadir di akhir pekan)' };
+            } else {
+              // Jika akhir pekan sedang berlangsung hari ini atau masih di masa depan -> STRIP (-)
+              const isTodayWeekend = todayJakarta === satKey || todayJakarta === sunKey;
+              sabMin = { code: '-', color: 'text-slate-400 font-normal', full: isTodayWeekend ? 'Belum Absen Akhir Pekan' : 'Belum berlangsung' };
+            }
+          }
         }
 
-        const isSaturdayWorkday = isCs && week.daysKeys[5] >= CS_SATURDAY_START_DATE;
-        const daysList = isSaturdayWorkday ? [sen, sel, rab, kam, jum, sab] : [sen, sel, rab, kam, jum];
+        const isWeekendWorkday = isCs && week.daysKeys[5] >= CS_SATURDAY_START_DATE;
+        const daysList = isWeekendWorkday ? [sen, sel, rab, kam, jum, sabMin] : [sen, sel, rab, kam, jum];
         const daysPresent = daysList.filter(d => d.code === 'H' || d.code === 'T').length;
         const workingDaysCount = daysList.filter(d => d.code !== 'L' && d.code !== 'OFF').length;
 
@@ -483,7 +612,7 @@ export const LaporanAdminView: React.FC = () => {
           rab,
           kam,
           jum,
-          sab,
+          sabMin,
           totalHoursFormatted: formatHours(s.totalHoursNum),
           kehadiran: `${daysPresent} / ${workingDaysCount} Hari`
         };
@@ -497,111 +626,130 @@ export const LaporanAdminView: React.FC = () => {
         monthYearLabel: week.monthYearLabel,
         dayDates: week.dayDates,
         daysKeys: week.daysKeys,
+        sabMinDateLabel: week.sabMinDateLabel,
         weekHolidayCount: week.weekHolidayCount,
         students
       };
     });
-  }, [filteredAttendances, leaveRequests, students]);
+  }, [filteredAttendances, leaveRequests, students, userStudents, selectedStudent, selectedMonth]);
 
   // Grouping Bulanan: Bulan (Terbaru -> Terlama) -> Mahasiswa (A -> Z) -> Akumulasi Hari Kerja (Reguler 5 Hari vs CS 6 Hari)
   const groupedMonthlyAttendances = React.useMemo(() => {
     const now = new Date();
     const todayJakarta = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
+    const pad = (n: number) => String(n).padStart(2, '0');
 
     const monthMap = new Map<string, {
       monthKey: string;
       label: string;
       regulerWorkingDays: string[];
       csWorkingDays: string[];
+      csWeekendPairs: { satKey: string; sunKey: string }[];
       totalRegulerDaysInMonth: number;
       totalCsDaysInMonth: number;
       isCurrentMonth: boolean;
       records: typeof filteredAttendances;
     }>();
 
+    // Inisialisasi helper untuk menambahkan bulan ke dalam monthMap
+    const ensureMonthInMap = (year: number, monthIndex: number) => {
+      const mKey = `${year}-${pad(monthIndex + 1)}`;
+      if (monthMap.has(mKey)) return;
+
+      const d = new Date(year, monthIndex, 1);
+      const testDateStr = `${year}-${pad(monthIndex + 1)}-01`;
+      if (!matchesMonth(testDateStr)) return;
+
+      const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+      const isCurrentMonth = now.getFullYear() === year && now.getMonth() === monthIndex;
+      const maxDay = isCurrentMonth ? Math.min(daysInMonth, now.getDate()) : daysInMonth;
+
+      const regulerWorkingDays: string[] = [];
+      const csWorkingDays: string[] = [];
+      const csWeekendPairs: { satKey: string; sunKey: string }[] = [];
+
+      for (let day = 1; day <= maxDay; day++) {
+        const dt = new Date(year, monthIndex, day);
+        const dayOfWeek = dt.getDay(); // 0 is Sun, 6 is Sat
+        const dateKey = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
+
+        if (dayOfWeek === 0 || isIndonesianHoliday(dateKey)) continue;
+
+        if (dayOfWeek !== 6) {
+          regulerWorkingDays.push(dateKey);
+          csWorkingDays.push(dateKey);
+        } else {
+          // Hari Sabtu
+          if (dateKey >= CS_SATURDAY_START_DATE) {
+            const nextSun = new Date(year, monthIndex, day + 1);
+            const sunKey = `${nextSun.getFullYear()}-${pad(nextSun.getMonth() + 1)}-${pad(nextSun.getDate())}`;
+            csWeekendPairs.push({ satKey: dateKey, sunKey });
+            csWorkingDays.push(dateKey);
+          }
+        }
+      }
+
+      let totalRegulerDaysInMonth = 0;
+      let totalCsDaysInMonth = 0;
+      let totalHolidaysInMonth = 0;
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dt = new Date(year, monthIndex, day);
+        const dateKey = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
+        const dayOfWeek = dt.getDay();
+
+        if (dayOfWeek === 0) continue;
+
+        if (isIndonesianHoliday(dateKey)) {
+          totalHolidaysInMonth++;
+        } else {
+          if (dayOfWeek !== 6) {
+            totalRegulerDaysInMonth++;
+          }
+          if (dateKey < CS_SATURDAY_START_DATE) {
+            if (dayOfWeek !== 6) {
+              totalCsDaysInMonth++;
+            }
+          } else {
+            totalCsDaysInMonth++;
+          }
+        }
+      }
+
+      const holidayNote = totalHolidaysInMonth > 0 ? ` & ${totalHolidaysInMonth} Libur Nasional` : '';
+      const mLabel = isCurrentMonth
+        ? `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (Reguler: ${regulerWorkingDays.length} Hari, CS: ${csWorkingDays.length} Hari Berjalan${holidayNote})`
+        : `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (Reguler: ${totalRegulerDaysInMonth} Hari, CS: ${totalCsDaysInMonth} Hari${holidayNote})`;
+
+      monthMap.set(mKey, {
+        monthKey: mKey,
+        label: mLabel,
+        regulerWorkingDays,
+        csWorkingDays,
+        csWeekendPairs,
+        totalRegulerDaysInMonth,
+        totalCsDaysInMonth,
+        isCurrentMonth,
+        records: []
+      });
+    };
+
+    // 1. Pastikan bulan berjalan selalu diinisialisasi jika cocok dengan filter
+    ensureMonthInMap(now.getFullYear(), now.getMonth());
+
+    // 2. Masukkan semua bulan dari riwayat absensi yang ada
     filteredAttendances.forEach(a => {
       if (!a.date) return;
       const d = new Date(a.date.includes('T') ? a.date : a.date + 'T00:00:00');
       const year = d.getFullYear();
       const monthIndex = d.getMonth();
-      const mKey = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
+      const mKey = `${year}-${pad(monthIndex + 1)}`;
 
       if (!monthMap.has(mKey)) {
-        const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-        const isCurrentMonth = now.getFullYear() === year && now.getMonth() === monthIndex;
-        const maxDay = isCurrentMonth ? Math.min(daysInMonth, now.getDate()) : daysInMonth;
-
-        const regulerWorkingDays: string[] = [];
-        const csWorkingDays: string[] = [];
-        for (let day = 1; day <= maxDay; day++) {
-          const dt = new Date(year, monthIndex, day);
-          const dayOfWeek = dt.getDay(); // 0 is Sun, 6 is Sat
-          const pad = (n: number) => String(n).padStart(2, '0');
-          const dateKey = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
-
-          if (dayOfWeek === 0 || isIndonesianHoliday(dateKey)) continue;
-
-          // Hari kerja reguler: Senin - Jumat (Sabtu libur)
-          if (dayOfWeek !== 6) {
-            regulerWorkingDays.push(dateKey);
-          }
-
-          // Hari kerja CS:
-          // Sebelum CS_SATURDAY_START_DATE (sebelum 14 September 2026), shift Sabtu belum berlaku sehingga Sabtu masih libur (5 hari kerja).
-          // Mulai 14 September 2026 (Sabtu 19 September), peserta CS bekerja 6 hari (Senin - Sabtu).
-          if (dateKey < CS_SATURDAY_START_DATE) {
-            if (dayOfWeek !== 6) {
-              csWorkingDays.push(dateKey);
-            }
-          } else {
-            csWorkingDays.push(dateKey);
-          }
-        }
-
-        let totalRegulerDaysInMonth = 0;
-        let totalCsDaysInMonth = 0;
-        let totalHolidaysInMonth = 0;
-        for (let day = 1; day <= daysInMonth; day++) {
-          const dt = new Date(year, monthIndex, day);
-          const pad = (n: number) => String(n).padStart(2, '0');
-          const dateKey = `${year}-${pad(monthIndex + 1)}-${pad(day)}`;
-          const dayOfWeek = dt.getDay();
-
-          if (dayOfWeek === 0) continue;
-
-          if (isIndonesianHoliday(dateKey)) {
-            totalHolidaysInMonth++;
-          } else {
-            if (dayOfWeek !== 6) {
-              totalRegulerDaysInMonth++;
-            }
-            if (dateKey < CS_SATURDAY_START_DATE) {
-              if (dayOfWeek !== 6) {
-                totalCsDaysInMonth++;
-              }
-            } else {
-              totalCsDaysInMonth++;
-            }
-          }
-        }
-
-        const holidayNote = totalHolidaysInMonth > 0 ? ` & ${totalHolidaysInMonth} Libur Nasional` : '';
-        const mLabel = isCurrentMonth
-          ? `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (Reguler: ${regulerWorkingDays.length} Hari, CS: ${csWorkingDays.length} Hari Berjalan${holidayNote})`
-          : `Bulan: ${d.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} (Reguler: ${totalRegulerDaysInMonth} Hari, CS: ${totalCsDaysInMonth} Hari${holidayNote})`;
-
-        monthMap.set(mKey, {
-          monthKey: mKey,
-          label: mLabel,
-          regulerWorkingDays,
-          csWorkingDays,
-          totalRegulerDaysInMonth,
-          totalCsDaysInMonth,
-          isCurrentMonth,
-          records: []
-        });
+        ensureMonthInMap(year, monthIndex);
       }
-      monthMap.get(mKey)!.records.push(a);
+      if (monthMap.has(mKey)) {
+        monthMap.get(mKey)!.records.push(a);
+      }
     });
 
     const sortedMonths = Array.from(monthMap.values()).sort((a, b) => b.monthKey.localeCompare(a.monthKey));
@@ -615,26 +763,67 @@ export const LaporanAdminView: React.FC = () => {
         totalHoursNum: number;
       }>();
 
+      // Inisialisasi seluruh mahasiswa aktif agar selalu tampil di tabel bulanan
+      const targetStudents = selectedStudent === 'Semua'
+        ? userStudents
+        : userStudents.filter(st => st.id === selectedStudent || st.name === selectedStudent);
+
+      const monthStart = `${m.monthKey}-01`;
+      const daysInThisMonth = new Date(parseInt(m.monthKey.split('-')[0]), parseInt(m.monthKey.split('-')[1]), 0).getDate();
+      const monthEnd = `${m.monthKey}-${pad(daysInThisMonth)}`;
+
+      targetStudents.forEach(st => {
+        if (st.startDate && monthEnd < st.startDate) return;
+        if (st.endDate && monthStart > st.endDate) return;
+
+        const sKey = st.id || st.name;
+        studentMap.set(sKey, {
+          userId: st.id,
+          studentName: st.name,
+          studentNim: st.nim || '-',
+          dayRecords: {},
+          totalHoursNum: 0
+        });
+      });
+
       m.records.forEach(r => {
-        const sKey = r.userId || r.studentName;
+        let sKey = r.userId;
         if (!studentMap.has(sKey)) {
-          studentMap.set(sKey, {
-            userId: r.userId,
-            studentName: r.studentName,
-            studentNim: r.studentNim,
-            dayRecords: {},
-            totalHoursNum: 0
+          const foundKey = Array.from(studentMap.keys()).find(k => {
+            const item = studentMap.get(k);
+            return (item?.userId && r.userId && item.userId === r.userId) ||
+                   (item?.studentName && r.studentName && item.studentName.toLowerCase().trim() === r.studentName.toLowerCase().trim());
           });
+          if (foundKey) {
+            sKey = foundKey;
+          } else {
+            // Hanya masukkan jika mahasiswa berstatus Aktif
+            const isActive = userStudents.some(st => st.id === r.userId || st.name === r.studentName);
+            if (!isActive) return;
+
+            sKey = r.userId || r.studentName;
+            studentMap.set(sKey, {
+              userId: r.userId,
+              studentName: r.studentName,
+              studentNim: r.studentNim || '-',
+              dayRecords: {},
+              totalHoursNum: 0
+            });
+          }
         }
-        const s = studentMap.get(sKey)!;
+        const s = studentMap.get(sKey);
+        if (!s) return;
         s.dayRecords[r.date] = r;
         s.totalHoursNum += parseHours(r.totalHours, r.checkOutTime);
+        if ((!s.studentNim || s.studentNim === '-') && r.studentNim) {
+          s.studentNim = r.studentNim;
+        }
       });
 
       const students = Array.from(studentMap.values()).map(s => {
+        const userObj = userStudents.find(u => u.id === s.userId || u.name === s.studentName);
         const isCs = isCsStudent(s.userId, s.studentName) || Object.values(s.dayRecords).some(r => r.notes && /cs/i.test(r.notes));
         const skema = isCs ? 'CS (6 Hari)' : 'Reguler (5 Hari)';
-        const studentWorkingDays = isCs ? m.csWorkingDays : m.regulerWorkingDays;
 
         let hadir = 0;
         let terlambat = 0;
@@ -642,8 +831,11 @@ export const LaporanAdminView: React.FC = () => {
         let sakit = 0;
         let alpha = 0;
 
-        // Evaluasi kehadiran berdasarkan Hari Kerja masing-masing skema
-        studentWorkingDays.forEach(wDate => {
+        // Evaluasi kehadiran hari kerja reguler (Senin - Jumat)
+        m.regulerWorkingDays.forEach(wDate => {
+          if (userObj?.startDate && wDate < userObj.startDate) return;
+          if (userObj?.endDate && wDate > userObj.endDate) return;
+
           const rec = s.dayRecords[wDate];
           if (rec) {
             if (rec.status === 'Hadir') hadir++;
@@ -652,7 +844,6 @@ export const LaporanAdminView: React.FC = () => {
             else if (rec.status === 'Sakit') sakit++;
             else if (rec.status === 'Alpha') alpha++;
           } else {
-            // Cek apakah ada pengajuan izin/sakit yang disetujui di tanggal ini
             const leave = leaveRequests.find(l => 
               l.userId === s.userId && 
               l.status === 'Disetujui' &&
@@ -665,22 +856,77 @@ export const LaporanAdminView: React.FC = () => {
                 izin++;
               }
             } else if (wDate < todayJakarta) {
-              // Tidak hadir di hari kerja yang sudah berlalu tanpa keterangan = Alpha!
               alpha++;
             }
           }
         });
 
-        // Hitung juga jika ada kehadiran di luar hari kerja standar
+        // Evaluasi kehadiran akhir pekan gabungan khusus peserta CS
+        if (isCs) {
+          m.csWeekendPairs.forEach(({ satKey, sunKey }) => {
+            if (userObj?.startDate && sunKey < userObj.startDate) return;
+            if (userObj?.endDate && satKey > userObj.endDate) return;
+
+            const satRec = s.dayRecords[satKey];
+            const sunRec = s.dayRecords[sunKey];
+
+            if (satRec?.status === 'Hadir' || sunRec?.status === 'Hadir') {
+              hadir++;
+              // Jika hadir kedua-duanya (Sabtu dan Minggu), catat kehadiran ekstra
+              if (satRec?.status === 'Hadir' && sunRec?.status === 'Hadir') {
+                hadir++;
+              }
+            } else if (satRec?.status === 'Terlambat' || sunRec?.status === 'Terlambat') {
+              terlambat++;
+            } else if (satRec?.status === 'Izin' || sunRec?.status === 'Izin') {
+              izin++;
+            } else if (satRec?.status === 'Sakit' || sunRec?.status === 'Sakit') {
+              sakit++;
+            } else if (satRec?.status === 'Alpha' || sunRec?.status === 'Alpha') {
+              alpha++;
+            } else {
+              const leave = leaveRequests.find(l => 
+                l.userId === s.userId && 
+                l.status === 'Disetujui' &&
+                ((l.startDate <= satKey && satKey <= l.endDate) || (l.startDate <= sunKey && sunKey <= l.endDate))
+              );
+              if (leave) {
+                if (leave.leaveType?.toLowerCase().includes('sakit')) {
+                  sakit++;
+                } else {
+                  izin++;
+                }
+              } else if (sunKey < todayJakarta) {
+                // Akhir pekan telah berlalu penuh tanpa kehadiran
+                alpha++;
+              }
+            }
+          });
+        }
+
+        // Hitung juga jika ada kehadiran di luar hari kerja standar (misal Reguler masuk akhir pekan)
         Object.entries(s.dayRecords).forEach(([dateStr, rec]) => {
-          if (!studentWorkingDays.includes(dateStr)) {
+          const isEvaluatedWeekday = m.regulerWorkingDays.includes(dateStr);
+          const isEvaluatedCsWeekend = isCs && m.csWeekendPairs.some(p => p.satKey === dateStr || p.sunKey === dateStr);
+          if (!isEvaluatedWeekday && !isEvaluatedCsWeekend) {
             if (rec.status === 'Hadir') hadir++;
             else if (rec.status === 'Terlambat') terlambat++;
           }
         });
 
-        // Persentase kehadiran dihitung dari total Hari Kerja yang telah dievaluasi
-        const totalEvaluated = Math.max(studentWorkingDays.length, hadir + terlambat + izin + sakit + alpha);
+        // Hitung total hari kerja yang wajib dievaluasi sesuai masa magang mahasiswa
+        const studentWeekdayCount = m.regulerWorkingDays.filter(wDate =>
+          (!userObj?.startDate || wDate >= userObj.startDate) &&
+          (!userObj?.endDate || wDate <= userObj.endDate)
+        ).length;
+
+        const studentWeekendCount = isCs ? m.csWeekendPairs.filter(({ satKey, sunKey }) =>
+          (!userObj?.startDate || sunKey >= userObj.startDate) &&
+          (!userObj?.endDate || satKey <= userObj.endDate)
+        ).length : 0;
+
+        const studentExpectedDays = studentWeekdayCount + studentWeekendCount;
+        const totalEvaluated = Math.max(studentExpectedDays, hadir + terlambat + izin + sakit + alpha);
         const presence = hadir + terlambat;
         const percentage = totalEvaluated > 0 ? Math.min(100, Math.round((presence / totalEvaluated) * 100)) : 0;
 
@@ -706,7 +952,7 @@ export const LaporanAdminView: React.FC = () => {
         students
       };
     });
-  }, [filteredAttendances, leaveRequests, students]);
+  }, [filteredAttendances, leaveRequests, students, userStudents, selectedStudent, selectedMonth]);
 
   // Export to PDF
   const handleExportPDF = () => {
@@ -815,7 +1061,7 @@ export const LaporanAdminView: React.FC = () => {
         6: { cellWidth: 26, halign: 'center' }
       };
     } else if (reportType === 'mingguan') {
-      head = [['No', 'Mahasiswa', 'Skema', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Total Jam', 'Kehadiran']];
+      head = [['No', 'Mahasiswa', 'Skema', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab/Min', 'Total Jam', 'Kehadiran']];
       groupedWeeklyAttendances.forEach(week => {
         rows.push([
           {
@@ -840,7 +1086,7 @@ export const LaporanAdminView: React.FC = () => {
             { content: s.rab.code, styles: { halign: 'center', valign: 'middle' } },
             { content: s.kam.code, styles: { halign: 'center', valign: 'middle' } },
             { content: s.jum.code, styles: { halign: 'center', valign: 'middle' } },
-            { content: s.sab.code, styles: { halign: 'center', valign: 'middle' } },
+            { content: s.sabMin.code, styles: { halign: 'center', valign: 'middle' } },
             { content: s.totalHoursFormatted, styles: { halign: 'center', valign: 'middle' } },
             { content: s.kehadiran, styles: { halign: 'center', valign: 'middle' } }
           ]);
@@ -848,14 +1094,14 @@ export const LaporanAdminView: React.FC = () => {
       });
       columnStyles = {
         0: { cellWidth: 8, halign: 'center' },
-        1: { cellWidth: 38 },
+        1: { cellWidth: 35 },
         2: { cellWidth: 24, halign: 'center' },
         3: { cellWidth: 11, halign: 'center' },
         4: { cellWidth: 11, halign: 'center' },
         5: { cellWidth: 11, halign: 'center' },
         6: { cellWidth: 11, halign: 'center' },
         7: { cellWidth: 11, halign: 'center' },
-        8: { cellWidth: 11, halign: 'center' },
+        8: { cellWidth: 14, halign: 'center' },
         9: { cellWidth: 24, halign: 'center' },
         10: { cellWidth: 26, halign: 'center' }
       };
@@ -1002,7 +1248,7 @@ export const LaporanAdminView: React.FC = () => {
           'Rabu': '',
           'Kamis': '',
           'Jumat': '',
-          'Sabtu': '',
+          'Sab/Min': '',
           'Total Jam': '',
           'Kehadiran': ''
         });
@@ -1016,7 +1262,7 @@ export const LaporanAdminView: React.FC = () => {
             'Rabu': s.rab.code,
             'Kamis': s.kam.code,
             'Jumat': s.jum.code,
-            'Sabtu': s.sab.code,
+            'Sab/Min': s.sabMin.code,
             'Total Jam': s.totalHoursFormatted,
             'Kehadiran': s.kehadiran
           });
@@ -1123,7 +1369,7 @@ export const LaporanAdminView: React.FC = () => {
               onChange={e => setSelectedStudent(e.target.value)}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 p-2 text-xs outline-none focus:border-[#2F80ED] focus:bg-white transition"
             >
-              <option value="Semua">Semua Peserta ({userStudents.length} Mahasiswa)</option>
+              <option value="Semua">Semua Peserta Aktif ({userStudents.length} Mahasiswa)</option>
               {userStudents.map(s => (
                 <option key={s.id} value={s.id}>
                   {s.name} {s.nim ? `(${s.nim})` : ''}
@@ -1370,7 +1616,7 @@ export const LaporanAdminView: React.FC = () => {
                     <th className="py-3 px-2 w-14 text-center border-r border-slate-700/60">Rab</th>
                     <th className="py-3 px-2 w-14 text-center border-r border-slate-700/60">Kam</th>
                     <th className="py-3 px-2 w-14 text-center border-r border-slate-700/60">Jum</th>
-                    <th className="py-3 px-2 w-14 text-center border-r border-slate-700/60">Sab</th>
+                    <th className="py-3 px-2 w-16 text-center border-r border-slate-700/60">Sab/Min</th>
                     <th className="py-3 px-3 w-24 text-center border-r border-slate-700/60">Total Jam</th>
                     <th className="py-3 px-3 w-28 text-center">Kehadiran</th>
                   </tr>
@@ -1425,9 +1671,9 @@ export const LaporanAdminView: React.FC = () => {
                             <span className="absolute right-0 top-1/2 -translate-y-1/2 h-3 w-[1px] bg-slate-400/40 dark:bg-slate-500/40 pointer-events-none"></span>
                           </td>
 
-                          {/* Col 9: SAB */}
-                          <td className="py-2.5 px-0 text-center font-bold font-mono text-slate-700 dark:text-slate-200 relative" title={`Sabtu, ${week.daysKeys[5]}`}>
-                            <span>{week.dayDates[5]}</span>
+                          {/* Col 9: SAB/MIN */}
+                          <td className="py-2.5 px-0 text-center font-bold font-mono text-slate-700 dark:text-slate-200 relative" title={`Sabtu/Minggu, ${week.sabMinDateLabel}`}>
+                            <span>{week.sabMinDateLabel}</span>
                           </td>
 
                           {/* Col 10: Di bawah TOTAL JAM -> "Sep 2026)" */}
@@ -1480,8 +1726,8 @@ export const LaporanAdminView: React.FC = () => {
                             <td className={`py-2.5 px-2 text-center ${student.jum.color} border-r border-slate-200 dark:border-slate-700`} title={`Jumat: ${student.jum.full}`}>
                               {student.jum.code}
                             </td>
-                            <td className={`py-2.5 px-2 text-center ${student.sab.color} border-r border-slate-200 dark:border-slate-700`} title={`Sabtu: ${student.sab.full}`}>
-                              {student.sab.code}
+                            <td className={`py-2.5 px-2 text-center ${student.sabMin.color} border-r border-slate-200 dark:border-slate-700`} title={`Sabtu/Minggu: ${student.sabMin.full}`}>
+                              {student.sabMin.code}
                             </td>
                             <td className="py-2.5 px-3 text-center font-mono text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-700">
                               {student.totalHoursFormatted}
