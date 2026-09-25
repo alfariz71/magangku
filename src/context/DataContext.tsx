@@ -152,7 +152,7 @@ const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   csShift2StartTime: '15:00',
   csShift2EndTime: '21:00',
   lateToleranceMins: 15,
-  lateToleranceCsShift1Mins: 0,
+  lateToleranceCsShift1Mins: 15,
   lateToleranceCsShift2Mins: -10,
   allowOvertime: true,
   requireSignatureOnReport: true,
@@ -251,7 +251,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return DEFAULT_SYSTEM_SETTINGS;
   });
 
-  const updateSystemSettings = (newSettings: Partial<SystemSettings>) => {
+  // Sync settings with remote database if system_settings table exists
+  useEffect(() => {
+    const fetchRemoteSettings = async () => {
+      try {
+        const { data, error } = await supabase.from('system_settings').select('settings').eq('id', 'default').maybeSingle();
+        if (!error && data?.settings) {
+          setSystemSettings(prev => ({ ...prev, ...data.settings }));
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('magangku_system_settings', JSON.stringify({ ...DEFAULT_SYSTEM_SETTINGS, ...data.settings }));
+          }
+        }
+      } catch {
+        // Fallback silently to local storage / default
+      }
+    };
+    fetchRemoteSettings();
+  }, []);
+
+  const updateSystemSettings = async (newSettings: Partial<SystemSettings>) => {
     setSystemSettings(prev => {
       const updated = { ...prev, ...newSettings };
       if (typeof window !== 'undefined') {
@@ -259,6 +277,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return updated;
     });
+
+    try {
+      await supabase.from('system_settings').upsert({
+        id: 'default',
+        settings: newSettings,
+        updated_at: new Date().toISOString()
+      });
+    } catch {
+      // Silently ignore if table doesn't exist yet
+    }
   };
 
   // ---- Load data when user changes ----
@@ -450,12 +478,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     } else if (r.check_in_time && !r.check_out_time) {
       // OPSI 2: Jika lupa absen pulang dan HARI SUDAH LEWAT (bukan hari ini),
-      // otomatis asumsikan jam pulang adalah jam tutup kantor standar dari pengaturan (default 17:00 WIB)
+      // otomatis asumsikan jam pulang adalah jam tutup kantor standar dari pengaturan sesuai shift masing-masing
       const today = getTodayJakarta();
       const isPastDay = dateStr < today;
 
       if (isPastDay) {
-        const defaultCloseTime = systemSettings.workEndTime || '17:00';
+        let defaultCloseTime = systemSettings.workEndTime || '17:00';
+        const notesStr = (r.notes as string) || '';
+        const isCsShift2 = notesStr.includes('Shift 2');
+        const isCsShift1 = notesStr.includes('Shift 1');
+
+        if (isCsShift2) {
+          defaultCloseTime = systemSettings.csShift2EndTime || '21:00';
+        } else if (isCsShift1) {
+          defaultCloseTime = systemSettings.csShift1EndTime || '15:00';
+        }
+
         finalCheckOutFormatted = `${defaultCloseTime} WIB (Otomatis)`;
         const inDate = inDateParsed || new Date(r.check_in_time as string);
         const defaultOutDate = new Date(`${dateStr}T${defaultCloseTime}:00+07:00`);
@@ -467,7 +505,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const mins = diffMinutes % 60;
           computedTotalHours = `${hours} jam ${mins} menit`;
         } else {
-          computedTotalHours = '8 jam 0 menit';
+          computedTotalHours = (isCsShift1 || isCsShift2) ? '6 jam 0 menit' : '8 jam 0 menit';
         }
       }
     }
@@ -518,7 +556,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const attendanceStats = {
-    hadir: attendances.filter(a => a.userId === currentUser?.id && a.status === 'Hadir').length,
+    hadir: attendances.filter(a => a.userId === currentUser?.id && (a.status === 'Hadir' || a.status === 'Terlambat')).length,
     terlambat: attendances.filter(a => a.userId === currentUser?.id && a.status === 'Terlambat').length,
     izin: attendances.filter(a => a.userId === currentUser?.id && (a.status === 'Izin' || a.status === 'Sakit')).length,
     alpha: attendances.filter(a => a.userId === currentUser?.id && a.status === 'Alpha').length
@@ -915,7 +953,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         targetStartMinute = m || 0;
         shiftTolerance = typeof systemSettings.lateToleranceCsShift1Mins === 'number'
           ? systemSettings.lateToleranceCsShift1Mins
-          : 0;
+          : 15;
         const endStr = systemSettings.csShift1EndTime || '15:00';
         shiftNotes = `CS - Shift 1 (${systemSettings.csShift1StartTime || '08:00'} - ${endStr})`;
       }

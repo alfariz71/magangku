@@ -158,7 +158,10 @@ export const Header: React.FC<HeaderProps> = ({ onMenuToggle, onNavigate }) => {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-[76px] w-full items-center justify-between border-b border-[#EAEFF4] bg-white px-4 sm:px-8 transition-smooth">
+    <header 
+      className="sticky top-0 z-30 flex min-h-[76px] w-full items-center justify-between border-b border-[#EAEFF4] bg-white px-4 sm:px-8 transition-smooth"
+      style={{ paddingTop: 'max(0px, env(safe-area-inset-top, 0px))' }}
+    >
       {/* Left: Mobile Toggle & Greeting */}
       <div className="flex items-center gap-3">
         {onMenuToggle && (

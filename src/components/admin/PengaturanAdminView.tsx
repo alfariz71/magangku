@@ -12,7 +12,7 @@ export const PengaturanAdminView: React.FC = () => {
   const [csShift2StartTime, setCsShift2StartTime] = useState(systemSettings.csShift2StartTime || '15:00');
   const [csShift2EndTime, setCsShift2EndTime] = useState(systemSettings.csShift2EndTime || '21:00');
   const [lateToleranceMins, setLateToleranceMins] = useState<number | string>(systemSettings.lateToleranceMins ?? 15);
-  const [lateToleranceCsShift1Mins, setLateToleranceCsShift1Mins] = useState<number | string>(systemSettings.lateToleranceCsShift1Mins ?? 0);
+  const [lateToleranceCsShift1Mins, setLateToleranceCsShift1Mins] = useState<number | string>(systemSettings.lateToleranceCsShift1Mins ?? 15);
   const [lateToleranceCsShift2Mins, setLateToleranceCsShift2Mins] = useState<number | string>(systemSettings.lateToleranceCsShift2Mins ?? -10);
   const [allowOvertime, setAllowOvertime] = useState(systemSettings.allowOvertime ?? true);
   const [requireSignatureOnReport, setRequireSignatureOnReport] = useState(systemSettings.requireSignatureOnReport ?? true);
@@ -27,7 +27,7 @@ export const PengaturanAdminView: React.FC = () => {
     setCsShift2StartTime(systemSettings.csShift2StartTime || '15:00');
     setCsShift2EndTime(systemSettings.csShift2EndTime || '21:00');
     setLateToleranceMins(systemSettings.lateToleranceMins ?? 15);
-    setLateToleranceCsShift1Mins(systemSettings.lateToleranceCsShift1Mins ?? 0);
+    setLateToleranceCsShift1Mins(systemSettings.lateToleranceCsShift1Mins ?? 15);
     setLateToleranceCsShift2Mins(systemSettings.lateToleranceCsShift2Mins ?? -10);
     setAllowOvertime(systemSettings.allowOvertime);
     setRequireSignatureOnReport(systemSettings.requireSignatureOnReport);

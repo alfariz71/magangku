@@ -27,6 +27,8 @@ import LokasiAdminView from './components/admin/LokasiAdminView';
 import KoreksiAdminView from './components/admin/KoreksiAdminView';
 import { ResetPasswordModal } from './components/auth/ResetPasswordModal';
 import { supabase } from './lib/supabase';
+import { Capacitor } from '@capacitor/core';
+import { LocalNotifications } from '@capacitor/local-notifications';
 
 const MainLayout: React.FC = () => {
   const { isAuthenticated, role, isLoading } = useAuth();
@@ -36,6 +38,13 @@ const MainLayout: React.FC = () => {
   const [isHelpModalOpen, setIsHelpModalOpen] = useState<boolean>(false);
   const [showRegister, setShowRegister] = useState<boolean>(false);
   const [showResetPasswordModal, setShowResetPasswordModal] = useState<boolean>(false);
+
+  // Minta izin notifikasi native di Android 13+ saat aplikasi pertama dibuka
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      LocalNotifications.requestPermissions().catch(() => {});
+    }
+  }, []);
 
   // Detect recovery link from email (#type=recovery or PASSWORD_RECOVERY event)
   useEffect(() => {

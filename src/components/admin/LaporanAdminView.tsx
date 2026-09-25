@@ -930,13 +930,16 @@ export const LaporanAdminView: React.FC = () => {
         const presence = hadir + terlambat;
         const percentage = totalEvaluated > 0 ? Math.min(100, Math.round((presence / totalEvaluated) * 100)) : 0;
 
+        const totalHadir = hadir + terlambat;
+
         return {
           userId: s.userId,
           studentName: s.studentName,
           studentNim: s.studentNim,
           skema,
           isCs,
-          hadir,
+          hadir: totalHadir,
+          hadirTepatWaktu: hadir,
           terlambat,
           izin,
           sakit,
