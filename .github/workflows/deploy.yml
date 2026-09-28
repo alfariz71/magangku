@@ -1,0 +1,37 @@
+name: Deploy MagangKu PWA to Office Server
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: 1. Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 2. Build Docker Image
+        run: |
+          docker build \
+            --build-arg VITE_SUPABASE_URL="${{ secrets.VITE_SUPABASE_URL }}" \
+            --build-arg VITE_SUPABASE_ANON_KEY="${{ secrets.VITE_SUPABASE_ANON_KEY }}" \
+            -t magangku-app:latest .
+
+      - name: 3. Stop Container Lama
+        run: |
+          docker stop magangku-web || true
+          docker rm magangku-web || true
+
+      - name: 4. Jalankan Container Baru
+        run: |
+          docker run -d \
+            --name magangku-web \
+            -p 8080:80 \
+            --restart unless-stopped \
+            magangku-app:latest
+
+      - name: 5. Verifikasi Status Container
+        run: |
+          docker ps | grep magangku-web
