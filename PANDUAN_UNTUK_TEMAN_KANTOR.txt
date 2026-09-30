@@ -1,0 +1,82 @@
+================================================================================
+  PANDUAN RINGKAS UNTUK TEMAN KANTOR (SETUP SERVER DEBIAN 13 & CLOUDFLARE)
+================================================================================
+
+Halo bro! Tugas lu di server Debian 13 kantor simpel banget.
+Database Supabase TIDAK PERLU lu install/sentuh sama sekali, karena web ini 
+otomatis langsung tersambung ke Supabase Cloud lama via kredensial GitHub Actions.
+
+Tugas lu cuma 3 langkah di bawah ini:
+1. Pastikan Docker aktif
+2. Pasang GitHub Runner (biar kodingan otomatis masuk ke server)
+3. Pasang Cloudflare Tunnel (biar web bisa diakses lewat domain netmon-bms.my.id)
+
+Berikut langkah detailnya:
+
+--------------------------------------------------------------------------------
+LANGKAH 1: PASTIKAN DOCKER AKTIF DI DEBIAN 13
+--------------------------------------------------------------------------------
+Buka terminal Debian 13 server kantor, lalu jalankan:
+
+  sudo apt update && sudo apt install docker.io curl -y
+  sudo usermod -aG docker $USER
+
+*Catatan: Kalau baru pertama install docker, logout terminal lalu login lagi 
+biar izin user docker aktif.
+
+
+--------------------------------------------------------------------------------
+LANGKAH 2: PASANG GITHUB ACTIONS RUNNER (AGEN OTOMASI)
+--------------------------------------------------------------------------------
+Di terminal Debian 13, jalankan perintah berikut berurutan:
+
+  mkdir -p ~/actions-runner && cd ~/actions-runner
+
+  curl -o actions-runner-linux-x64.tar.gz -L https://github.com/actions/runner/releases/download/v2.321.0/actions-runner-linux-x64-2.321.0.tar.gz
+
+  tar xzf ./actions-runner-linux-x64.tar.gz
+
+Lalu hubungkan runner ke repositori GitHub:
+(Minta token terbaru ke Ikhsan dari menu GitHub Repo -> Settings -> Actions -> Runners -> New self-hosted runner)
+
+  ./config.sh --url https://github.com/alfariz71/magangku --token <MASUKKAN_TOKEN_DARI_IKHSAN>
+
+*Catatan: Saat muncul pertanyaan nama runner atau label, cukup tekan ENTER terus sampai selesai.
+
+Agar runner ini berjalan otomatis di background (tidak mati saat terminal ditutup):
+
+  sudo ./svc.sh install
+  sudo ./svc.sh start
+
+>> Begitu langkah ini selesai, GitHub Actions akan OTOMATIS nge-build aplikasi 
+   dan menjalankannya di dalam Docker container di port 8080 (http://localhost:8080).
+
+
+--------------------------------------------------------------------------------
+LANGKAH 3: PASANG CLOUDFLARE TUNNEL (AGAR ONLINE DI DOMAIN)
+--------------------------------------------------------------------------------
+1. Buka dashboard Cloudflare Zero Trust (di akun yang memegang domain netmon-bms.my.id):
+   Networks -> Tunnels -> Pilih Tunnel yang sudah dibuat -> Edit / Configure.
+   
+2. Di bagian "Install connector" (Pilih Debian 64-bit), jalankan 1 baris perintah 
+   curl cloudflared yang diberikan Cloudflare di terminal Debian 13.
+   Contoh bentuk perintahnya:
+   curl -L --output cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb && sudo dpkg -i cloudflared.deb && sudo cloudflared service install <TOKEN_CLOUDFLARE>
+
+3. Di dashboard Cloudflare Tunnel, masuk ke tab "Public Hostnames" -> Add a public hostname:
+   - Subdomain : magang (atau absen)
+   - Domain    : netmon-bms.my.id
+   - Type      : HTTP
+   - URL       : localhost:8080
+   Lalu klik "Save hostname".
+
+--------------------------------------------------------------------------------
+SELESAI!
+--------------------------------------------------------------------------------
+Web MagangKu sekarang sudah resmi online dan bisa diakses publik di:
+https://magang.netmon-bms.my.id
+
+- Semua data akun dan absensi lama tetap utuh dan tersinkronisasi.
+- Ke depannya, setiap kali Ikhsan melakukan "git push", server kantor lu akan 
+  otomatis memperbarui aplikasi sendiri tanpa lu perlu buka terminal lagi!
+================================================================================
