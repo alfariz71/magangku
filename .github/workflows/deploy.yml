@@ -30,7 +30,7 @@ jobs:
         run: |
           docker run -d \
             --name magangku-web \
-            -p 8080:80 \
+            -p 127.0.0.1:8080:80 \
             --restart unless-stopped \
             magangku-app:latest
 
