@@ -50,3 +50,37 @@ export function isVideoUrl(url?: string | null): boolean {
   if (!url) return false;
   return url.includes('/video/upload/') || /\.(mp4|mov|webm|ogg|m4v)(\?.*)?$/i.test(url);
 }
+
+/**
+ * Mengurai string attachmentUrl menjadi array URL.
+ * Mendukung format URL tunggal legacy maupun JSON array string ["url1", "url2"].
+ */
+export function parseAttachmentUrls(url?: string | null): string[] {
+  if (!url) return [];
+  const trimmed = url.trim();
+  if (!trimmed) return [];
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+      }
+    } catch {
+      // fallback jika gagal parse JSON
+    }
+  }
+  return [trimmed];
+}
+
+/**
+ * Mengemas array URL menjadi string attachmentUrl yang disimpan ke database.
+ * Jika kosong -> undefined
+ * Jika 1 URL -> string biasa (backward-compatible)
+ * Jika > 1 URL -> JSON array string ["url1", "url2"]
+ */
+export function formatAttachmentUrls(urls: string[]): string | undefined {
+  const filtered = urls.filter(u => typeof u === 'string' && u.trim().length > 0);
+  if (filtered.length === 0) return undefined;
+  if (filtered.length === 1) return filtered[0];
+  return JSON.stringify(filtered);
+}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Search,
   Clock,
@@ -8,17 +8,20 @@ import {
   ExternalLink,
   X,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   User as UserIcon,
   BookOpen,
   ChevronsUpDown,
   Filter
 } from 'lucide-react';
 import { useData } from '../../context/DataContext';
-import { isVideoUrl } from '../../lib/cloudinary';
+import { isVideoUrl, parseAttachmentUrls } from '../../lib/cloudinary';
 import { ActivityRecord } from '../../types';
 
 interface PhotoModalState {
-  url: string;
+  urls: string[];
+  currentIndex: number;
   title: string;
   student: string;
   date: string;
@@ -40,6 +43,28 @@ export const AktivitasAdminView: React.FC = () => {
   const [selectedStudentFilter, setSelectedStudentFilter] = useState('ALL');
   const [expandedStudents, setExpandedStudents] = useState<Set<string>>(new Set());
   const [selectedPhoto, setSelectedPhoto] = useState<PhotoModalState | null>(null);
+
+  // Keyboard navigation untuk Photo/Video Modal Slider
+  useEffect(() => {
+    if (!selectedPhoto || selectedPhoto.urls.length <= 1) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        setSelectedPhoto(prev => prev ? {
+          ...prev,
+          currentIndex: (prev.currentIndex - 1 + prev.urls.length) % prev.urls.length
+        } : null);
+      } else if (e.key === 'ArrowRight') {
+        setSelectedPhoto(prev => prev ? {
+          ...prev,
+          currentIndex: (prev.currentIndex + 1) % prev.urls.length
+        } : null);
+      } else if (e.key === 'Escape') {
+        setSelectedPhoto(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedPhoto]);
 
   const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' });
 
@@ -424,12 +449,19 @@ export const AktivitasAdminView: React.FC = () => {
 
                                 {/* Dokumentasi */}
                                 <td className="py-3 px-4 text-center align-top whitespace-nowrap">
-                                  {act.attachmentUrl ? (
-                                    isVideoUrl(act.attachmentUrl) ? (
+                                  {act.attachmentUrl ? (() => {
+                                    const urls = parseAttachmentUrls(act.attachmentUrl);
+                                    if (urls.length === 0) return <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>;
+                                    const isVid = urls.length === 1 && isVideoUrl(urls[0]);
+                                    const hasMultiple = urls.length > 1;
+
+                                    return isVid ? (
                                       <button
+                                        type="button"
                                         onClick={() =>
                                           setSelectedPhoto({
-                                            url: act.attachmentUrl!,
+                                            urls,
+                                            currentIndex: 0,
                                             title: act.title,
                                             student: group.name,
                                             date: formatDateHeader(actDate),
@@ -442,9 +474,11 @@ export const AktivitasAdminView: React.FC = () => {
                                       </button>
                                     ) : (
                                       <button
+                                        type="button"
                                         onClick={() =>
                                           setSelectedPhoto({
-                                            url: act.attachmentUrl!,
+                                            urls,
+                                            currentIndex: 0,
                                             title: act.title,
                                             student: group.name,
                                             date: formatDateHeader(actDate),
@@ -453,10 +487,10 @@ export const AktivitasAdminView: React.FC = () => {
                                         className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/80 dark:bg-blue-950/50 px-2.5 py-1 text-[11px] font-semibold text-[#2F80ED] dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition cursor-pointer shadow-2xs"
                                       >
                                         <ImageIcon className="h-3.5 w-3.5" />
-                                        <span>Lihat Foto</span>
+                                        <span>Lihat Foto {hasMultiple ? `(${urls.length})` : ''}</span>
                                       </button>
-                                    )
-                                  ) : (
+                                    );
+                                  })() : (
                                     <span className="text-slate-300 dark:text-slate-600 text-xs">—</span>
                                   )}
                                 </td>
@@ -503,41 +537,52 @@ export const AktivitasAdminView: React.FC = () => {
                               </p>
                             )}
 
-                            {act.attachmentUrl && (
-                              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                                {isVideoUrl(act.attachmentUrl) ? (
-                                  <button
-                                    onClick={() =>
-                                      setSelectedPhoto({
-                                        url: act.attachmentUrl!,
-                                        title: act.title,
-                                        student: group.name,
-                                        date: formatDateHeader(actDate),
-                                      })
-                                    }
-                                    className="w-full justify-center inline-flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50/80 dark:bg-purple-950/50 px-2.5 py-1.5 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-100 transition shadow-2xs cursor-pointer"
-                                  >
-                                    <Video className="h-3.5 w-3.5" />
-                                    <span>Lihat Video Kegiatan</span>
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() =>
-                                      setSelectedPhoto({
-                                        url: act.attachmentUrl!,
-                                        title: act.title,
-                                        student: group.name,
-                                        date: formatDateHeader(actDate),
-                                      })
-                                    }
-                                    className="w-full justify-center inline-flex items-center gap-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/80 dark:bg-blue-950/50 px-2.5 py-1.5 text-xs font-semibold text-[#2F80ED] dark:text-blue-400 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
-                                  >
-                                    <ImageIcon className="h-3.5 w-3.5" />
-                                    <span>Lihat Foto Kegiatan</span>
-                                  </button>
-                                )}
-                              </div>
-                            )}
+                            {act.attachmentUrl && (() => {
+                              const urls = parseAttachmentUrls(act.attachmentUrl);
+                              if (urls.length === 0) return null;
+                              const isVid = urls.length === 1 && isVideoUrl(urls[0]);
+                              const hasMultiple = urls.length > 1;
+
+                              return (
+                                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                                  {isVid ? (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setSelectedPhoto({
+                                          urls,
+                                          currentIndex: 0,
+                                          title: act.title,
+                                          student: group.name,
+                                          date: formatDateHeader(actDate),
+                                        })
+                                      }
+                                      className="w-full justify-center inline-flex items-center gap-1.5 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50/80 dark:bg-purple-950/50 px-2.5 py-1.5 text-xs font-semibold text-purple-600 dark:text-purple-400 hover:bg-purple-100 transition shadow-2xs cursor-pointer"
+                                    >
+                                      <Video className="h-3.5 w-3.5" />
+                                      <span>Lihat Video Kegiatan</span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setSelectedPhoto({
+                                          urls,
+                                          currentIndex: 0,
+                                          title: act.title,
+                                          student: group.name,
+                                          date: formatDateHeader(actDate),
+                                        })
+                                      }
+                                      className="w-full justify-center inline-flex items-center gap-1.5 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50/80 dark:bg-blue-950/50 px-2.5 py-1.5 text-xs font-semibold text-[#2F80ED] dark:text-blue-400 hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                                    >
+                                      <ImageIcon className="h-3.5 w-3.5" />
+                                      <span>Lihat Foto Kegiatan {hasMultiple ? `(${urls.length})` : ''}</span>
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })}
@@ -551,20 +596,36 @@ export const AktivitasAdminView: React.FC = () => {
         )}
       </div>
 
-      {/* Modal Preview Foto / Video Kegiatan */}
-      {selectedPhoto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4">
-          <div className="relative w-full max-w-lg rounded-2xl bg-white dark:bg-slate-900 p-5 shadow-2xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95">
+      {/* Modal Preview Foto / Video Kegiatan dengan Slide Buttons */}
+      {selectedPhoto && selectedPhoto.urls.length > 0 && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4"
+          onClick={() => setSelectedPhoto(null)}
+        >
+          <div
+            className="relative w-full max-w-xl rounded-2xl bg-white dark:bg-slate-900 p-5 shadow-2xl border border-slate-100 dark:border-slate-800 animate-in zoom-in-95"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header Modal */}
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900 dark:text-white">{selectedPhoto.title}</h3>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+              <div className="pr-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white leading-tight">
+                    {selectedPhoto.title}
+                  </h3>
+                  {selectedPhoto.urls.length > 1 && (
+                    <span className="inline-flex items-center rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 px-2 py-0.5 text-[10px] font-bold text-[#2F80ED] dark:text-blue-300 shrink-0">
+                      {selectedPhoto.currentIndex + 1} / {selectedPhoto.urls.length}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                   {selectedPhoto.student} • {selectedPhoto.date}
                 </p>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <a
-                  href={selectedPhoto.url}
+                  href={selectedPhoto.urls[selectedPhoto.currentIndex]}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="rounded-lg p-1.5 text-slate-400 hover:text-[#2F80ED] hover:bg-blue-50 dark:hover:bg-slate-800 transition"
@@ -573,6 +634,7 @@ export const AktivitasAdminView: React.FC = () => {
                   <ExternalLink className="h-4 w-4" />
                 </a>
                 <button
+                  type="button"
                   onClick={() => setSelectedPhoto(null)}
                   className="rounded-lg p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                 >
@@ -581,25 +643,96 @@ export const AktivitasAdminView: React.FC = () => {
               </div>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded-xl bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-center max-h-[70vh]">
-              {isVideoUrl(selectedPhoto.url) ? (
+            {/* Media Container dengan Slide Buttons */}
+            <div className="relative mt-4 overflow-hidden rounded-xl bg-slate-950 border border-slate-200 dark:border-slate-800 flex items-center justify-center min-h-[220px] max-h-[65vh]">
+              {isVideoUrl(selectedPhoto.urls[selectedPhoto.currentIndex]) ? (
                 <video
-                  src={selectedPhoto.url}
+                  key={selectedPhoto.urls[selectedPhoto.currentIndex]}
+                  src={selectedPhoto.urls[selectedPhoto.currentIndex]}
                   controls
                   autoPlay
-                  className="w-full h-auto max-h-[65vh] object-contain rounded-lg"
+                  className="w-full h-auto max-h-[62vh] object-contain rounded-lg"
                 />
               ) : (
                 <img
-                  src={selectedPhoto.url}
-                  alt={selectedPhoto.title}
-                  className="w-full h-auto max-h-[65vh] object-contain"
+                  key={selectedPhoto.urls[selectedPhoto.currentIndex]}
+                  src={selectedPhoto.urls[selectedPhoto.currentIndex]}
+                  alt={`${selectedPhoto.title} - ${selectedPhoto.currentIndex + 1}`}
+                  className="w-full h-auto max-h-[62vh] object-contain"
                 />
+              )}
+
+              {/* Tombol Slide Kiri & Kanan (Muncul jika ada lebih dari 1 foto) */}
+              {selectedPhoto.urls.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedPhoto(prev => prev ? {
+                        ...prev,
+                        currentIndex: (prev.currentIndex - 1 + prev.urls.length) % prev.urls.length
+                      } : null);
+                    }}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 hover:bg-black/85 text-white shadow-lg backdrop-blur-xs transition hover:scale-105 active:scale-95 cursor-pointer"
+                    title="Foto Sebelumnya"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedPhoto(prev => prev ? {
+                        ...prev,
+                        currentIndex: (prev.currentIndex + 1) % prev.urls.length
+                      } : null);
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 hover:bg-black/85 text-white shadow-lg backdrop-blur-xs transition hover:scale-105 active:scale-95 cursor-pointer"
+                    title="Foto Berikutnya"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
               )}
             </div>
 
-            <div className="mt-4 flex justify-end">
+            {/* Thumbnail dots / navigation slider */}
+            {selectedPhoto.urls.length > 1 && (
+              <div className="mt-3 flex items-center justify-center gap-2 overflow-x-auto py-1">
+                {selectedPhoto.urls.map((url, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setSelectedPhoto(prev => prev ? { ...prev, currentIndex: idx } : null)}
+                    className={`relative rounded-lg overflow-hidden border-2 transition-all cursor-pointer shrink-0 ${
+                      selectedPhoto.currentIndex === idx
+                        ? 'border-[#2F80ED] ring-2 ring-blue-400/30 scale-105'
+                        : 'border-transparent opacity-50 hover:opacity-100'
+                    }`}
+                  >
+                    {isVideoUrl(url) ? (
+                      <div className="w-10 h-10 bg-slate-800 flex items-center justify-center text-white">
+                        <Video className="h-4 w-4" />
+                      </div>
+                    ) : (
+                      <img src={url} alt={`Slide ${idx + 1}`} className="w-10 h-10 object-cover" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Footer Modal */}
+            <div className="mt-4 flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
+              <span className="text-[11px] text-slate-400">
+                {selectedPhoto.urls.length > 1
+                  ? `${selectedPhoto.urls.length} lampiran foto/video`
+                  : '1 lampiran'}
+              </span>
               <button
+                type="button"
                 onClick={() => setSelectedPhoto(null)}
                 className="rounded-xl bg-[#2F80ED] px-4 py-2 text-xs font-semibold text-white hover:bg-blue-600 shadow-md cursor-pointer transition"
               >

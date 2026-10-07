@@ -1,9 +1,16 @@
-import React, { useState, useRef } from 'react';
-import { Plus, X, Check, Calendar, Clock, AlertCircle, Camera, Image as ImageIcon, Video, Upload, ExternalLink, Edit2, Trash2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Plus, X, Check, Calendar, Clock, AlertCircle, Camera, Image as ImageIcon, Video, Upload, ExternalLink, Edit2, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
-import { uploadToCloudinary, isVideoUrl } from '../../lib/cloudinary';
+import { uploadToCloudinary, isVideoUrl, parseAttachmentUrls, formatAttachmentUrls } from '../../lib/cloudinary';
 import { ActivityRecord } from '../../types';
+
+interface MediaItem {
+  id: string;
+  file: File;
+  previewUrl: string;
+  type: 'image' | 'video';
+}
 
 export const AktivitasMagangView: React.FC = () => {
   const { activities, addActivity, updateActivity, deleteActivity, todayAttendance, systemSettings } = useData();
@@ -49,21 +56,47 @@ export const AktivitasMagangView: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successToast, setSuccessToast] = useState(false);
 
-  // States untuk modal dokumentasi foto & video
+  // States untuk modal dokumentasi foto & video (Multi-file)
   const [showDocModal, setShowDocModal] = useState(false);
   const docFileInputRef = useRef<HTMLInputElement | null>(null);
   const [docDate, setDocDate] = useState(new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }));
-  const [docMedia, setDocMedia] = useState<File | null>(null);
-  const [docMediaPreview, setDocMediaPreview] = useState<string>('');
-  const [docMediaType, setDocMediaType] = useState<'image' | 'video'>('image');
+  const [docMediaList, setDocMediaList] = useState<MediaItem[]>([]);
   const [docTitle, setDocTitle] = useState('');
   const [docDesc, setDocDesc] = useState('');
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgressText, setUploadProgressText] = useState('');
 
-  // State untuk modal preview foto & video (lightbox)
-  const [selectedPhoto, setSelectedPhoto] = useState<{ url: string; title: string; date: string } | null>(null);
+  // State untuk modal preview foto & video (lightbox slider)
+  const [selectedPhoto, setSelectedPhoto] = useState<{
+    urls: string[];
+    currentIndex: number;
+    title: string;
+    date: string;
+  } | null>(null);
 
-  // States untuk Edit Aktivitas
+  // Keyboard navigation untuk Lightbox Slider
+  useEffect(() => {
+    if (!selectedPhoto || selectedPhoto.urls.length <= 1) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        setSelectedPhoto(prev => prev ? {
+          ...prev,
+          currentIndex: (prev.currentIndex - 1 + prev.urls.length) % prev.urls.length
+        } : null);
+      } else if (e.key === 'ArrowRight') {
+        setSelectedPhoto(prev => prev ? {
+          ...prev,
+          currentIndex: (prev.currentIndex + 1) % prev.urls.length
+        } : null);
+      } else if (e.key === 'Escape') {
+        setSelectedPhoto(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedPhoto]);
+
+  // States untuk Edit Aktivitas (Multi-file)
   const [editModalOpen, setEditModalOpen] = useState(false);
   const editFileInputRef = useRef<HTMLInputElement | null>(null);
   const [editingActivity, setEditingActivity] = useState<ActivityRecord | null>(null);
@@ -71,11 +104,10 @@ export const AktivitasMagangView: React.FC = () => {
   const [editDate, setEditDate] = useState('');
   const [editTime, setEditTime] = useState('');
   const [editDesc, setEditDesc] = useState('');
-  const [editAttachmentUrl, setEditAttachmentUrl] = useState<string | undefined>('');
-  const [editNewMedia, setEditNewMedia] = useState<File | null>(null);
-  const [editNewMediaPreview, setEditNewMediaPreview] = useState<string>('');
-  const [editNewMediaType, setEditNewMediaType] = useState<'image' | 'video'>('image');
+  const [editExistingUrls, setEditExistingUrls] = useState<string[]>([]);
+  const [editNewMediaList, setEditNewMediaList] = useState<MediaItem[]>([]);
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  const [editUploadProgressText, setEditUploadProgressText] = useState('');
 
   const handleOpenEdit = (act: ActivityRecord) => {
     setEditingActivity(act);
@@ -83,10 +115,24 @@ export const AktivitasMagangView: React.FC = () => {
     setEditDate(act.activityDate);
     setEditTime(act.time || '08:00 - 17:00 WIB');
     setEditDesc(act.description && !act.description.startsWith('Waktu: ') ? act.description : '');
-    setEditAttachmentUrl(act.attachmentUrl || '');
-    setEditNewMedia(null);
-    setEditNewMediaPreview('');
+    setEditExistingUrls(parseAttachmentUrls(act.attachmentUrl));
+    setEditNewMediaList([]);
+    setEditUploadProgressText('');
     setEditModalOpen(true);
+  };
+
+  const handleRemoveExistingEditUrl = (index: number) => {
+    setEditExistingUrls(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleRemoveNewEditMedia = (index: number) => {
+    setEditNewMediaList(prev => {
+      const target = prev[index];
+      if (target?.previewUrl) {
+        try { URL.revokeObjectURL(target.previewUrl); } catch (_) {}
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -94,24 +140,35 @@ export const AktivitasMagangView: React.FC = () => {
     if (!editingActivity || !editTitle.trim()) return;
     setIsSubmittingEdit(true);
     try {
-      let finalUrl = editAttachmentUrl;
-      if (editNewMedia) {
-        if (editNewMediaType === 'image') {
-          const compressed = await compressImage(editNewMedia);
-          finalUrl = await uploadToCloudinary(compressed, 'magangku/aktivitas');
-        } else {
-          finalUrl = await uploadToCloudinary(editNewMedia, 'magangku/aktivitas');
+      const newUploadedUrls: string[] = [];
+      if (editNewMediaList.length > 0) {
+        for (let i = 0; i < editNewMediaList.length; i++) {
+          const item = editNewMediaList[i];
+          setEditUploadProgressText(`Mengunggah foto baru (${i + 1}/${editNewMediaList.length})...`);
+          if (item.type === 'image') {
+            const compressed = await compressImage(item.file);
+            const url = await uploadToCloudinary(compressed, 'magangku/aktivitas');
+            newUploadedUrls.push(url);
+          } else {
+            const url = await uploadToCloudinary(item.file, 'magangku/aktivitas');
+            newUploadedUrls.push(url);
+          }
         }
       }
+
+      const finalUrls = [...editExistingUrls, ...newUploadedUrls];
 
       await updateActivity(editingActivity.id, {
         title: editTitle,
         activityDate: editDate,
         time: editTime,
         description: editDesc,
-        attachmentUrl: finalUrl || undefined,
+        attachmentUrl: formatAttachmentUrls(finalUrls),
       });
 
+      editNewMediaList.forEach(m => { try { URL.revokeObjectURL(m.previewUrl); } catch (_) {} });
+      setEditNewMediaList([]);
+      setEditUploadProgressText('');
       setEditModalOpen(false);
       setEditingActivity(null);
     } catch (err) {
@@ -119,6 +176,7 @@ export const AktivitasMagangView: React.FC = () => {
       alert('Gagal memperbarui aktivitas: ' + (err instanceof Error ? err.message : 'Terjadi kesalahan'));
     } finally {
       setIsSubmittingEdit(false);
+      setEditUploadProgressText('');
     }
   };
 
@@ -239,61 +297,76 @@ export const AktivitasMagangView: React.FC = () => {
   };
 
   const handleMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
-    const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(file.name);
-    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif|gif)$/i.test(file.name);
+    const validNewItems: MediaItem[] = [];
 
-    if (!isVideo && !isImage) {
-      alert('Format file tidak didukung. Harap pilih foto (JPG, PNG, WebP) atau video (MP4, WebM)!');
-      e.target.value = '';
-      return;
-    }
+    for (const file of files) {
+      const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(file.name);
+      const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif|gif)$/i.test(file.name);
 
-    if (isVideo) {
-      if (file.size > 30 * 1024 * 1024) {
-        alert('Ukuran video melebihi batas maksimal 30 MB!');
-        e.target.value = '';
-        return;
+      if (!isVideo && !isImage) {
+        alert(`Format file "${file.name}" tidak didukung. Harap pilih foto (JPG, PNG, WebP) atau video (MP4, WebM)!`);
+        continue;
       }
-      setDocMediaType('video');
-    } else {
-      setDocMediaType('image');
+
+      if (isVideo && file.size > 30 * 1024 * 1024) {
+        alert(`Ukuran video "${file.name}" melebihi batas maksimal 30 MB!`);
+        continue;
+      }
+
+      validNewItems.push({
+        id: Math.random().toString(36).substring(2, 9),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        type: isVideo ? 'video' : 'image',
+      });
     }
 
-    setDocMedia(file);
-    const url = URL.createObjectURL(file);
-    setDocMediaPreview(url);
+    setDocMediaList(prev => [...prev, ...validNewItems]);
     e.target.value = '';
   };
 
-  const handleEditMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(file.name);
-    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif|gif)$/i.test(file.name);
-
-    if (!isVideo && !isImage) {
-      alert('Format file tidak didukung. Harap pilih foto (JPG, PNG, WebP) atau video (MP4, WebM)!');
-      e.target.value = '';
-      return;
-    }
-
-    if (isVideo) {
-      if (file.size > 30 * 1024 * 1024) {
-        alert('Ukuran video melebihi batas maksimal 30 MB!');
-        e.target.value = '';
-        return;
+  const handleRemoveDocMedia = (index: number) => {
+    setDocMediaList(prev => {
+      const target = prev[index];
+      if (target?.previewUrl) {
+        try { URL.revokeObjectURL(target.previewUrl); } catch (_) {}
       }
-      setEditNewMediaType('video');
-    } else {
-      setEditNewMediaType('image');
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const handleEditMediaSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const validNewItems: MediaItem[] = [];
+
+    for (const file of files) {
+      const isVideo = file.type.startsWith('video/') || /\.(mp4|mov|webm|m4v|avi|mkv)$/i.test(file.name);
+      const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|webp|heic|heif|gif)$/i.test(file.name);
+
+      if (!isVideo && !isImage) {
+        alert(`Format file "${file.name}" tidak didukung. Harap pilih foto (JPG, PNG, WebP) atau video (MP4, WebM)!`);
+        continue;
+      }
+
+      if (isVideo && file.size > 30 * 1024 * 1024) {
+        alert(`Ukuran video "${file.name}" melebihi batas maksimal 30 MB!`);
+        continue;
+      }
+
+      validNewItems.push({
+        id: Math.random().toString(36).substring(2, 9),
+        file,
+        previewUrl: URL.createObjectURL(file),
+        type: isVideo ? 'video' : 'image',
+      });
     }
 
-    setEditNewMedia(file);
-    setEditNewMediaPreview(URL.createObjectURL(file));
+    setEditNewMediaList(prev => [...prev, ...validNewItems]);
     e.target.value = '';
   };
 
@@ -301,34 +374,42 @@ export const AktivitasMagangView: React.FC = () => {
     if (!docTitle.trim()) { alert('Judul kegiatan wajib diisi'); return; }
     setIsUploading(true);
     try {
-      let mediaUrl = '';
-      if (docMedia && currentUser?.id) {
-        if (docMediaType === 'image') {
-          const compressed = await compressImage(docMedia);
-          mediaUrl = await uploadToCloudinary(compressed, 'magangku/aktivitas');
-        } else {
-          // Video diunggah langsung ke Cloudinary tanpa kompresi canvas
-          mediaUrl = await uploadToCloudinary(docMedia, 'magangku/aktivitas');
+      const uploadedUrls: string[] = [];
+      if (docMediaList.length > 0 && currentUser?.id) {
+        for (let i = 0; i < docMediaList.length; i++) {
+          const item = docMediaList[i];
+          setUploadProgressText(`Mengunggah media (${i + 1}/${docMediaList.length})...`);
+          if (item.type === 'image') {
+            const compressed = await compressImage(item.file);
+            const url = await uploadToCloudinary(compressed, 'magangku/aktivitas');
+            uploadedUrls.push(url);
+          } else {
+            // Video diunggah langsung ke Cloudinary tanpa kompresi canvas
+            const url = await uploadToCloudinary(item.file, 'magangku/aktivitas');
+            uploadedUrls.push(url);
+          }
         }
       }
       await addActivity({
         title: docTitle,
         description: docDesc,
         activityDate: docDate || new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Jakarta' }),
-        attachmentUrl: mediaUrl,
+        attachmentUrl: formatAttachmentUrls(uploadedUrls),
         time: getDefaultShiftTime(),
         createdAt: new Date().toISOString()
       });
       setShowDocModal(false);
-      setDocMedia(null);
-      setDocMediaPreview('');
+      docMediaList.forEach(m => { try { URL.revokeObjectURL(m.previewUrl); } catch (_) {} });
+      setDocMediaList([]);
       setDocTitle('');
       setDocDesc('');
+      setUploadProgressText('');
     } catch (err) {
       console.error('Save doc error:', err);
       alert('Gagal menyimpan dokumentasi: ' + (err instanceof Error ? err.message : 'Terjadi kesalahan'));
     } finally {
       setIsUploading(false);
+      setUploadProgressText('');
     }
   };
 
@@ -460,37 +541,39 @@ export const AktivitasMagangView: React.FC = () => {
 
                           {/* Dokumentasi (Foto / Video) */}
                           <td className="py-3.5 px-4 whitespace-nowrap">
-                            {act.attachmentUrl ? (
-                              isVideoUrl(act.attachmentUrl) ? (
+                            {(() => {
+                              const urls = parseAttachmentUrls(act.attachmentUrl);
+                              if (urls.length === 0) return <span className="text-slate-300 text-xs">—</span>;
+
+                              const hasMultiple = urls.length > 1;
+                              const isVideo = !hasMultiple && isVideoUrl(urls[0]);
+
+                              return (
                                 <button
                                   type="button"
                                   onClick={() => setSelectedPhoto({
-                                    url: act.attachmentUrl!,
+                                    urls,
+                                    currentIndex: 0,
                                     title: act.title,
                                     date: formatDateHeader(act.activityDate || date)
                                   })}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-purple-200 bg-purple-50/80 px-2.5 py-1 text-[11px] font-semibold text-purple-600 hover:bg-purple-100 transition shadow-2xs cursor-pointer"
+                                  className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition shadow-2xs cursor-pointer ${
+                                    isVideo
+                                      ? 'border-purple-200 bg-purple-50/80 text-purple-600 hover:bg-purple-100'
+                                      : 'border-blue-200 bg-blue-50/80 text-[#2F80ED] hover:bg-blue-100'
+                                  }`}
                                 >
-                                  <Video className="h-3.5 w-3.5" />
-                                  <span>Lihat Video</span>
+                                  {isVideo ? <Video className="h-3.5 w-3.5" /> : <ImageIcon className="h-3.5 w-3.5" />}
+                                  <span>
+                                    {isVideo
+                                      ? 'Lihat Video'
+                                      : hasMultiple
+                                      ? `Lihat Foto (${urls.length})`
+                                      : 'Lihat Foto'}
+                                  </span>
                                 </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedPhoto({
-                                    url: act.attachmentUrl!,
-                                    title: act.title,
-                                    date: formatDateHeader(act.activityDate || date)
-                                  })}
-                                  className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50/80 px-2.5 py-1 text-[11px] font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs cursor-pointer"
-                                >
-                                  <ImageIcon className="h-3.5 w-3.5" />
-                                  <span>Lihat Foto</span>
-                                </button>
-                              )
-                            ) : (
-                              <span className="text-slate-300 text-xs">—</span>
-                            )}
+                              );
+                            })()}
                           </td>
 
                           {/* Aksi (Edit & Hapus) */}
@@ -625,37 +708,47 @@ export const AktivitasMagangView: React.FC = () => {
                       </div>
 
                       {/* Media Attachment Button */}
-                      {act.attachmentUrl && (
-                        <div className="pt-1">
-                          {isVideoUrl(act.attachmentUrl) ? (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedPhoto({
-                                url: act.attachmentUrl!,
-                                title: act.title,
-                                date: formatDateHeader(act.activityDate || date)
-                              })}
-                              className="w-full flex items-center justify-center gap-2 rounded-xl border border-purple-200 bg-purple-50/70 py-2 px-3 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition shadow-2xs cursor-pointer"
-                            >
-                              <Video className="h-4 w-4 text-purple-600" />
-                              <span>Lihat Video Kegiatan</span>
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setSelectedPhoto({
-                                url: act.attachmentUrl!,
-                                title: act.title,
-                                date: formatDateHeader(act.activityDate || date)
-                              })}
-                              className="w-full flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50/70 py-2 px-3 text-xs font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs cursor-pointer"
-                            >
-                              <ImageIcon className="h-4 w-4 text-[#2F80ED]" />
-                              <span>Lihat Foto Kegiatan</span>
-                            </button>
-                          )}
-                        </div>
-                      )}
+                      {(() => {
+                        const urls = parseAttachmentUrls(act.attachmentUrl);
+                        if (urls.length === 0) return null;
+
+                        const hasMultiple = urls.length > 1;
+                        const isVideo = !hasMultiple && isVideoUrl(urls[0]);
+
+                        return (
+                          <div className="pt-1">
+                            {isVideo ? (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPhoto({
+                                  urls,
+                                  currentIndex: 0,
+                                  title: act.title,
+                                  date: formatDateHeader(act.activityDate || date)
+                                })}
+                                className="w-full flex items-center justify-center gap-2 rounded-xl border border-purple-200 bg-purple-50/70 py-2 px-3 text-xs font-semibold text-purple-700 hover:bg-purple-100 transition shadow-2xs cursor-pointer"
+                              >
+                                <Video className="h-4 w-4 text-purple-600" />
+                                <span>Lihat Video Kegiatan</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => setSelectedPhoto({
+                                  urls,
+                                  currentIndex: 0,
+                                  title: act.title,
+                                  date: formatDateHeader(act.activityDate || date)
+                                })}
+                                className="w-full flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50/70 py-2 px-3 text-xs font-semibold text-[#2F80ED] hover:bg-blue-100 transition shadow-2xs cursor-pointer"
+                              >
+                                <ImageIcon className="h-4 w-4 text-[#2F80ED]" />
+                                <span>{hasMultiple ? `Lihat Foto Kegiatan (${urls.length} Foto)` : 'Lihat Foto Kegiatan'}</span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 </div>
@@ -762,62 +855,105 @@ export const AktivitasMagangView: React.FC = () => {
         </div>
       )}
 
-      {/* Modal Dokumentasi Kegiatan */}
+      {/* Modal Dokumentasi Kegiatan (Multi-file) */}
       {showDocModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
-            <div className="flex items-center justify-between mb-5">
-              <h3 className="text-base font-bold text-[#183B66]">Tambah Dokumentasi Kegiatan</h3>
-              <button onClick={() => setShowDocModal(false)} className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-xs p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-base font-bold text-[#183B66]">Tambah Dokumentasi Kegiatan</h3>
+                <p className="text-[11px] text-slate-400">Bisa memilih lebih dari 1 foto untuk satu kegiatan</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isUploading) return;
+                  setShowDocModal(false);
+                  docMediaList.forEach(m => { try { URL.revokeObjectURL(m.previewUrl); } catch (_) {} });
+                  setDocMediaList([]);
+                }}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 cursor-pointer"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Photo / Video Upload */}
-            <div
-              className="mb-4 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 cursor-pointer hover:border-[#2F80ED] hover:bg-blue-50/30 transition"
-              onClick={() => {
-                if (!docMediaPreview) {
-                  docFileInputRef.current?.click();
-                }
-              }}
-            >
-              {docMediaPreview ? (
-                <div className="relative w-full">
-                  {docMediaType === 'video' ? (
-                    <video
-                      src={docMediaPreview}
-                      controls
-                      className="w-full max-h-48 rounded-xl object-contain bg-black"
-                    />
-                  ) : (
-                    <img
-                      src={docMediaPreview}
-                      alt="Preview"
-                      className="w-full max-h-48 object-cover rounded-xl"
-                    />
-                  )}
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setDocMedia(null); setDocMediaPreview(''); }}
-                    className="absolute top-2 right-2 rounded-full bg-slate-900/70 p-1.5 text-white hover:bg-slate-900"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
+            {/* Photo / Video Upload Area */}
+            <div className="mb-4 space-y-2">
+              <label className="block text-xs font-semibold text-slate-700">
+                Lampiran Foto / Video {docMediaList.length > 0 && <span className="text-[#2F80ED] font-bold">({docMediaList.length} dipilih)</span>}
+              </label>
+
+              {docMediaList.length > 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                  {/* Grid Thumbnails */}
+                  <div className="grid grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                    {docMediaList.map((media, idx) => (
+                      <div key={media.id} className="relative group rounded-xl overflow-hidden border border-slate-200 bg-black aspect-square flex items-center justify-center">
+                        {media.type === 'video' ? (
+                          <video src={media.previewUrl} className="w-full h-full object-cover" />
+                        ) : (
+                          <img src={media.previewUrl} alt={`Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                        )}
+                        {/* Badge Index */}
+                        <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">
+                          #{idx + 1}
+                        </span>
+                        {/* Tombol Hapus Thumbnail */}
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); handleRemoveDocMedia(idx); }}
+                          className="absolute top-1 right-1 rounded-full bg-red-600 text-white p-1 shadow-md hover:bg-red-700 transition cursor-pointer"
+                          title="Hapus foto ini"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+
+                    {/* Tombol Tambah Foto Tambahan */}
+                    <button
+                      type="button"
+                      onClick={() => docFileInputRef.current?.click()}
+                      className="rounded-xl border-2 border-dashed border-slate-300 hover:border-[#2F80ED] bg-white hover:bg-blue-50/40 aspect-square flex flex-col items-center justify-center text-slate-500 hover:text-[#2F80ED] transition cursor-pointer"
+                    >
+                      <Plus className="h-5 w-5 mb-0.5" />
+                      <span className="text-[10px] font-bold">+ Tambah</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
+                    <span>Total {docMediaList.length} berkas dipilih</span>
+                    <button
+                      type="button"
+                      onClick={() => docFileInputRef.current?.click()}
+                      className="text-xs font-semibold text-[#2F80ED] hover:underline cursor-pointer"
+                    >
+                      + Tambah berkas lagi
+                    </button>
+                  </div>
                 </div>
               ) : (
-                <div className="py-6 text-center">
+                <div
+                  className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 cursor-pointer hover:border-[#2F80ED] hover:bg-blue-50/30 transition text-center"
+                  onClick={() => docFileInputRef.current?.click()}
+                >
                   <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#EBF3FE] text-[#2F80ED]">
                     <Upload className="h-6 w-6" />
                   </div>
-                  <p className="text-xs font-semibold text-slate-700">Klik untuk upload foto atau video</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Foto (JPG, PNG, WebP) atau Video (MP4, WebM maks. 30MB)</p>
+                  <p className="text-xs font-semibold text-slate-700">Klik untuk upload foto kegiatan</p>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Bisa pilih beberapa foto sekaligus (JPG, PNG, WebP) atau Video</p>
+                  <span className="mt-2 inline-flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-[10px] font-bold text-[#2F80ED]">
+                    ✨ Mendukung multi-file upload
+                  </span>
                 </div>
               )}
+
               <input
                 ref={docFileInputRef}
                 type="file"
-                accept="*/*"
+                multiple
+                accept="image/*,video/*"
                 className="hidden"
                 onChange={handleMediaSelect}
               />
@@ -863,63 +999,141 @@ export const AktivitasMagangView: React.FC = () => {
             <button
               onClick={handleSaveDoc}
               disabled={isUploading || !docTitle.trim()}
-              className="mt-5 w-full rounded-2xl bg-emerald-500 py-3 text-xs font-bold text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 disabled:opacity-50 transition"
+              className="mt-5 w-full rounded-2xl bg-emerald-500 py-3 text-xs font-bold text-white shadow-lg shadow-emerald-500/20 hover:bg-emerald-600 disabled:opacity-50 transition cursor-pointer"
             >
-              {isUploading ? 'Mengunggah Media...' : 'Simpan Dokumentasi'}
+              {isUploading ? (uploadProgressText || 'Mengunggah Media...') : 'Simpan Dokumentasi'}
             </button>
           </div>
         </div>
       )}
 
-      {/* Modal Preview Foto Kegiatan (Lightbox) */}
-      {selectedPhoto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-xs p-4" onClick={() => setSelectedPhoto(null)}>
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-5 shadow-2xl border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+      {/* Modal Preview Foto Kegiatan (Lightbox dengan Tombol Slide) */}
+      {selectedPhoto && selectedPhoto.urls.length > 0 && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/70 backdrop-blur-xs p-4" onClick={() => setSelectedPhoto(null)}>
+          <div className="relative w-full max-w-xl rounded-2xl bg-white p-5 shadow-2xl border border-slate-100 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">{selectedPhoto.title}</h3>
-                <p className="text-[11px] text-slate-400">{selectedPhoto.date}</p>
+              <div className="pr-4">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-900 leading-tight">{selectedPhoto.title}</h3>
+                  {selectedPhoto.urls.length > 1 && (
+                    <span className="inline-flex items-center rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-bold text-[#2F80ED] shrink-0">
+                      {selectedPhoto.currentIndex + 1} / {selectedPhoto.urls.length}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">{selectedPhoto.date}</p>
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <a
-                  href={selectedPhoto.url}
+                  href={selectedPhoto.urls[selectedPhoto.currentIndex]}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="rounded-lg p-1.5 text-slate-400 hover:text-[#2F80ED] hover:bg-blue-50 transition"
-                  title="Buka Tab Baru"
+                  title="Buka File di Tab Baru"
                 >
                   <ExternalLink className="h-4 w-4" />
                 </a>
                 <button
+                  type="button"
                   onClick={() => setSelectedPhoto(null)}
-                  className="rounded-lg p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+                  className="rounded-lg p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition cursor-pointer"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded-xl bg-slate-900 border border-slate-200 flex items-center justify-center max-h-[70vh]">
-              {isVideoUrl(selectedPhoto.url) ? (
+            {/* Media Container dengan Tombol Slide */}
+            <div className="relative mt-4 overflow-hidden rounded-xl bg-slate-950 border border-slate-200 flex items-center justify-center min-h-[220px] max-h-[65vh]">
+              {isVideoUrl(selectedPhoto.urls[selectedPhoto.currentIndex]) ? (
                 <video
-                  src={selectedPhoto.url}
+                  key={selectedPhoto.urls[selectedPhoto.currentIndex]}
+                  src={selectedPhoto.urls[selectedPhoto.currentIndex]}
                   controls
                   autoPlay
-                  className="w-full h-auto max-h-[65vh] object-contain rounded-lg"
+                  className="w-full h-auto max-h-[62vh] object-contain rounded-lg"
                 />
               ) : (
                 <img
-                  src={selectedPhoto.url}
-                  alt={selectedPhoto.title}
-                  className="w-full h-auto max-h-[65vh] object-contain"
+                  key={selectedPhoto.urls[selectedPhoto.currentIndex]}
+                  src={selectedPhoto.urls[selectedPhoto.currentIndex]}
+                  alt={`${selectedPhoto.title} - ${selectedPhoto.currentIndex + 1}`}
+                  className="w-full h-auto max-h-[62vh] object-contain"
                 />
+              )}
+
+              {/* Tombol Slide Kiri & Kanan (Muncul jika ada lebih dari 1 foto) */}
+              {selectedPhoto.urls.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedPhoto(prev => prev ? {
+                        ...prev,
+                        currentIndex: (prev.currentIndex - 1 + prev.urls.length) % prev.urls.length
+                      } : null);
+                    }}
+                    className="absolute left-2.5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 hover:bg-black/85 text-white shadow-lg backdrop-blur-xs transition hover:scale-105 active:scale-95 cursor-pointer"
+                    title="Foto Sebelumnya"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedPhoto(prev => prev ? {
+                        ...prev,
+                        currentIndex: (prev.currentIndex + 1) % prev.urls.length
+                      } : null);
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 hover:bg-black/85 text-white shadow-lg backdrop-blur-xs transition hover:scale-105 active:scale-95 cursor-pointer"
+                    title="Foto Berikutnya"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
               )}
             </div>
 
-            <div className="mt-4 flex justify-end">
+            {/* Thumbnail dots / navigation slider */}
+            {selectedPhoto.urls.length > 1 && (
+              <div className="mt-3 flex items-center justify-center gap-2 overflow-x-auto py-1">
+                {selectedPhoto.urls.map((url, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => setSelectedPhoto(prev => prev ? { ...prev, currentIndex: idx } : null)}
+                    className={`relative rounded-lg overflow-hidden border-2 transition-all cursor-pointer shrink-0 ${
+                      selectedPhoto.currentIndex === idx
+                        ? 'border-[#2F80ED] ring-2 ring-blue-400/30 scale-105'
+                        : 'border-transparent opacity-50 hover:opacity-100'
+                    }`}
+                  >
+                    {isVideoUrl(url) ? (
+                      <div className="w-10 h-10 bg-slate-800 flex items-center justify-center text-white">
+                        <Video className="h-4 w-4" />
+                      </div>
+                    ) : (
+                      <img src={url} alt={`Slide ${idx + 1}`} className="w-10 h-10 object-cover" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4 flex items-center justify-between pt-2 border-t border-slate-100">
+              <span className="text-[11px] text-slate-400">
+                {selectedPhoto.urls.length > 1
+                  ? `${selectedPhoto.urls.length} lampiran foto/video`
+                  : '1 lampiran'}
+              </span>
               <button
+                type="button"
                 onClick={() => setSelectedPhoto(null)}
-                className="rounded-xl bg-[#2F80ED] px-4 py-2 text-xs font-semibold text-white hover:bg-blue-600 shadow-md"
+                className="rounded-xl bg-[#2F80ED] px-4 py-2 text-xs font-semibold text-white hover:bg-blue-600 shadow-md cursor-pointer transition"
               >
                 Tutup
               </button>
@@ -995,68 +1209,113 @@ export const AktivitasMagangView: React.FC = () => {
                 />
               </div>
 
-              {/* Lampiran Media (Foto / Video) */}
-              <div className="relative">
-                <label className="block text-xs font-semibold text-slate-700 mb-1.5">Lampiran Media (Foto / Video)</label>
-
-                {/* Kalau ada media baru yang dipilih */}
-                {editNewMediaPreview ? (
-                  <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-50 p-2">
-                    {editNewMediaType === 'video' ? (
-                      <video src={editNewMediaPreview} controls className="w-full max-h-44 rounded-lg object-contain bg-black" />
-                    ) : (
-                      <img src={editNewMediaPreview} alt="Preview baru" className="w-full max-h-44 object-contain rounded-lg" />
+              {/* Lampiran Media (Foto / Video - Multi-file) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-semibold text-slate-700">
+                    Lampiran Media (Foto / Video)
+                    {(editExistingUrls.length + editNewMediaList.length) > 0 && (
+                      <span className="text-[#2F80ED] font-bold ml-1">
+                        ({editExistingUrls.length + editNewMediaList.length} berkas)
+                      </span>
                     )}
+                  </label>
+                  {(editExistingUrls.length + editNewMediaList.length) > 0 && (
                     <button
                       type="button"
-                      onClick={() => { setEditNewMedia(null); setEditNewMediaPreview(''); }}
-                      className="absolute top-3 right-3 rounded-full bg-slate-900/70 p-1.5 text-white hover:bg-slate-900"
-                      title="Batal ganti file"
+                      onClick={() => editFileInputRef.current?.click()}
+                      className="text-[11px] font-semibold text-[#2F80ED] hover:underline cursor-pointer"
                     >
-                      <X className="h-4 w-4" />
+                      + Tambah Foto
                     </button>
-                  </div>
-                ) : editAttachmentUrl ? (
-                  /* Kalau ada media lama yang tersimpan */
-                  <div className="relative w-full rounded-xl overflow-hidden border border-slate-200 bg-slate-50 p-2">
-                    {isVideoUrl(editAttachmentUrl) ? (
-                      <video src={editAttachmentUrl} controls className="w-full max-h-44 rounded-lg object-contain bg-black" />
-                    ) : (
-                      <img src={editAttachmentUrl} alt="Media lampiran" className="w-full max-h-44 object-contain rounded-lg" />
-                    )}
-                    <div className="mt-2.5 flex items-center justify-between px-1">
+                  )}
+                </div>
+
+                {(editExistingUrls.length + editNewMediaList.length) > 0 ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+                    <div className="grid grid-cols-3 gap-2.5 max-h-56 overflow-y-auto pr-1">
+                      {/* Media Lama yang Tersimpan */}
+                      {editExistingUrls.map((url, idx) => (
+                        <div key={`existing-${idx}`} className="relative group rounded-xl overflow-hidden border border-slate-200 bg-black aspect-square flex items-center justify-center">
+                          {isVideoUrl(url) ? (
+                            <video src={url} className="w-full h-full object-cover" />
+                          ) : (
+                            <img src={url} alt={`Lampiran ${idx + 1}`} className="w-full h-full object-cover" />
+                          )}
+                          <span className="absolute bottom-1 left-1 bg-black/70 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">
+                            Tersimpan
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveExistingEditUrl(idx)}
+                            className="absolute top-1 right-1 rounded-full bg-red-600 text-white p-1 shadow-md hover:bg-red-700 transition cursor-pointer"
+                            title="Hapus foto ini"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Media Baru yang Baru Dipilih */}
+                      {editNewMediaList.map((media, idx) => (
+                        <div key={media.id} className="relative group rounded-xl overflow-hidden border-2 border-emerald-400 bg-black aspect-square flex items-center justify-center">
+                          {media.type === 'video' ? (
+                            <video src={media.previewUrl} className="w-full h-full object-cover" />
+                          ) : (
+                            <img src={media.previewUrl} alt={`Baru ${idx + 1}`} className="w-full h-full object-cover" />
+                          )}
+                          <span className="absolute bottom-1 left-1 bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">
+                            Baru
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveNewEditMedia(idx)}
+                            className="absolute top-1 right-1 rounded-full bg-red-600 text-white p-1 shadow-md hover:bg-red-700 transition cursor-pointer"
+                            title="Hapus foto baru ini"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+
+                      {/* Tombol Tambah di dalam Grid */}
                       <button
                         type="button"
                         onClick={() => editFileInputRef.current?.click()}
-                        className="text-xs font-semibold text-[#2F80ED] hover:underline cursor-pointer"
+                        className="rounded-xl border-2 border-dashed border-slate-300 hover:border-[#2F80ED] bg-white hover:bg-blue-50/40 aspect-square flex flex-col items-center justify-center text-slate-500 hover:text-[#2F80ED] transition cursor-pointer"
                       >
-                        Ganti Media
+                        <Plus className="h-5 w-5 mb-0.5" />
+                        <span className="text-[10px] font-bold">+ Tambah</span>
                       </button>
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1 border-t border-slate-200/60">
+                      <span>{editExistingUrls.length} tersimpan, {editNewMediaList.length} berkas baru</span>
                       <button
                         type="button"
-                        onClick={() => setEditAttachmentUrl('')}
+                        onClick={() => { setEditExistingUrls([]); setEditNewMediaList([]); }}
                         className="text-xs font-semibold text-red-500 hover:underline cursor-pointer"
                       >
-                        Hapus Lampiran
+                        Hapus Semua
                       </button>
                     </div>
                   </div>
                 ) : (
-                  /* Belum ada media sama sekali */
                   <div
-                    className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-4 cursor-pointer hover:border-[#2F80ED] hover:bg-blue-50/30 transition"
+                    className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 p-6 cursor-pointer hover:border-[#2F80ED] hover:bg-blue-50/30 transition text-center"
                     onClick={() => editFileInputRef.current?.click()}
                   >
-                    <Upload className="h-5 w-5 text-[#2F80ED] mb-1" />
+                    <Upload className="h-6 w-6 text-[#2F80ED] mb-1.5" />
                     <p className="text-xs font-semibold text-slate-700">Unggah foto atau video baru</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Foto (JPG, PNG, WebP) atau Video (MP4, WebM maks. 30MB)</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Bisa pilih beberapa foto sekaligus (JPG, PNG, WebP) atau Video</p>
                   </div>
                 )}
 
                 <input
                   ref={editFileInputRef}
                   type="file"
-                  accept="*/*"
+                  multiple
+                  accept="image/*,video/*"
                   className="hidden"
                   onChange={handleEditMediaSelect}
                 />
@@ -1067,16 +1326,16 @@ export const AktivitasMagangView: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setEditModalOpen(false)}
-                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+                  className="rounded-xl border border-slate-200 px-4 py-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 cursor-pointer"
                 >
                   Batal
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmittingEdit || !editTitle.trim()}
-                  className="rounded-xl bg-[#2F80ED] px-5 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-600 disabled:opacity-50"
+                  className="rounded-xl bg-[#2F80ED] px-5 py-2.5 text-xs font-semibold text-white shadow-md shadow-blue-500/20 hover:bg-blue-600 disabled:opacity-50 cursor-pointer transition"
                 >
-                  {isSubmittingEdit ? 'Menyimpan Perubahan...' : 'Simpan Perubahan'}
+                  {isSubmittingEdit ? (editUploadProgressText || 'Menyimpan Perubahan...') : 'Simpan Perubahan'}
                 </button>
               </div>
             </form>
