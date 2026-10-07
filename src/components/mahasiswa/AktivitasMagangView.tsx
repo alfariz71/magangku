@@ -862,7 +862,7 @@ export const AktivitasMagangView: React.FC = () => {
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-base font-bold text-[#183B66]">Tambah Dokumentasi Kegiatan</h3>
-                <p className="text-[11px] text-slate-400">Bisa memilih lebih dari 1 foto untuk satu kegiatan</p>
+                <p className="text-[11px] text-slate-400">Unggah bukti foto kegiatan harian Anda</p>
               </div>
               <button
                 type="button"
@@ -942,10 +942,7 @@ export const AktivitasMagangView: React.FC = () => {
                     <Upload className="h-6 w-6" />
                   </div>
                   <p className="text-xs font-semibold text-slate-700">Klik untuk upload foto kegiatan</p>
-                  <p className="text-[10px] text-slate-400 mt-0.5">Bisa pilih beberapa foto sekaligus (JPG, PNG, WebP) atau Video</p>
-                  <span className="mt-2 inline-flex items-center gap-1 rounded-lg bg-blue-50 border border-blue-200 px-2.5 py-1 text-[10px] font-bold text-[#2F80ED]">
-                    ✨ Mendukung multi-file upload
-                  </span>
+                  <p className="text-[10px] text-slate-400 mt-0.5">Format JPG, PNG, WebP, atau Video</p>
                 </div>
               )}
 
@@ -1307,7 +1304,7 @@ export const AktivitasMagangView: React.FC = () => {
                   >
                     <Upload className="h-6 w-6 text-[#2F80ED] mb-1.5" />
                     <p className="text-xs font-semibold text-slate-700">Unggah foto atau video baru</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5">Bisa pilih beberapa foto sekaligus (JPG, PNG, WebP) atau Video</p>
+                    <p className="text-[10px] text-slate-400 mt-0.5">Format JPG, PNG, WebP, atau Video</p>
                   </div>
                 )}
 
